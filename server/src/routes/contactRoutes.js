@@ -9,3 +9,4 @@ router.post('/', submissionLimiter, createContact);
 router.get('/', requireAdmin, getContacts);
 
 export default router;
+

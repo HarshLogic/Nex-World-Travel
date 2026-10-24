@@ -48,3 +48,4 @@ export const getBookings = async (req, res, next) => {
     next(error);
   }
 };
+

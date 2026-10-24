@@ -45,12 +45,12 @@ export default function Navbar() {
           <div className="flex items-center justify-between">
             {/* Brand Logo */}
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="relative h-10 w-36 sm:h-11 sm:w-44 transition-transform group-hover:scale-[1.02]">
+              <div className="relative h-11 w-44 sm:h-12 sm:w-52 transition-transform group-hover:scale-[1.02]">
                 <Image
                   src="/images/logo.png"
                   alt="Nex World Travel & Tourism"
                   fill
-                  sizes="(max-width: 640px) 144px, 176px"
+                  sizes="(max-width: 640px) 176px, 208px"
                   className="object-contain object-left"
                   priority
                 />
@@ -160,3 +160,4 @@ export default function Navbar() {
     </>
   );
 }
+

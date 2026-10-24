@@ -26,3 +26,4 @@ export const bookingSchema = z.object({
 export const validateBooking = (data) => {
   return bookingSchema.safeParse(data);
 };
+

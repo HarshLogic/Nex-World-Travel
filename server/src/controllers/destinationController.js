@@ -38,3 +38,4 @@ export const getDestinationBySlug = async (req, res, next) => {
     next(error);
   }
 };
+

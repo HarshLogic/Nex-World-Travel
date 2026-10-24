@@ -38,3 +38,4 @@ export const getActivityBySlug = async (req, res, next) => {
     next(error);
   }
 };
+

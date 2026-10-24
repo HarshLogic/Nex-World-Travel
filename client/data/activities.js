@@ -90,3 +90,4 @@ export const activitiesData = [
     featured: true,
   },
 ];
+

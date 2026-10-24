@@ -7,3 +7,4 @@ router.get('/', getActivities);
 router.get('/:slug', getActivityBySlug);
 
 export default router;
+

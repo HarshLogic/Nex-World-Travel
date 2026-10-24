@@ -37,3 +37,4 @@ export const getPackageBySlug = async (req, res, next) => {
     next(error);
   }
 };
+

@@ -9,3 +9,4 @@ router.post('/', submissionLimiter, createBooking);
 router.get('/', requireAdmin, getBookings);
 
 export default router;
+

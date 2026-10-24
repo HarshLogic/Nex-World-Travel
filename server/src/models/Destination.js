@@ -22,3 +22,4 @@ const destinationSchema = new mongoose.Schema(
 );
 
 export const Destination = mongoose.model('Destination', destinationSchema);
+

@@ -110,3 +110,4 @@ export const destinationsData = [
     featured: true,
   },
 ];
+

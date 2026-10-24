@@ -7,3 +7,4 @@ router.get('/', getPackages);
 router.get('/:slug', getPackageBySlug);
 
 export default router;
+

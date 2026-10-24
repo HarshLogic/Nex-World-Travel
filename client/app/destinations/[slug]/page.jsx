@@ -136,3 +136,4 @@ export default async function DestinationDetailPage({ params }) {
     </div>
   );
 }
+

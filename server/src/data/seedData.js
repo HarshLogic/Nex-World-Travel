@@ -297,3 +297,4 @@ export const seedPackages = [
     featured: true,
   },
 ];
+

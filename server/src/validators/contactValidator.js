@@ -11,3 +11,4 @@ export const contactSchema = z.object({
 export const validateContact = (data) => {
   return contactSchema.safeParse(data);
 };
+

@@ -7,6 +7,15 @@ export const metadata = {
   title: 'Nex World Travel & Tourism | Premium Next-Gen Travel Booking & Tours',
   description:
     'Experience extraordinary global travel with Nex World Travel & Tourism, Abu Dhabi. Customized vacation packages, luxury cruises, adventures, and personalized itineraries across Asia, Europe, Africa, Australia, and UAE.',
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/images/favicon.png', sizes: '32x32', type: 'image/png' },
+      { url: '/images/app-icon.png', sizes: '192x192', type: 'image/png' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/images/app-icon.png',
+  },
   keywords: [
     'Nex World Travel',
     'Nex World Travel and Tourism',
@@ -47,3 +56,4 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
+

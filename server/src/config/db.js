@@ -24,3 +24,4 @@ export const getDBStatus = () => {
     mode: isConnected ? 'mongodb-live' : 'resilient-in-memory-active',
   };
 };
+

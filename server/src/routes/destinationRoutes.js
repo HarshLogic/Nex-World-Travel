@@ -7,3 +7,4 @@ router.get('/', getDestinations);
 router.get('/:slug', getDestinationBySlug);
 
 export default router;
+

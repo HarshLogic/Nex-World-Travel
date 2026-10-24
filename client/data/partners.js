@@ -15,3 +15,4 @@ export const partnersData = {
     { name: 'Lemon Tree Hotels', logo: '/images/partners/lemontree.png' },
   ],
 };
+
