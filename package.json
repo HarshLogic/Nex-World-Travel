@@ -1,0 +1,13 @@
+{
+  "name": "nex-world-travel",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix client install && npm --prefix server install",
+    "dev:client": "npm --prefix client run dev",
+    "dev:server": "npm --prefix server run dev",
+    "build:client": "npm --prefix client run build",
+    "start:client": "npm --prefix client start",
+    "start:server": "npm --prefix server start"
+  }
+}

@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-main: #FFFFFF;
+  --bg-secondary: #F7F9FC;
+  --text-primary: #172033;
+  --text-secondary: #667085;
+  --border-color: #E6EAF0;
+  --accent-primary: #315EFB;
+  --accent-secondary: #48B9B0;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .font-heading {
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Futuristic UI utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(230, 234, 240, 0.8);
+}
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(230, 234, 240, 0.6);
+}
+
+.futuristic-border {
+  border: 1px solid #E6EAF0;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.futuristic-border:hover {
+  border-color: rgba(49, 94, 251, 0.4);
+  box-shadow: 0 12px 30px -10px rgba(49, 94, 251, 0.12);
+}
+
+/* Subtle futuristic background grid */
+.tech-grid-bg {
+  background-image: radial-gradient(rgba(49, 94, 251, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Subtle glow badge */
+.badge-glow {
+  position: relative;
+}
+.badge-glow::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(90deg, #315EFB, #48B9B0);
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0.15;
+  filter: blur(4px);
+}
+
+/* Responsive custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F7F9FC;
+}
+::-webkit-scrollbar-thumb {
+  background: #D0D7E2;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #98A2B3;
+}
