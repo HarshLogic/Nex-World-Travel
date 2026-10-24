@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "install:all": "npm --prefix client install && npm --prefix server install",
+    "dev": "npm --prefix client run dev",
     "dev:client": "npm --prefix client run dev",
     "dev:server": "npm --prefix server run dev",
+    "build": "npm --prefix client run build",
     "build:client": "npm --prefix client run build",
+    "start": "npm --prefix client start",
     "start:client": "npm --prefix client start",
-    "start:server": "npm --prefix server start"
+    "start:server": "npm --prefix server start",
+    "test": "node server/test/api.test.js",
+    "install:all": "npm --prefix client install && npm --prefix server install"
   }
 }
-
