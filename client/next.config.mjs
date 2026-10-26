@@ -15,12 +15,12 @@ const nextConfig = {
     unoptimized: true,
   },
   async rewrites() {
+    const rawBackendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const backendUrl = rawBackendUrl.replace(/\/+$/, '');
     return [
       {
         source: '/api/:path*',
-        destination: process.env.NEXT_PUBLIC_API_URL 
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/:path*` 
-          : 'http://localhost:5000/api/:path*',
+        destination: `${backendUrl}/api/:path*`,
       },
     ];
   },

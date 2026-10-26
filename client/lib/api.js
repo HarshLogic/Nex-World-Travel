@@ -3,7 +3,10 @@ import { activitiesData } from '../data/activities';
 import { packagesData } from '../data/packages';
 import { getAuthHeaders, saveAuth, clearAuth } from './auth';
 
-const BASE_URL = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000');
+// Get backend API root URL with automatic slash trimming to prevent `//api/...` errors
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+const cleanApiUrl = rawApiUrl.replace(/\/+$/, '');
+const BASE_URL = cleanApiUrl;
 
 // ==================== AUTHENTICATION ====================
 export async function loginMember(memberId, password) {
