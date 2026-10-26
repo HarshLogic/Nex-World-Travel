@@ -238,7 +238,7 @@ export default function BookingForm() {
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="bg-white rounded-3xl p-6 sm:p-10 border border-border shadow-card max-w-4xl mx-auto space-y-8"
+      className="bg-white rounded-3xl p-4 sm:p-10 border border-border shadow-card max-w-4xl mx-auto space-y-6 sm:space-y-8"
     >
       {/* General form error if any */}
       {errors.form && (

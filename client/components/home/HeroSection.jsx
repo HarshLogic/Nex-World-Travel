@@ -14,32 +14,32 @@ export default function HeroSection() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Top Badges */}
-        <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-border shadow-subtle text-xs font-semibold text-text-primary">
-            <span className="flex h-2 w-2 rounded-full bg-accent-secondary animate-pulse" />
-            <MapPin className="w-3.5 h-3.5 text-accent-primary" />
-            <span>Nex World Travel & Tourism • Abu Dhabi, UAE</span>
+        <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 mb-6">
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-full bg-white border border-border shadow-subtle text-[11px] sm:text-xs font-semibold text-text-primary max-w-full">
+            <span className="flex h-2 w-2 rounded-full bg-accent-secondary animate-pulse shrink-0" />
+            <MapPin className="w-3.5 h-3.5 text-accent-primary shrink-0" />
+            <span className="truncate">Nex World Travel & Tourism • Abu Dhabi</span>
           </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent-primary-light border border-accent-primary/20 text-xs font-semibold text-accent-primary">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Futuristic Travel Architecture</span>
+          <div className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full bg-accent-primary-light border border-accent-primary/20 text-[11px] sm:text-xs font-semibold text-accent-primary shrink-0">
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+            <span>Curated Global Journeys</span>
           </div>
         </div>
 
         {/* Editorial Headline */}
-        <div className="text-center max-w-4xl mx-auto mb-10">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-text-primary tracking-tight leading-[1.08] mb-6">
+        <div className="text-center max-w-4xl mx-auto mb-10 px-2 sm:px-0">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-text-primary tracking-tight leading-[1.12] sm:leading-[1.08] mb-4 sm:mb-6">
             Your Next Great <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-primary to-accent-secondary">Adventure</span> Starts Here.
           </h1>
-          <p className="text-lg sm:text-xl text-text-secondary leading-relaxed max-w-2xl mx-auto">
+          <p className="text-base sm:text-xl text-text-secondary leading-relaxed max-w-2xl mx-auto">
             Discover extraordinary destinations, thoughtfully curated holidays, and unforgettable experiences crafted around your unique rhythm.
           </p>
 
           {/* Action CTAs */}
-          <div className="flex flex-wrap items-center justify-center gap-4 mt-8">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mt-8 w-full max-w-md sm:max-w-none mx-auto">
             <Link
               href="/destinations"
-              className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-full text-base font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-lg shadow-accent-primary/25 transition-all duration-200 active:scale-95 group"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-full text-sm sm:text-base font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-lg shadow-accent-primary/25 transition-all duration-200 active:scale-95 group"
             >
               <span>Explore Destinations</span>
               <Compass className="w-4 h-4 transition-transform group-hover:rotate-45" />
@@ -47,7 +47,7 @@ export default function HeroSection() {
 
             <Link
               href="/booking"
-              className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-base font-semibold text-text-primary bg-white hover:bg-surface-50 border border-border shadow-subtle hover:border-accent-primary/40 transition-all duration-200 group"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full text-sm sm:text-base font-semibold text-text-primary bg-white hover:bg-surface-50 border border-border shadow-subtle hover:border-accent-primary/40 transition-all duration-200 group"
             >
               <span>Plan Your Journey</span>
               <ArrowUpRight className="w-4 h-4 text-text-secondary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />

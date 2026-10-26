@@ -24,10 +24,10 @@ export default function CallToAction() {
               Tell us what you love, from preferred dates to must-see landmarks. Our Abu Dhabi travel specialists will craft a tailored holiday plan with clear guidance and personalized care.
             </p>
 
-            <div className="flex flex-wrap items-center justify-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 w-full max-w-md mx-auto">
               <Link
                 href="/booking"
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-full text-base font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-lg shadow-accent-primary/25 transition-all duration-200 active:scale-95 group"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full text-sm sm:text-base font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-lg shadow-accent-primary/25 transition-all duration-200 active:scale-95 group"
               >
                 <span>Start Planning Your Journey</span>
                 <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
@@ -35,7 +35,7 @@ export default function CallToAction() {
 
               <Link
                 href="/contact"
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-full text-base font-semibold text-text-primary bg-white hover:bg-surface-50 border border-border shadow-subtle transition-all duration-200"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full text-sm sm:text-base font-semibold text-text-primary bg-white hover:bg-surface-50 border border-border shadow-subtle transition-all duration-200"
               >
                 <MessageSquare className="w-4 h-4 text-text-secondary" />
                 <span>Contact Travel Desk</span>

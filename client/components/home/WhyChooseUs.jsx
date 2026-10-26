@@ -76,11 +76,11 @@ export default function WhyChooseUs() {
         </div>
 
         {/* Verified Metrics Counter Row */}
-        <div className="bg-white rounded-3xl p-8 border border-border shadow-card">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 divide-y lg:divide-y-0 lg:divide-x divide-border">
-            {METRICS.map((metric, i) => (
-              <div key={metric.label} className={`text-center ${i > 0 ? 'pt-6 lg:pt-0 lg:px-4' : 'lg:px-4'}`}>
-                <div className="text-3xl sm:text-4xl font-extrabold text-text-primary mb-1">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-border shadow-card">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+            {METRICS.map((metric) => (
+              <div key={metric.label} className="text-center p-3 rounded-2xl bg-surface-50/60 lg:bg-transparent">
+                <div className="text-2xl sm:text-4xl font-extrabold text-text-primary mb-1">
                   {metric.value}
                 </div>
                 <div className="text-xs font-semibold text-text-primary mb-0.5">

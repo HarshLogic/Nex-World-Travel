@@ -1,0 +1,1437 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
+import {
+  Users,
+  Shield,
+  FileEdit,
+  MapPin,
+  CalendarCheck,
+  MessageSquare,
+  LogOut,
+  Search,
+  Filter,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  ChevronRight,
+  ChevronLeft,
+  Eye,
+  Edit,
+  Clock,
+  Sparkles,
+  Award,
+  Send,
+  Plus,
+  RefreshCw,
+  X,
+  Lock,
+  Download,
+  Info,
+} from 'lucide-react';
+import {
+  fetchCurrentUser,
+  fetchAdminMembers,
+  createAdminMember,
+  createEmployeeChangeRequest,
+  fetchMyChangeRequests,
+  updateAdminMember,
+  fetchAdminBookings,
+  updateBookingStatus,
+  addBookingNote,
+  fetchAdminMemberRequests,
+  updateMemberRequestStatus,
+  fetchDestinations,
+  createDestination,
+  updateDestination,
+} from '../../../lib/api';
+import { getAuthUser, clearAuth } from '../../../lib/auth';
+
+export default function EmployeeDashboardPage() {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState(null);
+  const [permissions, setPermissions] = useState([]);
+  const [activeTab, setActiveTab] = useState('members');
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+  const [toastType, setToastType] = useState('success');
+
+  // Members state
+  const [members, setMembers] = useState([]);
+  const [membersPagination, setMembersPagination] = useState({ page: 1, limit: 15, total: 0, pages: 1 });
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberPackageFilter, setMemberPackageFilter] = useState('');
+  const [selectedMember, setSelectedMember] = useState(null);
+
+  // Change Request Modal state
+  const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
+  const [crTargetMember, setCrTargetMember] = useState(null);
+  const [crField, setCrField] = useState('nightsAvailable');
+  const [crNewValue, setCrNewValue] = useState('');
+  const [crReason, setCrReason] = useState('');
+
+  // Add Member Modal state (when employee has create_member permission)
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [addMemberForm, setAddMemberForm] = useState({
+    memberId: '',
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    packageType: 'Gold',
+    nightsAvailable: 14,
+    extraOffers: 'Airport Transfer, VIP Lounge, Travel Concierge',
+    tenurePeriod: '3 Years',
+    travelCardBenefit: true,
+    purchaseDate: new Date().toISOString().split('T')[0],
+    productPrice: 12500,
+    initialPaidAmount: 5000,
+    hasEmi: true,
+    emiAmount: 1250,
+    emiFrequency: 'Monthly',
+    nextEmiDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    dueAmount: 1250,
+  });
+
+  // Direct Edit Modal (if employee has edit_member_details permission - permitted contact info only)
+  const [showDirectEditModal, setShowDirectEditModal] = useState(false);
+  const [directEditForm, setDirectEditForm] = useState({});
+
+  // My Change Requests state
+  const [myChangeRequests, setMyChangeRequests] = useState([]);
+
+  // Bookings state
+  const [bookings, setBookings] = useState([]);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [bookingNoteText, setBookingNoteText] = useState('');
+
+  // Member Support Requests state
+  const [memberRequests, setMemberRequests] = useState([]);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [mrNote, setMrNote] = useState('');
+
+  // Destinations state
+  const [destinations, setDestinations] = useState([]);
+
+  const triggerToast = (msg, type = 'success') => {
+    setToastMessage(msg);
+    setToastType(type);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const hasPerm = (perm) => {
+    if (!permissions || permissions.length === 0) return false;
+    return permissions.includes(perm);
+  };
+
+  useEffect(() => {
+    const user = getAuthUser();
+    if (!user || (user.role !== 'employee' && user.role !== 'master_head')) {
+      router.push('/employee/login');
+      return;
+    }
+    setCurrentUser(user);
+    loadEmployeeSession();
+  }, [router]);
+
+  const loadEmployeeSession = async () => {
+    setLoading(true);
+    try {
+      const freshUser = await fetchCurrentUser();
+      if (freshUser) {
+        setCurrentUser(freshUser);
+        const perms = freshUser.permissions || [];
+        setPermissions(perms);
+
+        // Load accessible tabs
+        const promises = [fetchMyChangeRequests().catch(() => [])];
+
+        if (perms.includes('view_members')) {
+          promises.push(fetchAdminMembers({ page: 1, limit: 15 }).catch(() => ({ members: [], pagination: {} })));
+        }
+        if (perms.includes('manage_bookings')) {
+          promises.push(fetchAdminBookings().catch(() => []));
+        }
+        promises.push(fetchAdminMemberRequests().catch(() => []));
+        if (perms.includes('add_destinations') || perms.includes('edit_destinations')) {
+          promises.push(fetchDestinations().catch(() => []));
+        }
+
+        const results = await Promise.all(promises);
+        setMyChangeRequests(results[0] || []);
+
+        let idx = 1;
+        if (perms.includes('view_members')) {
+          const memRes = results[idx++];
+          setMembers(memRes?.members || []);
+          if (memRes?.pagination) setMembersPagination(memRes.pagination);
+        }
+        if (perms.includes('manage_bookings')) {
+          setBookings(results[idx++] || []);
+        }
+        setMemberRequests(results[idx++] || []);
+        if (perms.includes('add_destinations') || perms.includes('edit_destinations')) {
+          setDestinations(results[idx++] || []);
+        }
+      }
+    } catch (err) {
+      triggerToast(err.message || 'Error loading employee session', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMembersSearch = async (page = 1) => {
+    try {
+      const params = { page, limit: 15 };
+      if (memberSearch.trim()) params.search = memberSearch.trim();
+      if (memberPackageFilter) params.packageType = memberPackageFilter;
+
+      const res = await fetchAdminMembers(params);
+      setMembers(res.members || []);
+      if (res.pagination) setMembersPagination(res.pagination);
+    } catch (err) {
+      triggerToast(err.message || 'Error searching members', 'error');
+    }
+  };
+
+  const handleSignOut = () => {
+    clearAuth();
+    router.push('/login');
+  };
+
+  // Submit Change Request for Master Head approval
+  const handleSubmitChangeRequest = async (e) => {
+    e.preventDefault();
+    if (!crTargetMember || !crReason.trim()) return;
+    setActionLoading(true);
+    try {
+      const proposed = {};
+      const current = {};
+
+      if (crField === 'nightsAvailable') {
+        proposed.nightsAvailable = Number(crNewValue);
+        current.nightsAvailable = crTargetMember.nightsAvailable;
+      } else if (crField === 'packageType') {
+        proposed.packageType = crNewValue;
+        current.packageType = crTargetMember.packageType;
+      } else if (crField === 'travelCardBenefit') {
+        proposed.travelCardBenefit = crNewValue === 'true' || crNewValue === 'yes';
+        current.travelCardBenefit = crTargetMember.travelCardBenefit;
+      } else if (crField === 'extraOffers') {
+        proposed.extraOffers = crNewValue;
+        current.extraOffers = crTargetMember.extraOffers;
+      } else if (crField === 'tenurePeriod') {
+        proposed.tenurePeriod = crNewValue;
+        current.tenurePeriod = crTargetMember.tenurePeriod;
+      } else if (crField === 'phone') {
+        proposed.phone = crNewValue;
+        current.phone = crTargetMember.phone;
+      }
+
+      await createEmployeeChangeRequest({
+        memberProfileId: crTargetMember.id || crTargetMember._id,
+        changeType: `Update ${crField}`,
+        proposedChanges: proposed,
+        currentValues: current,
+        reason: crReason.trim(),
+      });
+
+      triggerToast('Change request submitted! Sent to Master Head for approval.');
+      setShowChangeRequestModal(false);
+      setCrReason('');
+      setCrNewValue('');
+      // Reload my change requests
+      fetchMyChangeRequests().then(setMyChangeRequests).catch(() => {});
+    } catch (err) {
+      triggerToast(err.message || 'Failed to submit change request', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Add Member by Employee with create_member permission
+  const handleAddMemberSubmit = async (e) => {
+    e.preventDefault();
+    setActionLoading(true);
+    try {
+      const payload = {
+        memberId: addMemberForm.memberId.trim().toUpperCase(),
+        name: addMemberForm.name.trim(),
+        email: addMemberForm.email.trim(),
+        phone: addMemberForm.phone.trim(),
+        password: addMemberForm.password,
+        packageType: addMemberForm.packageType,
+        nightsAvailable: Number(addMemberForm.nightsAvailable),
+        extraOffers: addMemberForm.extraOffers,
+        tenurePeriod: addMemberForm.tenurePeriod,
+        travelCardBenefit: Boolean(addMemberForm.travelCardBenefit),
+        purchaseDate: addMemberForm.purchaseDate,
+        productPrice: Number(addMemberForm.productPrice),
+        initialPaidAmount: Number(addMemberForm.initialPaidAmount),
+        emiDetails: {
+          hasEmi: Boolean(addMemberForm.hasEmi),
+          emiAmount: Number(addMemberForm.emiAmount),
+          frequency: addMemberForm.emiFrequency,
+          nextDueDate: addMemberForm.nextEmiDueDate,
+          dueAmount: Number(addMemberForm.dueAmount),
+        },
+      };
+
+      const res = await createAdminMember(payload);
+      triggerToast(`Member ${res.profile?.memberId || payload.memberId} registered successfully!`);
+      setShowAddMemberModal(false);
+      handleMembersSearch(1);
+    } catch (err) {
+      triggerToast(err.message || 'Failed to register member', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Direct Edit Submit (only for authorized employees with edit_member_details)
+  const handleDirectEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedMember) return;
+    setActionLoading(true);
+    try {
+      const res = await updateAdminMember(selectedMember.memberId, directEditForm);
+      triggerToast(`Member ${selectedMember.memberId} updated successfully.`);
+      setShowDirectEditModal(false);
+      setSelectedMember(res.profile);
+      handleMembersSearch(membersPagination.page);
+    } catch (err) {
+      triggerToast(err.message || 'Direct edit failed', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Booking note
+  const handleAddBookingNoteSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedBooking || !bookingNoteText.trim()) return;
+    try {
+      const res = await addBookingNote(selectedBooking.id || selectedBooking._id, bookingNoteText.trim());
+      triggerToast('Staff note recorded');
+      setSelectedBooking(res.booking);
+      setBookingNoteText('');
+      fetchAdminBookings().then(setBookings).catch(() => {});
+    } catch (err) {
+      triggerToast(err.message || 'Failed to add note', 'error');
+    }
+  };
+
+  const handleUpdateBookingStatus = async (id, status) => {
+    try {
+      await updateBookingStatus(id, status);
+      triggerToast(`Booking status set to ${status}`);
+      fetchAdminBookings().then(setBookings).catch(() => {});
+    } catch (err) {
+      triggerToast(err.message || 'Failed to update booking status', 'error');
+    }
+  };
+
+  // Member request ticket status
+  const handleUpdateTicketStatus = async (id, status) => {
+    try {
+      await updateMemberRequestStatus(id, status, mrNote);
+      triggerToast(`Ticket updated to ${status}`);
+      setMrNote('');
+      fetchAdminMemberRequests().then(setMemberRequests).catch(() => {});
+    } catch (err) {
+      triggerToast(err.message || 'Failed to update ticket', 'error');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-accent-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-semibold text-text-secondary">Loading Employee Portal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F7F9FC] text-text-primary flex flex-col">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-sm font-medium transition-all animate-in slide-in-from-bottom-3 ${
+            toastType === 'error'
+              ? 'bg-red-600 text-white shadow-red-500/20'
+              : 'bg-emerald-600 text-white shadow-emerald-500/20'
+          }`}
+        >
+          {toastType === 'error' ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+          <span>{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="ml-2 hover:opacity-80">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Top Header */}
+      <header className="sticky top-0 z-40 bg-white border-b border-border shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="relative h-9 w-36">
+                <Image
+                  src="/images/logo.png"
+                  alt="Nex World Travel"
+                  fill
+                  sizes="144px"
+                  className="object-contain object-left"
+                />
+              </div>
+            </Link>
+            <span className="hidden sm:inline-block h-5 w-[1px] bg-border" />
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                <Shield className="w-3.5 h-3.5 text-blue-600" />
+                Staff Specialist Portal
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-bold text-text-primary">{currentUser?.name || 'Staff Member'}</p>
+              <p className="text-[11px] text-text-tertiary">{currentUser?.email}</p>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-xl border border-border transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Employee Navigation Tabs */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 overflow-x-auto scrollbar-none flex gap-1 border-t border-border/50 py-1.5 bg-white">
+          {[
+            { id: 'members', label: 'Members Directory', icon: Users, perm: 'view_members' },
+            {
+              id: 'my-change-requests',
+              label: `My Change Requests (${myChangeRequests.length})`,
+              icon: FileEdit,
+              perm: null,
+            },
+            {
+              id: 'bookings',
+              label: `Booking Enquiries (${bookings.length})`,
+              icon: CalendarCheck,
+              perm: 'manage_bookings',
+            },
+            {
+              id: 'member-tickets',
+              label: `Member Inquiries (${memberRequests.length})`,
+              icon: MessageSquare,
+              perm: null,
+            },
+            {
+              id: 'permissions-info',
+              label: 'My Assigned Privileges',
+              icon: Shield,
+              perm: null,
+            },
+          ].map((tab) => {
+            if (tab.perm && !hasPerm(tab.perm)) return null;
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`whitespace-nowrap inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  isActive
+                    ? 'bg-accent-primary text-white shadow-xs'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-surface-50'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+        {/* ============================== TAB 1: MEMBERS DIRECTORY ============================== */}
+        {activeTab === 'members' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-text-primary">Member Records Operations</h1>
+                <p className="text-sm text-text-secondary">
+                  Look up member accounts, inspect remaining room nights, review travel card status, and request
+                  updates.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {hasPerm('create_member') && (
+                  <button
+                    onClick={() => setShowAddMemberModal(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover rounded-xl shadow-xs transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Register New Member</span>
+                  </button>
+                )}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-amber-800">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Package changes require Master Head approval</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-border shadow-xs flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-text-tertiary absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  placeholder="Search Member ID, name, or phone..."
+                  value={memberSearch}
+                  onChange={(e) => setMemberSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleMembersSearch(1)}
+                  className="w-full pl-10 pr-4 py-2 text-xs bg-surface-50 rounded-xl border border-border focus:border-accent-primary"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  value={memberPackageFilter}
+                  onChange={(e) => setMemberPackageFilter(e.target.value)}
+                  className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary"
+                >
+                  <option value="">All Packages</option>
+                  <option value="Gold">Gold Tier</option>
+                  <option value="Silver">Silver Tier</option>
+                </select>
+
+                <button
+                  onClick={() => handleMembersSearch(1)}
+                  className="px-4 py-2 bg-text-primary text-white text-xs font-semibold rounded-xl hover:bg-black"
+                >
+                  Search
+                </button>
+              </div>
+            </div>
+
+            {/* Members Table */}
+            <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px] text-left text-xs">
+                  <thead className="bg-surface-50 text-text-tertiary font-bold uppercase tracking-wider border-b border-border">
+                    <tr>
+                      <th className="py-3.5 px-4">Member ID</th>
+                      <th className="py-3.5 px-4">Registered Name</th>
+                      <th className="py-3.5 px-4">Tier</th>
+                      <th className="py-3.5 px-4">Available Nights</th>
+                      <th className="py-3.5 px-4">Travel Card</th>
+                      <th className="py-3.5 px-4">Balance</th>
+                      <th className="py-3.5 px-4 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {members.map((m) => (
+                      <tr key={m.memberId} className="hover:bg-surface-50 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-accent-primary">{m.memberId}</td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-text-primary">{m.registeredName || m.userId?.name}</div>
+                          <div className="text-[11px] text-text-tertiary">{m.email || m.userId?.email}</div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                              m.packageType === 'Gold'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                            }`}
+                          >
+                            <Award className="w-3 h-3" />
+                            {m.packageType}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-text-primary">{m.nightsAvailable} nights</td>
+                        <td className="py-3.5 px-4">
+                          {m.travelCardBenefit ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              Yes
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-700">
+                              <XCircle className="w-3 h-3 text-red-600" />
+                              No
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-red-600">
+                          ${m.outstandingBalance?.toLocaleString()}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => setSelectedMember(m)}
+                              className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary"
+                              title="View Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+
+                            {/* Permitted Contact Info Edit */}
+                            {hasPerm('edit_member_details') && (
+                              <button
+                                onClick={() => {
+                                  setSelectedMember(m);
+                                  setDirectEditForm({
+                                    phone: m.phone || '',
+                                  });
+                                  setShowDirectEditModal(true);
+                                }}
+                                className="px-2 py-1 bg-surface-100 hover:bg-surface-200 text-text-primary rounded-lg text-[11px] font-semibold border border-border"
+                                title="Update Contact Phone"
+                              >
+                                Contact Info
+                              </button>
+                            )}
+
+                            {/* Request Package Change button for all staff */}
+                            <button
+                              onClick={() => {
+                                setCrTargetMember(m);
+                                setCrField('packageType');
+                                setCrNewValue(m.packageType === 'Gold' ? 'Silver' : 'Gold');
+                                setShowChangeRequestModal(true);
+                              }}
+                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-xs"
+                            >
+                              <FileEdit className="w-3 h-3 text-amber-600" />
+                              <span>Request Package Change</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {members.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-text-tertiary">
+                          No members found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              <div className="px-4 py-3 bg-surface-50 border-t border-border flex items-center justify-between text-xs text-text-secondary">
+                <div>
+                  Showing {members.length} of {membersPagination.total} members (Page {membersPagination.page} of{' '}
+                  {membersPagination.pages})
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    disabled={membersPagination.page <= 1}
+                    onClick={() => handleMembersSearch(membersPagination.page - 1)}
+                    className="p-1.5 rounded-lg border border-border bg-white disabled:opacity-40"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    disabled={membersPagination.page >= membersPagination.pages}
+                    onClick={() => handleMembersSearch(membersPagination.page + 1)}
+                    className="p-1.5 rounded-lg border border-border bg-white disabled:opacity-40"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Member View Drawer */}
+        {selectedMember && !showChangeRequestModal && !showDirectEditModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-text-primary">
+                    {selectedMember.registeredName || selectedMember.userId?.name}
+                  </h3>
+                  <span className="font-mono text-xs font-bold text-accent-primary bg-accent-primary-light px-2 py-0.5 rounded-full">
+                    {selectedMember.memberId}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedMember(null)}
+                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs bg-surface-50 p-4 rounded-2xl border border-border">
+                <div>
+                  <span className="text-text-tertiary">Tier</span>
+                  <p className="font-bold text-text-primary mt-0.5">{selectedMember.packageType}</p>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Available Nights</span>
+                  <p className="font-bold text-accent-primary mt-0.5">{selectedMember.nightsAvailable} Nights</p>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Travel Card Benefit</span>
+                  <p className="font-bold text-emerald-600 mt-0.5">
+                    {selectedMember.travelCardBenefit ? 'Included' : 'None'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Outstanding Balance</span>
+                  <p className="font-bold text-red-600 mt-0.5">
+                    ${selectedMember.outstandingBalance?.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-xs">
+                <span className="font-semibold text-text-secondary block mb-1">Contract Perks:</span>
+                <p className="bg-surface-50 p-3 rounded-xl border border-border text-text-primary">
+                  {selectedMember.extraOffers || 'Standard package amenities apply.'}
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  onClick={() => {
+                    setCrTargetMember(selectedMember);
+                    setCrField('nightsAvailable');
+                    setCrNewValue(selectedMember.nightsAvailable);
+                    setShowChangeRequestModal(true);
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs"
+                >
+                  <FileEdit className="w-4 h-4" />
+                  <span>Request Package Change</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Member Modal (for authorized employees with create_member) */}
+        {showAddMemberModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div>
+                  <h3 className="text-base font-bold text-text-primary">Register New Member</h3>
+                  <p className="text-xs text-text-secondary">
+                    Create unique Member ID, configure package tier, and record initial membership contract.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAddMemberModal(false)}
+                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddMemberSubmit} className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">
+                      Member ID (Login Identifier) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. NEX-M-1002"
+                      value={addMemberForm.memberId}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, memberId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-mono font-bold uppercase focus:border-accent-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Temporary Password *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. MemberPassword2026!"
+                      value={addMemberForm.password}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, password: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Full Legal Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Johnathan Davis"
+                      value={addMemberForm.name}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, name: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Email Address *</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="john@example.com"
+                      value={addMemberForm.email}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, email: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Phone Number</label>
+                    <input
+                      type="text"
+                      placeholder="+971 50 123 4567"
+                      value={addMemberForm.phone}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, phone: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Package Tier *</label>
+                    <select
+                      value={addMemberForm.packageType}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, packageType: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold"
+                    >
+                      <option value="Gold">Gold</option>
+                      <option value="Silver">Silver</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Available Nights *</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={addMemberForm.nightsAvailable}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, nightsAvailable: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-border"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Travel Card Benefit *</label>
+                    <select
+                      value={addMemberForm.travelCardBenefit ? 'yes' : 'no'}
+                      onChange={(e) =>
+                        setAddMemberForm({ ...addMemberForm, travelCardBenefit: e.target.value === 'yes' })
+                      }
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold"
+                    >
+                      <option value="yes">Yes (Included)</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Tenure Period</label>
+                    <input
+                      type="text"
+                      value={addMemberForm.tenurePeriod}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, tenurePeriod: e.target.value })}
+                      placeholder="e.g. 3 Years"
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-border"
+                    />
+                  </div>
+                </div>
+
+                {/* Financial Details */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Total Product Price ($) *</label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={addMemberForm.productPrice}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, productPrice: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Initial Down Payment ($) *</label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={addMemberForm.initialPaidAmount}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, initialPaidAmount: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-border text-emerald-600 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Estimated Balance</label>
+                    <div className="px-2.5 py-1.5 rounded-xl bg-white border border-border font-bold text-red-600">
+                      ${Math.max(0, Number(addMemberForm.productPrice) - Number(addMemberForm.initialPaidAmount))}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Extra Offers & Perks</label>
+                  <input
+                    type="text"
+                    value={addMemberForm.extraOffers}
+                    onChange={(e) => setAddMemberForm({ ...addMemberForm, extraOffers: e.target.value })}
+                    placeholder="Airport Transfer, VIP Lounge, Travel Concierge"
+                    className="w-full px-3 py-2 rounded-xl border border-border"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMemberModal(false)}
+                    className="px-4 py-2 text-text-secondary hover:bg-surface-50 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-6 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold rounded-xl shadow-xs disabled:opacity-50"
+                  >
+                    {actionLoading ? 'Registering...' : 'Register Member Account'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Change Request Modal */}
+        {showChangeRequestModal && crTargetMember && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div>
+                  <h3 className="text-base font-bold text-text-primary">Request Package & Membership Update</h3>
+                  <p className="text-xs text-text-secondary">
+                    Member: <strong>{crTargetMember.memberId}</strong> ({crTargetMember.registeredName || crTargetMember.name || 'Member'}) • Current Tier: <strong>{crTargetMember.packageType}</strong>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowChangeRequestModal(false)}
+                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitChangeRequest} className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Field to Update *</label>
+                  <select
+                    value={crField}
+                    onChange={(e) => {
+                      setCrField(e.target.value);
+                      if (e.target.value === 'nightsAvailable') setCrNewValue(crTargetMember.nightsAvailable);
+                      if (e.target.value === 'packageType') setCrNewValue(crTargetMember.packageType);
+                      if (e.target.value === 'travelCardBenefit')
+                        setCrNewValue(crTargetMember.travelCardBenefit ? 'yes' : 'no');
+                      if (e.target.value === 'extraOffers') setCrNewValue(crTargetMember.extraOffers || '');
+                      if (e.target.value === 'tenurePeriod') setCrNewValue(crTargetMember.tenurePeriod || '');
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                  >
+                    <option value="nightsAvailable">Available Nights Pool</option>
+                    <option value="packageType">Package Tier (Gold / Silver)</option>
+                    <option value="travelCardBenefit">Travel Card Benefit (Yes / No)</option>
+                    <option value="extraOffers">Contract Extra Offers</option>
+                    <option value="tenurePeriod">Tenure Period</option>
+                    <option value="phone">Registered Contact Phone</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Proposed New Value *</label>
+                  {crField === 'packageType' ? (
+                    <select
+                      value={crNewValue}
+                      onChange={(e) => setCrNewValue(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    >
+                      <option value="Gold">Gold</option>
+                      <option value="Silver">Silver</option>
+                    </select>
+                  ) : crField === 'travelCardBenefit' ? (
+                    <select
+                      value={crNewValue}
+                      onChange={(e) => setCrNewValue(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    >
+                      <option value="yes">Yes (Included)</option>
+                      <option value="no">No</option>
+                    </select>
+                  ) : (
+                    <input
+                      type={crField === 'nightsAvailable' ? 'number' : 'text'}
+                      required
+                      value={crNewValue}
+                      onChange={(e) => setCrNewValue(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">
+                    Justification / Reason for Master Head Review *
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={crReason}
+                    onChange={(e) => setCrReason(e.target.value)}
+                    placeholder="e.g. Member purchased additional 4 room nights under contract amendment #890"
+                    className="w-full p-3 rounded-xl border border-border focus:border-accent-primary"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setShowChangeRequestModal(false)}
+                    className="px-4 py-2 text-text-secondary hover:bg-surface-50 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-5 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold rounded-xl shadow-xs disabled:opacity-50"
+                  >
+                    {actionLoading ? 'Submitting...' : 'Submit for Approval'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Direct Edit Modal (Permitted Contact Info Only) */}
+        {showDirectEditModal && selectedMember && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div>
+                  <h3 className="text-base font-bold text-text-primary">Update Contact Information</h3>
+                  <p className="text-xs text-text-secondary">Member: {selectedMember.memberId}</p>
+                </div>
+                <button
+                  onClick={() => setShowDirectEditModal(false)}
+                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleDirectEditSubmit} className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Contact Phone Number</label>
+                  <input
+                    type="text"
+                    value={directEditForm.phone || ''}
+                    onChange={(e) => setDirectEditForm({ ...directEditForm, phone: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-border"
+                  />
+                </div>
+
+                <div className="bg-surface-50 p-3 rounded-xl border border-border text-[11px] text-text-secondary leading-relaxed">
+                  <strong>Notice:</strong> Membership tiers (Gold/Silver), available nights pool, tenure periods, and financial balances cannot be changed directly. Use the <strong>Request Package Change</strong> button to submit updates for Master Head review.
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowDirectEditModal(false)}
+                    className="px-4 py-2 text-text-secondary hover:bg-surface-50 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-5 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold rounded-xl"
+                  >
+                    Save Contact Info
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ============================== TAB 2: MY CHANGE REQUESTS ============================== */}
+        {activeTab === 'my-change-requests' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div>
+              <h1 className="text-2xl font-bold text-text-primary">My Submitted Change Requests</h1>
+              <p className="text-sm text-text-secondary">
+                Track status and feedback for member record changes submitted for Master Head review.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {myChangeRequests.map((cr) => (
+                <div
+                  key={cr.id || cr._id}
+                  className="bg-white rounded-2xl border border-border p-5 shadow-xs space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-bold text-accent-primary bg-accent-primary-light px-2.5 py-0.5 rounded-full">
+                      Member: {cr.memberProfileId?.memberId || cr.targetId || 'NEX-M'}
+                    </span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        cr.status === 'Approved'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : cr.status === 'Rejected'
+                          ? 'bg-red-50 text-red-700 border border-red-200'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}
+                    >
+                      {cr.status}
+                    </span>
+                  </div>
+
+                  <div className="text-xs grid grid-cols-1 sm:grid-cols-2 gap-3 bg-surface-50 p-3 rounded-xl border border-border">
+                    <div>
+                      <span className="text-[10px] text-text-tertiary block font-semibold">Current</span>
+                      <pre className="font-mono text-[11px] text-text-secondary whitespace-pre-wrap">
+                        {JSON.stringify(cr.currentValues || cr.currentValue || {}, null, 2)}
+                      </pre>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-text-tertiary block font-semibold">Proposed Change</span>
+                      <pre className="font-mono text-[11px] text-accent-primary font-bold whitespace-pre-wrap">
+                        {JSON.stringify(cr.proposedChanges || cr.proposedValue || {}, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-text-secondary">
+                    <span className="font-semibold text-text-primary">Submission Reason:</span> {cr.reason}
+                  </div>
+
+                  {cr.reviewNotes && (
+                    <div className="text-xs bg-red-50 text-red-800 p-2.5 rounded-xl border border-red-200">
+                      <span className="font-bold">Master Head Feedback:</span> {cr.reviewNotes}
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-text-tertiary pt-1">
+                    Submitted: {new Date(cr.createdAt).toLocaleString()}
+                  </div>
+                </div>
+              ))}
+              {myChangeRequests.length === 0 && (
+                <div className="bg-white rounded-2xl border border-border p-12 text-center text-text-tertiary text-xs">
+                  You have not submitted any change requests yet.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ============================== TAB 3: BOOKING ENQUIRIES ============================== */}
+        {activeTab === 'bookings' && hasPerm('manage_bookings') && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div>
+              <h1 className="text-2xl font-bold text-text-primary">Travel Booking Enquiries</h1>
+              <p className="text-sm text-text-secondary">
+                Review guest bookings, append operational customer call notes, and update statuses.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px] text-left text-xs">
+                  <thead className="bg-surface-50 text-text-tertiary font-bold uppercase tracking-wider border-b border-border">
+                    <tr>
+                      <th className="py-3 px-4">Ref</th>
+                      <th className="py-3 px-4">Customer</th>
+                      <th className="py-3 px-4">Destination</th>
+                      <th className="py-3 px-4">Date & Guests</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {bookings.map((b) => (
+                      <tr key={b.id || b._id} className="hover:bg-surface-50 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-accent-primary">
+                          {b.bookingReference || b.enquiryNumber || b.id || b._id}
+                        </td>
+                        <td className="py-3 px-4 font-medium text-text-primary">
+                          <div>
+                            {b.fullName || b.customerName || `${b.firstName || ''} ${b.lastName || ''}`.trim() || 'Guest'}
+                          </div>
+                          <div className="text-[11px] text-text-tertiary">
+                            {b.email} • {b.phone}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-text-secondary">
+                          {b.destinationName || b.destinationOrPackage || 'Custom Tour'}
+                        </td>
+                        <td className="py-3 px-4 text-text-secondary">
+                          {b.departureDate || b.travelDate || 'Flexible'} • {b.guests || (b.adults ? `${b.adults} Guests` : '2 Guests')}
+                        </td>
+                        <td className="py-3 px-4">
+                          <select
+                            value={b.status}
+                            onChange={(e) => handleUpdateBookingStatus(b.id || b._id, e.target.value)}
+                            className="px-2 py-1 rounded-lg border border-border bg-surface-50 text-xs font-semibold"
+                          >
+                            <option value="New">New</option>
+                            <option value="Contacted">Contacted</option>
+                            <option value="Confirmed">Confirmed</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => setSelectedBooking(b)}
+                            className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {bookings.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-text-tertiary">
+                          No booking enquiries assigned.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Selected Booking Drawer */}
+        {selectedBooking && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <h3 className="text-base font-bold text-text-primary">Booking Enquiry #{selectedBooking.bookingReference}</h3>
+                <button
+                  onClick={() => setSelectedBooking(null)}
+                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="text-xs bg-surface-50 p-3.5 rounded-xl border border-border space-y-1">
+                <p>
+                  <span className="font-semibold text-text-primary">Customer:</span>{' '}
+                  {selectedBooking.fullName || selectedBooking.customerName || `${selectedBooking.prefix || ''} ${selectedBooking.firstName || ''} ${selectedBooking.lastName || ''}`.trim() || 'Guest'}
+                </p>
+                <p>
+                  <span className="font-semibold text-text-primary">Contact:</span> {selectedBooking.email} •{' '}
+                  {selectedBooking.phone || 'N/A'}
+                </p>
+                <p>
+                  <span className="font-semibold text-text-primary">Destination:</span>{' '}
+                  {selectedBooking.destinationName || selectedBooking.destinationOrPackage || 'Custom Trip'}
+                </p>
+                {(selectedBooking.specialRequests || selectedBooking.activitiesRequired || selectedBooking.notes) && (
+                  <p className="pt-1 text-text-secondary italic">
+                    "{selectedBooking.specialRequests || selectedBooking.activitiesRequired || selectedBooking.notes}"
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-border">
+                <h4 className="text-xs font-bold text-text-primary">Notes</h4>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {(selectedBooking.internalNotes || []).map((n, idx) => (
+                    <div key={idx} className="p-2 rounded-lg bg-surface-50 text-xs border border-border">
+                      <span className="font-semibold text-text-primary">{n.authorName}:</span> {n.note}
+                    </div>
+                  ))}
+                </div>
+
+                <form onSubmit={handleAddBookingNoteSubmit} className="flex gap-2 pt-1">
+                  <input
+                    type="text"
+                    value={bookingNoteText}
+                    onChange={(e) => setBookingNoteText(e.target.value)}
+                    placeholder="Add call/follow-up note..."
+                    className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-border"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 bg-accent-primary text-white text-xs font-bold rounded-xl"
+                  >
+                    Post
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================== TAB 4: MEMBER TICKETS ============================== */}
+        {activeTab === 'member-tickets' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div>
+              <h1 className="text-2xl font-bold text-text-primary">Member Inquiries & Tickets</h1>
+              <p className="text-sm text-text-secondary">
+                Track and respond to member portal inquiries with 24-hour SLA commitment.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {memberRequests.map((req) => (
+                <div
+                  key={req.id || req._id}
+                  className="bg-white rounded-2xl border border-border p-5 shadow-xs space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-accent-primary bg-accent-primary-light px-2.5 py-0.5 rounded-full">
+                        {req.memberProfileId?.memberId || 'NEX-M'}
+                      </span>
+                      <span className="text-xs font-bold text-text-primary">{req.subject}</span>
+                    </div>
+                    <select
+                      value={req.status}
+                      onChange={(e) => handleUpdateTicketStatus(req.id || req._id, e.target.value)}
+                      className="px-2.5 py-1 text-xs font-bold rounded-lg border border-border bg-surface-50"
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Resolved">Resolved</option>
+                    </select>
+                  </div>
+
+                  <p className="text-xs text-text-secondary bg-surface-50 p-3 rounded-xl border border-border leading-relaxed">
+                    {req.message}
+                  </p>
+
+                  <div className="flex items-center justify-between text-[11px] text-text-tertiary">
+                    <span className="inline-flex items-center gap-1 text-purple-600 font-semibold">
+                      <Clock className="w-3 h-3" /> 24h SLA Target
+                    </span>
+                    <span>Received: {new Date(req.createdAt).toLocaleString()}</span>
+                  </div>
+                </div>
+              ))}
+              {memberRequests.length === 0 && (
+                <div className="bg-white rounded-2xl border border-border p-12 text-center text-text-tertiary text-xs">
+                  No member inquiries currently assigned.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ============================== TAB 5: MY ASSIGNED PRIVILEGES ============================== */}
+        {activeTab === 'permissions-info' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div>
+              <h1 className="text-2xl font-bold text-text-primary">Staff Authorization & Governance</h1>
+              <p className="text-sm text-text-secondary">
+                Overview of granted operational capabilities authorized by the Master Head administrator.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-border p-6 shadow-xs space-y-4">
+              <div className="flex items-center gap-3 pb-4 border-b border-border">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg">
+                  {currentUser?.name?.charAt(0) || 'S'}
+                </div>
+                <div>
+                  <h3 className="font-bold text-text-primary">{currentUser?.name}</h3>
+                  <p className="text-xs text-text-tertiary">{currentUser?.email} • Employee Role</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-text-primary">Your Permission Matrix:</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    { id: 'view_members', label: 'View members' },
+                    { id: 'create_member_change_request', label: 'Create member change requests' },
+                    { id: 'edit_member_details', label: 'Direct edit member details' },
+                    { id: 'edit_membership_plans', label: 'Edit membership plans' },
+                    { id: 'update_financial_info', label: 'Update membership financial info' },
+                    { id: 'manage_bookings', label: 'Manage booking enquiries' },
+                    { id: 'add_destinations', label: 'Add destinations' },
+                    { id: 'edit_destinations', label: 'Edit destinations' },
+                    { id: 'delete_destinations', label: 'Delete destinations' },
+                    { id: 'view_reports', label: 'View reports' },
+                    { id: 'export_records', label: 'Export records' },
+                  ].map((p) => {
+                    const active = hasPerm(p.id);
+                    return (
+                      <div
+                        key={p.id}
+                        className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+                          active
+                            ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900 font-semibold'
+                            : 'bg-surface-50 border-border text-text-tertiary'
+                        }`}
+                      >
+                        <span>{p.label}</span>
+                        {active ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold">
+                            Granted
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-200 text-text-tertiary font-medium">
+                            Not Granted
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <p className="text-xs text-text-tertiary pt-2">
+                Need additional permissions? Contact the Master Head administrator to request permission updates.
+              </p>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

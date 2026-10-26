@@ -11,6 +11,8 @@
     "start": "npm --prefix client start",
     "start:client": "npm --prefix client start",
     "start:server": "npm --prefix server start",
+    "setup:admin": "npm --prefix server run setup:admin",
+    "kill:ports": "npx -y kill-port 3000 5000",
     "test": "node server/test/api.test.js",
     "install:all": "npm --prefix client install && npm --prefix server install"
   }

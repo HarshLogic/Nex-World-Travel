@@ -156,12 +156,12 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-text-secondary">
+        <div className="pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-text-secondary text-center sm:text-left">
           <p>© {new Date().getFullYear()} Nex World Travel & Tourism. All rights reserved.</p>
-          <div className="flex items-center gap-6">
-            <span>Powered by Next-Gen Travel Architecture</span>
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-6">
+            <span>Next-Gen Travel Architecture</span>
             <div className="flex items-center gap-1.5 text-emerald-600 font-medium">
-              <ShieldCheck className="w-4 h-4" />
+              <ShieldCheck className="w-4 h-4 shrink-0" />
               <span>Verified Agency Service</span>
             </div>
           </div>
