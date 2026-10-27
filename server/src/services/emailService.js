@@ -1,6 +1,10 @@
 import nodemailer from 'nodemailer';
 
-const BUSINESS_BOOKING_EMAIL = process.env.BUSINESS_BOOKING_EMAIL || 'enquiry@nexworldtravel.com';
+const BOOKING_ASSISTANCE_EMAIL =
+  process.env.BOOKING_ASSISTANCE_EMAIL ||
+  process.env.BUSINESS_BOOKING_EMAIL ||
+  'reservation@nexworldtravel.com';
+const CUSTOMER_CARE_EMAIL = process.env.CUSTOMER_CARE_EMAIL || 'customercare@nexworldtravel.com';
 const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
 const SMTP_USER = process.env.SMTP_USER;
@@ -48,29 +52,35 @@ const getTransporter = () => {
 export const sendBookingNotification = async (booking) => {
   try {
     const mailer = getTransporter();
+    const leadName = booking.memberName || booking.customerName || `${booking.prefix || ''} ${booking.firstName || ''} ${booking.lastName || ''}`.trim();
+    const guestsCount = booking.guestsCount || ((Number(booking.adults) || 1) + (Number(booking.children) || 0));
+    const checkIn = booking.checkInDate || booking.travelDate || 'Pending Selection';
+    const checkOut = booking.checkOutDate || booking.returnDate || 'Flexible';
+
     const mailOptions = {
-      from: `"Nex World Travel & Tourism" <${SMTP_FROM_EMAIL}>`,
-      to: BUSINESS_BOOKING_EMAIL,
-      subject: `🚨 New Booking Enquiry [${booking.enquiryNumber}]: ${booking.destinationOrPackage}`,
+      from: `"Nex World Travel Reservations" <${SMTP_FROM_EMAIL}>`,
+      to: BOOKING_ASSISTANCE_EMAIL,
+      subject: `🚨 Booking Request [${booking.enquiryNumber}]: ${leadName} — ${booking.destinationOrPackage}`,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E6EAF0; border-radius: 12px;">
-          <h2 style="color: #172033; margin-top: 0;">New Journey Enquiry Registered</h2>
-          <p style="color: #667085; font-size: 14px;">A new travel consultation request was submitted on the Nex World Travel platform.</p>
+        <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #E6EAF0; border-radius: 16px; background-color: #FFFFFF;">
+          <h2 style="color: #172033; margin-top: 0; font-size: 20px;">Standard Booking Request Received</h2>
+          <p style="color: #667085; font-size: 13px;">To ensure a smooth and timely booking process, the customer submitted their request in the standard format:</p>
           
           <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
-            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold; color: #172033;">Enquiry Reference:</td><td style="color: #315EFB; font-weight: bold;">${booking.enquiryNumber}</td></tr>
-            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold; color: #172033;">Lead Traveler:</td><td>${booking.customerName || `${booking.prefix} ${booking.firstName} ${booking.lastName}`}</td></tr>
-            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold; color: #172033;">Email:</td><td><a href="mailto:${booking.email}">${booking.email}</a></td></tr>
-            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold; color: #172033;">Mobile Phone:</td><td>${booking.phone}</td></tr>
-            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold; color: #172033;">Nationality:</td><td>${booking.nationality}</td></tr>
-            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold; color: #172033;">Destination / Package:</td><td style="font-weight: bold;">${booking.destinationOrPackage}</td></tr>
-            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold; color: #172033;">Departure Date:</td><td>${booking.travelDate}</td></tr>
-            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold; color: #172033;">Travelers:</td><td>${booking.adults} Adults, ${booking.children || 0} Children</td></tr>
-            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold; color: #172033;">Requested Activities:</td><td>${booking.activitiesRequired}</td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 10px 0; font-weight: bold; color: #172033;">Reference Number:</td><td style="color: #315EFB; font-weight: bold; font-family: monospace;">${booking.enquiryNumber}</td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 10px 0; font-weight: bold; color: #172033;">Member Name:</td><td><strong>${leadName}</strong></td></tr>
+            ${booking.spouseName ? `<tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 10px 0; font-weight: bold; color: #172033;">Spouse Name:</td><td>${booking.spouseName}</td></tr>` : ''}
+            ${booking.kidsAges ? `<tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 10px 0; font-weight: bold; color: #172033;">Kids & Ages:</td><td>${booking.kidsAges}</td></tr>` : ''}
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 10px 0; font-weight: bold; color: #172033;">Check-in Date:</td><td style="color: #047857; font-weight: 600;">${checkIn}</td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 10px 0; font-weight: bold; color: #172033;">Check-out Date:</td><td style="color: #047857; font-weight: 600;">${checkOut}</td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 10px 0; font-weight: bold; color: #172033;">Destination / Location:</td><td style="font-weight: bold;">${booking.destinationOrPackage}</td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 10px 0; font-weight: bold; color: #172033;">Number of Guests (PAX):</td><td><strong>${guestsCount} Guest(s)</strong></td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 10px 0; font-weight: bold; color: #172033;">Contact Email:</td><td><a href="mailto:${booking.email}">${booking.email}</a></td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 10px 0; font-weight: bold; color: #172033;">Phone Number:</td><td><a href="tel:${booking.phone}">${booking.phone}</a></td></tr>
           </table>
 
-          <div style="background-color: #F7F9FC; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #667085;">
-            <strong>Next Steps:</strong> Review this enquiry in the <a href="http://localhost:3000/admin/dashboard" style="color: #315EFB;">Master Head Portal</a> or Employee Booking Dashboard to contact the traveler within 24 hours.
+          <div style="background-color: #F7F9FC; padding: 14px 18px; border-radius: 10px; font-size: 13px; color: #475467; border-left: 4px solid #315EFB;">
+            <em>"Once your request is received, our Reservations Team will check availability and assist you accordingly."</em>
           </div>
         </div>
       `,
@@ -80,6 +90,37 @@ export const sendBookingNotification = async (booking) => {
     return { success: true, messageId: result.messageId };
   } catch (err) {
     console.error('[EmailService] Failed to send booking notification:', err.message);
+    return { success: false, error: err.message };
+  }
+};
+
+export const sendContactNotification = async (contact) => {
+  try {
+    const mailer = getTransporter();
+    const mailOptions = {
+      from: `"Nex World Travel Support" <${SMTP_FROM_EMAIL}>`,
+      to: CUSTOMER_CARE_EMAIL,
+      subject: `📩 General Customer Care Inquiry [${contact.ticketNumber}]: ${contact.subject}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E6EAF0; border-radius: 12px;">
+          <h2 style="color: #172033; margin-top: 0;">Customer Care Inquiry Registered</h2>
+          <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold;">Ticket:</td><td style="font-family: monospace; font-weight: bold;">${contact.ticketNumber}</td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold;">From:</td><td>${contact.fullName}</td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold;">Email:</td><td><a href="mailto:${contact.email}">${contact.email}</a></td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold;">Phone:</td><td>${contact.phone || 'N/A'}</td></tr>
+            <tr style="border-bottom: 1px solid #f0f3f7;"><td style="padding: 8px 0; font-weight: bold;">Subject:</td><td>${contact.subject}</td></tr>
+          </table>
+          <div style="background-color: #F7F9FC; padding: 12px; border-radius: 8px; font-size: 13px; color: #172033; white-space: pre-line;">
+            ${contact.message}
+          </div>
+        </div>
+      `,
+    };
+    const result = await mailer.sendMail(mailOptions);
+    return { success: true, messageId: result.messageId };
+  } catch (err) {
+    console.error('[EmailService] Failed to send contact notification:', err.message);
     return { success: false, error: err.message };
   }
 };

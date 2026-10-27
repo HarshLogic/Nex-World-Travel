@@ -14,6 +14,7 @@ import { Booking } from '../models/Booking.js';
 import { Contact } from '../models/Contact.js';
 import { TermsCondition } from '../models/TermsCondition.js';
 import { AuditLog } from '../models/AuditLog.js';
+import { PlanAvailability } from '../models/PlanAvailability.js';
 import { seedDestinations, seedActivities, seedPackages } from '../data/seedData.js';
 
 class ResilientStore {
@@ -24,6 +25,7 @@ class ResilientStore {
     this.permissions = [];
     this.changeRequests = [];
     this.memberRequests = [];
+    this.availabilities = [];
     this.destinations = [...seedDestinations.map((d, i) => ({
       ...d,
       _id: `dest-${i + 1}`,
@@ -72,7 +74,11 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
   async initializeSeedAccounts() {
     if (this.initialized) return;
 
-    const adminHash = await bcrypt.hash('AdminPassword2026!', 10);
+    const masterEmail = (process.env.MASTER_HEAD_EMAIL || 'adityar@nexworldtravel.com').toLowerCase();
+    const masterPassword = process.env.MASTER_HEAD_PASSWORD || 'Aditiya@1993';
+    const masterName = process.env.MASTER_HEAD_NAME || 'Aditya R';
+    const adminHash = await bcrypt.hash(masterPassword, 10);
+    const legacyAdminHash = await bcrypt.hash('AdminPassword2026!', 10);
     const staffHash = await bcrypt.hash('StaffPassword2026!', 10);
     const memberHash = await bcrypt.hash('MemberPassword2026!', 10);
 
@@ -81,8 +87,8 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       _id: 'user-admin-1',
       id: 'user-admin-1',
       role: 'master_head',
-      email: 'admin@nexworldtravel.com',
-      name: 'Master Head Administrator',
+      email: masterEmail,
+      name: masterName,
       phone: '+971 2 639 5908',
       isActive: true,
       passwordHash: adminHash,
@@ -118,6 +124,19 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
     // Add to in-memory store
     this.users = [masterHead, staffUser, memberUser];
+    if (masterEmail !== 'admin@nexworldtravel.com') {
+      this.users.push({
+        _id: 'user-admin-legacy',
+        id: 'user-admin-legacy',
+        role: 'master_head',
+        email: 'admin@nexworldtravel.com',
+        name: 'Master Head Administrator (Legacy)',
+        phone: '+971 2 639 5908',
+        isActive: true,
+        passwordHash: legacyAdminHash,
+        createdAt: new Date().toISOString(),
+      });
+    }
 
     // Initial Member Profile
     const memberProfile = {
@@ -269,6 +288,130 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       },
     ];
 
+    // Seed Available Trips and Plan Dates Calendar
+    this.availabilities = [
+      {
+        _id: 'avail-1',
+        id: 'avail-1',
+        title: 'European Elegance: Paris & Rome Grand Tour',
+        destinationOrPlan: 'Paris & Rome, Europe',
+        packageTier: 'All',
+        startDate: '2026-11-05',
+        endDate: '2026-11-12',
+        isAvailable: true,
+        availableSeats: 8,
+        bookedSeats: 2,
+        notes: 'Includes VIP Louvre access, 5-star boutique accommodation, and high-speed rail transfer.',
+        createdBy: 'Master Administrator',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        _id: 'avail-2',
+        id: 'avail-2',
+        title: 'Swiss Alps & Glacier Express Scenic Panorama',
+        destinationOrPlan: 'Zermatt & Zurich, Switzerland',
+        packageTier: 'Gold',
+        startDate: '2026-11-18',
+        endDate: '2026-11-25',
+        isAvailable: true,
+        availableSeats: 6,
+        bookedSeats: 4,
+        notes: 'First-class Glacier Express journey with panoramic Alpine dining and private ski lodge access.',
+        createdBy: 'Master Administrator',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        _id: 'avail-3',
+        id: 'avail-3',
+        title: 'Bali Luxury Sanctuary & Ubud Rainforest Escape',
+        destinationOrPlan: 'Bali, Indonesia',
+        packageTier: 'Platinum',
+        startDate: '2026-12-02',
+        endDate: '2026-12-09',
+        isAvailable: true,
+        availableSeats: 10,
+        bookedSeats: 1,
+        notes: 'Private infinity pool villa, sunrise Mount Batur helicopter charter, and Ayurvedic wellness rituals.',
+        createdBy: 'Master Administrator',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        _id: 'avail-4',
+        id: 'avail-4',
+        title: 'Emirates Royal Oasis & Arabian Dune Retreat',
+        destinationOrPlan: 'Abu Dhabi & Liwa Desert, UAE',
+        packageTier: 'All',
+        startDate: '2026-12-14',
+        endDate: '2026-12-21',
+        isAvailable: true,
+        availableSeats: 12,
+        bookedSeats: 0,
+        notes: 'Exclusive Qasr Al Sarab desert tent experience, sunset falconry show, and private Yas Marina cruise.',
+        createdBy: 'Master Administrator',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        _id: 'avail-5',
+        id: 'avail-5',
+        title: 'Winter Festivities: Vienna & Prague Historic Castles',
+        destinationOrPlan: 'Vienna & Prague, Central Europe',
+        packageTier: 'Gold Plus',
+        startDate: '2026-12-24',
+        endDate: '2026-12-31',
+        isAvailable: false,
+        availableSeats: 0,
+        bookedSeats: 10,
+        notes: 'Sold out holiday season departure.',
+        createdBy: 'Master Administrator',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        _id: 'avail-6',
+        id: 'avail-6',
+        title: 'Tokyo & Kyoto Cultural Heritage Expedition',
+        destinationOrPlan: 'Tokyo & Kyoto, Japan',
+        packageTier: 'Titanium',
+        startDate: '2027-01-10',
+        endDate: '2027-01-18',
+        isAvailable: true,
+        availableSeats: 6,
+        bookedSeats: 2,
+        notes: 'Shinkansen Gran Class transit, private geisha tea banquet in Gion, and luxury ryokan hot spring stays.',
+        createdBy: 'Master Administrator',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        _id: 'avail-7',
+        id: 'avail-7',
+        title: 'Amalfi Coast & Capri Private Yacht Sojourn',
+        destinationOrPlan: 'Amalfi Coast & Capri, Italy',
+        packageTier: 'Platinum+',
+        startDate: '2027-02-08',
+        endDate: '2027-02-15',
+        isAvailable: true,
+        availableSeats: 8,
+        bookedSeats: 0,
+        notes: 'Cliffside luxury hotel suites in Positano and private day charter along the Faraglioni cliffs.',
+        createdBy: 'Master Administrator',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        _id: 'avail-8',
+        id: 'avail-8',
+        title: 'Kenya Maasai Mara Great Migration & Balloon Safari',
+        destinationOrPlan: 'Maasai Mara, Kenya',
+        packageTier: 'Gold',
+        startDate: '2027-03-10',
+        endDate: '2027-03-18',
+        isAvailable: true,
+        availableSeats: 10,
+        bookedSeats: 3,
+        notes: '4x4 custom Land Cruiser game drives with master naturalist guides and luxury tented bush lodge.',
+        createdBy: 'Master Administrator',
+        createdAt: new Date().toISOString(),
+      },
+    ];
+
     // If MongoDB is live, seed into Mongo
     if (this.isMongoLive()) {
       try {
@@ -347,8 +490,12 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     if (this.isMongoLive()) {
       try {
         const doc = await User.create(record);
-        return doc.toObject();
-      } catch (e) {}
+        const obj = doc.toObject();
+        this.users.push(obj);
+        return obj;
+      } catch (e) {
+        console.error('[StoreService] Mongo User.create error:', e.message);
+      }
     }
     this.users.push(record);
     return record;
@@ -449,8 +596,23 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     if (this.isMongoLive()) {
       try {
         const filter = {};
-        if (status) filter.membershipStatus = status;
-        if (packageType) filter.packageType = packageType;
+        if (status) {
+          const s = status.toLowerCase();
+          if (s === 'open' || s === 'active') {
+            filter.membershipStatus = { $in: ['Open', 'Active', 'open', 'active'] };
+          } else if (s === 'close' || s === 'closed') {
+            filter.membershipStatus = { $in: ['Close', 'closed', 'close'] };
+          } else if (s === 'deactive' || s === 'deactivated' || s === 'suspended') {
+            filter.membershipStatus = { $in: ['Deactive', 'deactive', 'Suspended', 'suspended'] };
+          } else if (s === 'cancel' || s === 'cancelled' || s === 'expired') {
+            filter.membershipStatus = { $in: ['Cancel', 'cancel', 'Cancelled', 'cancelled', 'Expired', 'expired'] };
+          } else {
+            filter.membershipStatus = new RegExp('^' + status + '$', 'i');
+          }
+        }
+        if (packageType) {
+          filter.packageType = new RegExp('^' + packageType.replace('+', '\\+') + '$', 'i');
+        }
         if (search) {
           const regex = new RegExp(search, 'i');
           filter.$or = [
@@ -462,11 +624,20 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
         }
 
         const total = await MemberProfile.countDocuments(filter);
-        const members = await MemberProfile.find(filter)
+        const docs = await MemberProfile.find(filter)
           .sort({ createdAt: -1 })
           .skip((page - 1) * limit)
           .limit(limit)
           .lean();
+
+        // Normalize fields for frontend consumer
+        const members = docs.map((m) => ({
+          ...m,
+          status: m.membershipStatus || 'Open',
+          membershipStatus: m.membershipStatus || 'Open',
+          nightsAvailable: m.availableNights !== undefined ? m.availableNights : (m.nightsAvailable || 0),
+          availableNights: m.availableNights !== undefined ? m.availableNights : (m.nightsAvailable || 0),
+        }));
 
         return {
           members,
@@ -474,14 +645,26 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
             total,
             page,
             limit,
-            pages: Math.ceil(total / limit),
+            pages: Math.ceil(total / limit) || 1,
           },
         };
-      } catch (e) {}
+      } catch (e) {
+        console.error('[StoreService] Mongo getMembers error:', e.message);
+      }
     }
 
     let results = [...this.members];
-    if (status) results = results.filter((m) => m.membershipStatus.toLowerCase() === status.toLowerCase());
+    if (status) {
+      const s = status.toLowerCase();
+      results = results.filter((m) => {
+        const ms = (m.membershipStatus || m.status || 'Open').toLowerCase();
+        if (s === 'open' || s === 'active') return ms === 'open' || ms === 'active';
+        if (s === 'close' || s === 'closed') return ms === 'close' || ms === 'closed';
+        if (s === 'deactive' || s === 'deactivated' || s === 'suspended') return ms === 'deactive' || ms === 'deactivated' || ms === 'suspended';
+        if (s === 'cancel' || s === 'cancelled' || s === 'expired') return ms === 'cancel' || ms === 'cancelled' || ms === 'expired';
+        return ms === s;
+      });
+    }
     if (packageType) results = results.filter((m) => m.packageType.toLowerCase() === packageType.toLowerCase());
     if (search) {
       const q = search.toLowerCase();
@@ -495,7 +678,13 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     }
 
     const total = results.length;
-    const paginated = results.slice((page - 1) * limit, page * limit);
+    const paginated = results.slice((page - 1) * limit, page * limit).map((m) => ({
+      ...m,
+      status: m.membershipStatus || 'Open',
+      membershipStatus: m.membershipStatus || 'Open',
+      nightsAvailable: m.availableNights !== undefined ? m.availableNights : (m.nightsAvailable || 0),
+      availableNights: m.availableNights !== undefined ? m.availableNights : (m.nightsAvailable || 0),
+    }));
 
     return {
       members: paginated,
@@ -563,34 +752,39 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       nextEMIDueDate: data.nextEMIDueDate || null,
       dueAmount: Number(data.emiAmount || 0),
       paymentStatus: productPrice === 0 ? 'Fully Paid' : 'Up to Date',
-      membershipStatus: data.membershipStatus || 'Active',
+      membershipStatus: data.membershipStatus || 'Open',
       termsAccepted: false,
       termsVersion: 'v1.0-2026',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    let finalProfile = profile;
     if (this.isMongoLive()) {
       try {
         const doc = await MemberProfile.create(profile);
-        return doc.toObject();
-      } catch (e) {}
+        finalProfile = doc.toObject ? doc.toObject() : doc;
+      } catch (e) {
+        console.error('[StoreService] Mongo MemberProfile.create error:', e.message);
+      }
     }
 
-    this.members.unshift(profile);
+    this.members.unshift(finalProfile);
 
     // Record initial down payment if > 0
     if (initialPaid > 0) {
-      await this.recordPayment(profile.memberId, {
+      await this.recordPayment(finalProfile.memberId, {
         amount: initialPaid,
         paymentType: 'down_payment',
         paymentMethod: 'Bank Transfer',
         notes: 'Initial enrollment payment',
       }, author);
+      const updated = await this.getMemberById(finalProfile.memberId);
+      if (updated) finalProfile = updated;
     }
 
-    await this.logAudit('MEMBER_CREATED', author, 'member', profile.memberId, { registeredName: profile.registeredName });
-    return profile;
+    await this.logAudit('MEMBER_CREATED', author, 'member', finalProfile.memberId, { registeredName: finalProfile.registeredName });
+    return finalProfile;
   }
 
   async updateMember(memberId, updateData, author = 'Master Head') {
@@ -608,12 +802,13 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
     if (this.isMongoLive()) {
       try {
-        await MemberProfile.findOneAndUpdate({ memberId: memberId.toUpperCase() }, member);
-      } catch (e) {}
-    } else {
-      const idx = this.members.findIndex((m) => m.memberId.toUpperCase() === memberId.toUpperCase());
-      if (idx !== -1) this.members[idx] = member;
+        await MemberProfile.findOneAndUpdate({ memberId: memberId.toUpperCase() }, { $set: updateData }, { new: true });
+      } catch (e) {
+        console.error('[StoreService] Mongo MemberProfile.findOneAndUpdate error:', e.message);
+      }
     }
+    const idx = this.members.findIndex((m) => m.memberId.toUpperCase() === memberId.toUpperCase());
+    if (idx !== -1) this.members[idx] = member;
 
     await this.logAudit('MEMBER_UPDATED', author, 'member', memberId, {
       changedFields: Object.keys(updateData),
@@ -646,7 +841,9 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     if (this.isMongoLive()) {
       try {
         await PaymentTransaction.create(paymentRecord);
-      } catch (e) {}
+      } catch (e) {
+        console.error('[StoreService] Mongo PaymentTransaction.create error:', e.message);
+      }
     }
     this.payments.unshift(paymentRecord);
 
@@ -657,12 +854,17 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     if (newBalance === 0) newStatus = 'Fully Paid';
     else newStatus = 'Up to Date';
 
-    await this.updateMember(memberId, {
+    const updatePayload = {
       totalAmountPaid: newPaid,
       outstandingBalance: newBalance,
       paymentStatus: newStatus,
       emiPaidMonths: member.emiAmount > 0 ? Math.floor(newPaid / member.emiAmount) : member.emiPaidMonths,
-    }, author);
+    };
+    if (paymentData.membershipStatus) {
+      updatePayload.membershipStatus = paymentData.membershipStatus;
+    }
+
+    await this.updateMember(memberId, updatePayload, author);
 
     await this.logAudit('PAYMENT_RECORDED', author, 'financial', memberId, {
       transactionId,
@@ -1050,11 +1252,14 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
   // ==================== BOOKING ENQUIRIES ====================
   async createBooking(bookingData) {
     const enquiryNumber = this.generateCode('NEX-BK');
-    const customerName = `${bookingData.prefix || ''} ${bookingData.firstName || ''} ${bookingData.lastName || ''}`.trim();
+    const memberName = bookingData.memberName || `${bookingData.prefix || ''} ${bookingData.firstName || ''} ${bookingData.lastName || ''}`.trim();
+    const customerName = memberName;
     const record = {
       ...bookingData,
       _id: `bk-${Date.now()}`,
       enquiryNumber,
+      referenceNumber: enquiryNumber,
+      memberName,
       customerName,
       status: 'New',
       emailNotificationSent: false,
@@ -1223,6 +1428,185 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       } catch (e) {}
     }
     return this.auditLogs.slice(0, limit);
+  }
+
+  // ==================== TRIP & PLAN AVAILABILITY ====================
+  async getAvailabilities({ destination = '', packageTier = '', isAvailable = '', search = '', memberId = '' } = {}) {
+    await this.initializeSeedAccounts();
+    if (this.isMongoLive()) {
+      try {
+        const filter = {};
+        if (destination) filter.destinationOrPlan = new RegExp(destination, 'i');
+        if (packageTier && packageTier !== 'All') {
+          filter.$or = [{ packageTier: 'All' }, { packageTier }];
+        }
+        if (isAvailable !== '') {
+          filter.isAvailable = String(isAvailable) === 'true';
+        }
+        if (memberId && memberId !== 'ALL') {
+          const mFilter = [
+            { memberId: 'ALL' },
+            { memberId: memberId.toUpperCase() },
+            { memberId: { $exists: false } },
+            { memberId: null },
+          ];
+          if (filter.$or) {
+            filter.$and = [{ $or: filter.$or }, { $or: mFilter }];
+            delete filter.$or;
+          } else {
+            filter.$or = mFilter;
+          }
+        }
+        if (search) {
+          const regex = new RegExp(search, 'i');
+          const searchCondition = [{ title: regex }, { destinationOrPlan: regex }, { notes: regex }, { memberName: regex }];
+          if (filter.$and) {
+            filter.$and.push({ $or: searchCondition });
+          } else if (filter.$or) {
+            filter.$and = [{ $or: filter.$or }, { $or: searchCondition }];
+            delete filter.$or;
+          } else {
+            filter.$or = searchCondition;
+          }
+        }
+        return await PlanAvailability.find(filter).sort({ startDate: 1 }).lean();
+      } catch (e) {
+        console.error('[StoreService] Mongo getAvailabilities error:', e.message);
+      }
+    }
+
+    let results = [...this.availabilities];
+    if (memberId && memberId !== 'ALL') {
+      const cleanMId = memberId.toUpperCase();
+      results = results.filter((a) => !a.memberId || a.memberId === 'ALL' || a.memberId.toUpperCase() === cleanMId);
+    }
+    if (destination) {
+      const q = destination.toLowerCase();
+      results = results.filter((a) => a.destinationOrPlan.toLowerCase().includes(q));
+    }
+    if (packageTier && packageTier !== 'All') {
+      results = results.filter((a) => a.packageTier === 'All' || a.packageTier === packageTier);
+    }
+    if (isAvailable !== '') {
+      const reqAvail = String(isAvailable) === 'true';
+      results = results.filter((a) => a.isAvailable === reqAvail);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      results = results.filter(
+        (a) =>
+          a.title.toLowerCase().includes(q) ||
+          a.destinationOrPlan.toLowerCase().includes(q) ||
+          (a.memberName && a.memberName.toLowerCase().includes(q)) ||
+          (a.notes && a.notes.toLowerCase().includes(q))
+      );
+    }
+    return results.sort((a, b) => (a.startDate > b.startDate ? 1 : -1));
+  }
+
+  async createAvailability(data, author = 'Master Administrator') {
+    await this.initializeSeedAccounts();
+    if (new Date(data.endDate) < new Date(data.startDate)) {
+      throw new Error('Trip end date cannot be earlier than start date.');
+    }
+
+    const id = `avail-${Date.now()}`;
+    const cleanMemberId = data.memberId ? data.memberId.toUpperCase().trim() : 'ALL';
+    const cleanMemberName = data.memberName
+      ? data.memberName.trim()
+      : (cleanMemberId !== 'ALL' ? cleanMemberId : 'All Members');
+
+    const record = {
+      _id: id,
+      id,
+      memberId: cleanMemberId,
+      memberName: cleanMemberName,
+      title: data.title.trim(),
+      destinationOrPlan: data.destinationOrPlan.trim(),
+      packageTier: data.packageTier || 'All',
+      startDate: data.startDate,
+      endDate: data.endDate,
+      isAvailable: data.isAvailable !== undefined ? Boolean(data.isAvailable) : true,
+      availableSeats: Number(data.availableSeats || 10),
+      bookedSeats: Number(data.bookedSeats || 0),
+      notes: (data.notes || '').trim(),
+      createdBy: author,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (this.isMongoLive()) {
+      try {
+        const doc = await PlanAvailability.create(record);
+        await this.logAudit('CREATE_PLAN_AVAILABILITY', author, 'PlanAvailability', String(doc._id), {
+          title: record.title,
+          period: `${record.startDate} to ${record.endDate}`,
+          memberId: record.memberId,
+        });
+        return doc.toObject ? doc.toObject() : doc;
+      } catch (e) {
+        console.error('[StoreService] Mongo PlanAvailability.create error:', e.message);
+      }
+    }
+
+    this.availabilities.unshift(record);
+    await this.logAudit('CREATE_PLAN_AVAILABILITY', author, 'PlanAvailability', id, {
+      title: record.title,
+      period: `${record.startDate} to ${record.endDate}`,
+      memberId: record.memberId,
+    });
+    return record;
+  }
+
+  async updateAvailability(id, updateData, author = 'Master Administrator') {
+    await this.initializeSeedAccounts();
+    const index = this.availabilities.findIndex((a) => a._id === id || a.id === id);
+    if (index === -1) {
+      throw new Error(`Availability record '${id}' not found.`);
+    }
+
+    if (updateData.startDate && updateData.endDate) {
+      if (new Date(updateData.endDate) < new Date(updateData.startDate)) {
+        throw new Error('Trip end date cannot be earlier than start date.');
+      }
+    }
+
+    const updated = {
+      ...this.availabilities[index],
+      ...updateData,
+      updatedAt: new Date().toISOString(),
+    };
+    this.availabilities[index] = updated;
+
+    if (this.isMongoLive()) {
+      try {
+        await PlanAvailability.findOneAndUpdate({ $or: [{ _id: id }, { id }] }, { $set: updateData });
+      } catch (e) {}
+    }
+
+    await this.logAudit('UPDATE_PLAN_AVAILABILITY', author, 'PlanAvailability', id, {
+      title: updated.title,
+      isAvailable: updated.isAvailable,
+      updatedFields: Object.keys(updateData),
+    });
+    return updated;
+  }
+
+  async deleteAvailability(id, author = 'Master Administrator') {
+    await this.initializeSeedAccounts();
+    const target = this.availabilities.find((a) => a._id === id || a.id === id);
+    this.availabilities = this.availabilities.filter((a) => a._id !== id && a.id !== id);
+
+    if (this.isMongoLive()) {
+      try {
+        await PlanAvailability.findOneAndDelete({ $or: [{ _id: id }, { id }] });
+      } catch (e) {}
+    }
+
+    await this.logAudit('DELETE_PLAN_AVAILABILITY', author, 'PlanAvailability', id, {
+      title: target?.title || id,
+    });
+    return { success: true };
   }
 }
 

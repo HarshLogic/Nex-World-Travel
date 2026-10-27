@@ -9,6 +9,37 @@ const bookingSchema = new mongoose.Schema(
       uppercase: true,
       index: true,
     },
+    // Standard Booking Request Format Fields
+    memberName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    spouseName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    kidsAges: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    checkInDate: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    checkOutDate: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    guestsCount: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
     customerName: {
       type: String,
       trim: true,

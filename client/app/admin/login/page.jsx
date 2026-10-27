@@ -9,8 +9,8 @@ import { loginStaff } from '../../../lib/api';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@nexworldtravel.com');
-  const [password, setPassword] = useState('AdminPassword2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -66,6 +66,7 @@ export default function AdminLoginPage() {
               <input
                 type="email"
                 required
+                placeholder="e.g. adityar@nexworldtravel.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
@@ -80,6 +81,7 @@ export default function AdminLoginPage() {
                 <input
                   type="password"
                   required
+                  placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"

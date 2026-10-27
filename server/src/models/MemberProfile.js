@@ -2,8 +2,11 @@ import mongoose from 'mongoose';
 
 const memberProfileSchema = new mongoose.Schema(
   {
+    _id: {
+      type: mongoose.Schema.Types.Mixed,
+    },
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.Mixed,
       ref: 'User',
       required: true,
       index: true,
@@ -37,8 +40,8 @@ const memberProfileSchema = new mongoose.Schema(
     packageType: {
       type: String,
       required: true,
-      enum: ['Gold', 'Silver'],
-      default: 'Silver',
+      enum: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'],
+      default: 'Gold',
       index: true,
     },
     availableNights: {
@@ -122,8 +125,8 @@ const memberProfileSchema = new mongoose.Schema(
     },
     membershipStatus: {
       type: String,
-      enum: ['Active', 'Expired', 'Suspended', 'Pending'],
-      default: 'Active',
+      enum: ['Open', 'Close', 'Deactive', 'Cancel', 'Active', 'Expired', 'Suspended', 'Pending'],
+      default: 'Open',
       index: true,
     },
     // Terms & Conditions Acknowledgement
@@ -150,6 +153,13 @@ memberProfileSchema.index({
   email: 'text',
   phone: 'text',
 });
+
+// Virtual for backward-compatibility with UI referencing nightsAvailable
+memberProfileSchema.virtual('nightsAvailable').get(function () {
+  return this.availableNights;
+});
+memberProfileSchema.set('toJSON', { virtuals: true });
+memberProfileSchema.set('toObject', { virtuals: true });
 
 export const MemberProfile = mongoose.model('MemberProfile', memberProfileSchema);
 

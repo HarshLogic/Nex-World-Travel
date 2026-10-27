@@ -64,6 +64,23 @@ async function runTests() {
       if (data.user.role !== 'master_head') throw new Error('Role mismatch for admin');
     });
 
+    // 3b. Master Head Login (adityar@nexworldtravel.com)
+    await check('Master Head Login (adityar@nexworldtravel.com)', async () => {
+      const res = await fetch('http://127.0.0.1:5098/api/v1/auth/staff/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'adityar@nexworldtravel.com',
+          password: 'Aditiya@1993',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.token) {
+        throw new Error('Master Head login with adityar failed: ' + JSON.stringify(data));
+      }
+      if (data.user.role !== 'master_head') throw new Error('Role mismatch for adityar');
+    });
+
     // 4. Employee Login with Email & Password
     let employeeToken = null;
     await check('Employee Login (staff@nexworldtravel.com)', async () => {
@@ -491,7 +508,212 @@ async function runTests() {
       }
     });
 
-    console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL 20 TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
+    // 21. Standard Booking Request Format Submission & Date Validation
+    await check('Standard Booking Request format submission & validation', async () => {
+      // Valid submission
+      const res = await fetch('http://127.0.0.1:5098/api/v1/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberName: 'Dr. Sarah Jenkins',
+          spouseName: 'Robert Jenkins',
+          kidsAges: '2 kids (ages 5, 8)',
+          checkInDate: '2026-11-15',
+          checkOutDate: '2026-11-22',
+          destinationOrPackage: 'Swiss Alps Luxury Retreat',
+          guestsCount: 4,
+          email: 'sarah.jenkins@example.com',
+          phone: '+971 50 999 8877',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.data.referenceNumber) {
+        throw new Error('Standard booking submission failed: ' + JSON.stringify(data));
+      }
+      if (!data.message.includes('Reservations Team will check availability')) {
+        throw new Error('Missing standard closing message in response');
+      }
+
+      // Invalid date validation: check-out before check-in
+      const invalidRes = await fetch('http://127.0.0.1:5098/api/v1/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberName: 'Dr. Sarah Jenkins',
+          checkInDate: '2026-11-25',
+          checkOutDate: '2026-11-20', // Invalid: before check-in!
+          destinationOrPackage: 'Swiss Alps',
+          guestsCount: 2,
+          email: 'sarah.jenkins@example.com',
+          phone: '+971 50 999 8877',
+        }),
+      });
+      if (invalidRes.status !== 400) {
+        throw new Error('Validation failed to reject check-out before check-in');
+      }
+    });
+
+    // 22. Trip and Plan Availability Calendar Endpoint
+    await check('Trip & Plan Availability Calendar (/api/v1/availability)', async () => {
+      const res = await fetch('http://127.0.0.1:5098/api/v1/availability');
+      const data = await res.json();
+      if (!res.ok || !data.success || !Array.isArray(data.data) || data.count === 0) {
+        throw new Error('Failed to retrieve trip availability: ' + JSON.stringify(data));
+      }
+      const availableTrips = data.data.filter((t) => t.isAvailable);
+      if (availableTrips.length === 0) {
+        throw new Error('No green available trips found in store');
+      }
+    });
+
+    // 23. Fix Master Head Dashboard Bug & Membership Status Lifecycle
+    await check('Master Head member creation persistence, immediate retrieval & status filtering', async () => {
+      const testMemberId = `NEX-M-${Date.now().toString().slice(-4)}`;
+      const createRes = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          memberId: testMemberId,
+          name: 'Dashboard Verification Member',
+          email: `${testMemberId.toLowerCase()}@nexworldtravel.com`,
+          phone: '+971 50 777 6655',
+          password: 'Pass2026!Verification',
+          packageType: 'Platinum',
+          nightsAvailable: 21,
+          membershipStatus: 'Open',
+          productPrice: 35000,
+          initialPaidAmount: 10000,
+          tenurePeriod: '5 Years',
+          travelCardBenefit: true,
+        }),
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok || !createData.success) {
+        throw new Error(`Failed to create member: ${JSON.stringify(createData)}`);
+      }
+
+      // Verify member can immediately log in
+      const loginRes = await fetch('http://127.0.0.1:5098/api/v1/auth/member/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberId: testMemberId,
+          password: 'Pass2026!Verification',
+        }),
+      });
+      const loginData = await loginRes.json();
+      if (!loginRes.ok || !loginData.success) {
+        throw new Error('Newly created member cannot log in');
+      }
+
+      // Verify member appears on Master Head dashboard member search
+      const searchRes = await fetch(`http://127.0.0.1:5098/api/v1/members?search=${testMemberId}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const searchData = await searchRes.json();
+      if (!searchRes.ok || !searchData.members || searchData.members.length === 0) {
+        throw new Error(`Master Head dashboard cannot find newly created member ${testMemberId}`);
+      }
+      const retrieved = searchData.members[0];
+      if (retrieved.membershipStatus !== 'Open') {
+        throw new Error(`Expected membershipStatus 'Open' but got ${retrieved.membershipStatus}`);
+      }
+
+      // Verify status filtering
+      const filterOpen = await fetch(`http://127.0.0.1:5098/api/v1/members?status=Open&search=${testMemberId}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const openData = await filterOpen.json();
+      if (openData.members.length === 0) {
+        throw new Error('Status filter "Open" failed to include the new member');
+      }
+
+      const filterClose = await fetch(`http://127.0.0.1:5098/api/v1/members?status=Close&search=${testMemberId}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const closeData = await filterClose.json();
+      if (closeData.members.length > 0) {
+        throw new Error('Status filter "Close" should not include Open member');
+      }
+
+      // Update status to 'Close', 'Deactive', 'Cancel'
+      for (const nextStatus of ['Deactive', 'Cancel', 'Close']) {
+        const updateRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${testMemberId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${adminToken}`,
+          },
+          body: JSON.stringify({ membershipStatus: nextStatus }),
+        });
+        const updateData = await updateRes.json();
+        if (!updateRes.ok || updateData.member?.membershipStatus !== nextStatus) {
+          throw new Error(`Failed to update membershipStatus to ${nextStatus}`);
+        }
+      }
+    });
+
+    // 24. Member-Specific Travel Availability and Financial Separation
+    await check('Member-specific travel availability calendar & separate payment status', async () => {
+      const availRes = await fetch('http://127.0.0.1:5098/api/v1/availability', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          memberId: 'NEX-M-1001',
+          memberName: 'Dr. Tariq Al Nuaimi',
+          title: 'Private Maldives Overwater Villa',
+          destinationOrPlan: 'Maldives',
+          startDate: '2026-12-01',
+          endDate: '2026-12-08',
+          isAvailable: true,
+          availableSeats: 2,
+        }),
+      });
+      const availData = await availRes.json();
+      if (!availRes.ok || !availData.success) {
+        throw new Error(`Failed to create member-specific availability: ${JSON.stringify(availData)}`);
+      }
+
+      // Member query returns their specific availability + ALL availability
+      const memberAvail = await fetch('http://127.0.0.1:5098/api/v1/availability?memberId=NEX-M-1001');
+      const mData = await memberAvail.json();
+      const hasSpecific = mData.data.some((a) => a.memberId === 'NEX-M-1001');
+      if (!hasSpecific) {
+        throw new Error('Member-specific availability not returned for member query');
+      }
+
+      // Payment with status update preserves paymentStatus integrity
+      const payRes = await fetch('http://127.0.0.1:5098/api/v1/members/NEX-M-1001/payments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          amount: 2000,
+          paymentMethod: 'Credit Card',
+          membershipStatus: 'Open',
+        }),
+      });
+      const payData = await payRes.json();
+      if (!payRes.ok || !payData.member) {
+        throw new Error('Payment recording failed');
+      }
+      if (payData.member.membershipStatus !== 'Open') {
+        throw new Error('membershipStatus was not updated via payment endpoint');
+      }
+      if (!['Up to Date', 'Fully Paid'].includes(payData.member.paymentStatus)) {
+        throw new Error(`paymentStatus corrupted: ${payData.member.paymentStatus}`);
+      }
+    });
+
+    console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
   } finally {
     server.close();
   }

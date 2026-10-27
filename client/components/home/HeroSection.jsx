@@ -20,16 +20,20 @@ export default function HeroSection() {
             <MapPin className="w-3.5 h-3.5 text-accent-primary shrink-0" />
             <span className="truncate">Nex World Travel & Tourism • Abu Dhabi</span>
           </div>
-          <div className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full bg-accent-primary-light border border-accent-primary/20 text-[11px] sm:text-xs font-semibold text-accent-primary shrink-0">
-            <Sparkles className="w-3.5 h-3.5 shrink-0" />
-            <span>Curated Global Journeys</span>
+          <div className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-[11px] sm:text-xs font-semibold text-amber-800 shrink-0">
+            <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>Official Travel Partner for Lulu Events in 2025 (Summer Carnival and Shopathon)</span>
           </div>
         </div>
 
         {/* Editorial Headline */}
-        <div className="text-center max-w-4xl mx-auto mb-10 px-2 sm:px-0">
-          <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-text-primary tracking-tight leading-[1.12] sm:leading-[1.08] mb-4 sm:mb-6">
-            Your Next Great <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-primary to-accent-secondary">Adventure</span> Starts Here.
+        <div className="text-center max-w-5xl mx-auto mb-10 px-2 sm:px-0">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold text-text-primary tracking-tight leading-[1.15] sm:leading-[1.1] mb-4 sm:mb-6">
+            Dream Without Limits.{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-primary via-indigo-600 to-accent-secondary">
+              Discover Endless Possibilities.
+            </span>{' '}
+            Explore Beyond Boundaries
           </h1>
           <p className="text-base sm:text-xl text-text-secondary leading-relaxed max-w-2xl mx-auto">
             Discover extraordinary destinations, thoughtfully curated holidays, and unforgettable experiences crafted around your unique rhythm.

@@ -109,9 +109,6 @@ export default function ContactPage() {
                     <a href="tel:+97126395908" className="text-xs text-accent-primary hover:underline block mt-0.5">
                       +971 2 639 5908
                     </a>
-                    <a href="tel:+97126397786" className="text-xs text-accent-primary hover:underline block">
-                      +971 2 639 7786
-                    </a>
                   </div>
                 </div>
 
@@ -121,12 +118,14 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <strong className="block text-text-primary font-semibold">Email Desk</strong>
-                    <a href="mailto:info@nexworldtravel.com" className="text-xs text-text-secondary hover:text-accent-primary block mt-0.5">
-                      info@nexworldtravel.com
-                    </a>
-                    <a href="mailto:enquiry@nexworldtravel.com" className="text-xs text-text-secondary hover:text-accent-primary block">
-                      enquiry@nexworldtravel.com
-                    </a>
+                    <div className="space-y-1 mt-0.5">
+                      <div>
+                        <span className="text-[11px] font-bold text-accent-primary uppercase tracking-wider block">Customer Care & Support:</span>
+                        <a href="mailto:customercare@nexworldtravel.com" className="text-xs text-text-secondary hover:text-accent-primary">
+                          customercare@nexworldtravel.com
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -137,7 +136,25 @@ export default function ContactPage() {
                   <div>
                     <strong className="block text-text-primary font-semibold">Consultation Hours</strong>
                     <p className="text-xs text-text-secondary mt-0.5">
-                      Monday to Saturday: 9:00 AM – 7:00 PM (Gulf Standard Time)
+                      Tuesday to Sunday: 11:00 AM – 07:00 PM
+                    </p>
+                    <p className="text-xs text-rose-600 font-semibold">
+                      Monday: Closed
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Branch Office Card */}
+              <div className="pt-4 border-t border-border space-y-2">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 flex-shrink-0">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <strong className="block text-text-primary font-semibold">Branch Office (India)</strong>
+                    <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
+                      Akshay Complex, 151/152/153, Dholepatil Road, near Ruby Hall, Sangamvadi, Pune, Maharashtra 411001, India
                     </p>
                   </div>
                 </div>

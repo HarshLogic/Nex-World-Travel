@@ -2,6 +2,9 @@ import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema(
   {
+    _id: {
+      type: mongoose.Schema.Types.Mixed,
+    },
     role: {
       type: String,
       required: true,

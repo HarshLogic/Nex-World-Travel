@@ -35,13 +35,18 @@ export const createBooking = async (req, res, next) => {
     res.status(201).json({
       success: true,
       message:
-        'Your travel enquiry has been successfully registered. A Nex World Travel specialist will review your preferences and contact you with a curated itinerary within 24 hours.',
+        'Your booking request has been saved successfully. Once your request is received, our Reservations Team will check availability and assist you accordingly.',
+      closingMessage:
+        'Once your request is received, our Reservations Team will check availability and assist you accordingly.',
       data: {
+        referenceNumber: booking.enquiryNumber,
         enquiryNumber: booking.enquiryNumber,
         status: booking.status,
-        recipient: `${booking.prefix} ${booking.firstName} ${booking.lastName}`,
+        recipient: booking.memberName || `${booking.prefix} ${booking.firstName} ${booking.lastName}`,
         destination: booking.destinationOrPackage,
-        travelDate: booking.travelDate,
+        checkInDate: booking.checkInDate || booking.travelDate,
+        checkOutDate: booking.checkOutDate || booking.returnDate,
+        guestsCount: booking.guestsCount || booking.adults,
         createdAt: booking.createdAt,
       },
     });

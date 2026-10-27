@@ -9,8 +9,8 @@ import { loginStaff } from '../../../lib/api';
 
 export default function EmployeeLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('staff@nexworldtravel.com');
-  const [password, setPassword] = useState('StaffPassword2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -62,6 +62,7 @@ export default function EmployeeLoginPage() {
               <input
                 type="email"
                 required
+                placeholder="e.g. staff@nexworldtravel.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
@@ -76,6 +77,7 @@ export default function EmployeeLoginPage() {
                 <input
                   type="password"
                   required
+                  placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"

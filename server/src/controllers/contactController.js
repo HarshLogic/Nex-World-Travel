@@ -1,5 +1,6 @@
 import { validateContact } from '../validators/contactValidator.js';
 import { store } from '../services/storeService.js';
+import { sendContactNotification } from '../services/emailService.js';
 
 export const createContact = async (req, res, next) => {
   try {
@@ -17,6 +18,11 @@ export const createContact = async (req, res, next) => {
     }
 
     const contact = await store.createContact(validation.data);
+
+    // Asynchronously dispatch to customer care desk (customercare@nexworldtravel.com)
+    sendContactNotification(contact).catch((err) => {
+      console.error('[ContactController] Email dispatch failed:', err.message);
+    });
 
     res.status(201).json({
       success: true,

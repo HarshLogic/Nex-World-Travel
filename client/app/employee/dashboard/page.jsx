@@ -31,6 +31,7 @@ import {
   Lock,
   Download,
   Info,
+  Calendar,
 } from 'lucide-react';
 import {
   fetchCurrentUser,
@@ -47,6 +48,7 @@ import {
   fetchDestinations,
   createDestination,
   updateDestination,
+  fetchAvailabilities,
 } from '../../../lib/api';
 import { getAuthUser, clearAuth } from '../../../lib/auth';
 
@@ -65,6 +67,7 @@ export default function EmployeeDashboardPage() {
   const [membersPagination, setMembersPagination] = useState({ page: 1, limit: 15, total: 0, pages: 1 });
   const [memberSearch, setMemberSearch] = useState('');
   const [memberPackageFilter, setMemberPackageFilter] = useState('');
+  const [memberStatusFilter, setMemberStatusFilter] = useState('');
   const [selectedMember, setSelectedMember] = useState(null);
 
   // Change Request Modal state
@@ -77,13 +80,14 @@ export default function EmployeeDashboardPage() {
   // Add Member Modal state (when employee has create_member permission)
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [addMemberForm, setAddMemberForm] = useState({
-    memberId: '',
+    memberId: `NEX-M-${Math.floor(2000 + Math.random() * 8000)}`,
     name: '',
     email: '',
     phone: '',
-    password: '',
+    password: 'Member123!',
     packageType: 'Gold',
     nightsAvailable: 14,
+    membershipStatus: 'Open',
     extraOffers: 'Airport Transfer, VIP Lounge, Travel Concierge',
     tenurePeriod: '3 Years',
     travelCardBenefit: true,
@@ -116,6 +120,9 @@ export default function EmployeeDashboardPage() {
 
   // Destinations state
   const [destinations, setDestinations] = useState([]);
+
+  // Trip Availability Calendar state
+  const [availabilities, setAvailabilities] = useState([]);
 
   const triggerToast = (msg, type = 'success') => {
     setToastMessage(msg);
@@ -160,6 +167,7 @@ export default function EmployeeDashboardPage() {
         if (perms.includes('add_destinations') || perms.includes('edit_destinations')) {
           promises.push(fetchDestinations().catch(() => []));
         }
+        promises.push(fetchAvailabilities().catch(() => []));
 
         const results = await Promise.all(promises);
         setMyChangeRequests(results[0] || []);
@@ -177,6 +185,7 @@ export default function EmployeeDashboardPage() {
         if (perms.includes('add_destinations') || perms.includes('edit_destinations')) {
           setDestinations(results[idx++] || []);
         }
+        setAvailabilities(results[idx++] || []);
       }
     } catch (err) {
       triggerToast(err.message || 'Error loading employee session', 'error');
@@ -185,11 +194,16 @@ export default function EmployeeDashboardPage() {
     }
   };
 
-  const handleMembersSearch = async (page = 1) => {
+  const handleMembersSearch = async (page = 1, overrideFilters = null) => {
     try {
+      const searchVal = overrideFilters && overrideFilters.search !== undefined ? overrideFilters.search : memberSearch.trim();
+      const pkgVal = overrideFilters && overrideFilters.packageType !== undefined ? overrideFilters.packageType : memberPackageFilter;
+      const statusVal = overrideFilters && overrideFilters.status !== undefined ? overrideFilters.status : memberStatusFilter;
+
       const params = { page, limit: 15 };
-      if (memberSearch.trim()) params.search = memberSearch.trim();
-      if (memberPackageFilter) params.packageType = memberPackageFilter;
+      if (searchVal) params.search = searchVal;
+      if (pkgVal) params.packageType = pkgVal;
+      if (statusVal) params.status = statusVal;
 
       const res = await fetchAdminMembers(params);
       setMembers(res.members || []);
@@ -219,6 +233,9 @@ export default function EmployeeDashboardPage() {
       } else if (crField === 'packageType') {
         proposed.packageType = crNewValue;
         current.packageType = crTargetMember.packageType;
+      } else if (crField === 'membershipStatus') {
+        proposed.membershipStatus = crNewValue;
+        current.membershipStatus = crTargetMember.membershipStatus || 'Open';
       } else if (crField === 'travelCardBenefit') {
         proposed.travelCardBenefit = crNewValue === 'true' || crNewValue === 'yes';
         current.travelCardBenefit = crTargetMember.travelCardBenefit;
@@ -260,32 +277,49 @@ export default function EmployeeDashboardPage() {
     setActionLoading(true);
     try {
       const payload = {
-        memberId: addMemberForm.memberId.trim().toUpperCase(),
+        memberId: (addMemberForm.memberId || `NEX-M-${Math.floor(2000 + Math.random() * 8000)}`).trim().toUpperCase(),
+        registeredName: addMemberForm.name.trim(),
         name: addMemberForm.name.trim(),
         email: addMemberForm.email.trim(),
         phone: addMemberForm.phone.trim(),
-        password: addMemberForm.password,
+        initialPassword: addMemberForm.password || 'Member123!',
+        password: addMemberForm.password || 'Member123!',
         packageType: addMemberForm.packageType,
-        nightsAvailable: Number(addMemberForm.nightsAvailable),
+        availableNights: Number(addMemberForm.nightsAvailable || 14),
+        nightsAvailable: Number(addMemberForm.nightsAvailable || 14),
+        membershipStatus: addMemberForm.membershipStatus || 'Open',
         extraOffers: addMemberForm.extraOffers,
         tenurePeriod: addMemberForm.tenurePeriod,
         travelCardBenefit: Boolean(addMemberForm.travelCardBenefit),
-        purchaseDate: addMemberForm.purchaseDate,
-        productPrice: Number(addMemberForm.productPrice),
-        initialPaidAmount: Number(addMemberForm.initialPaidAmount),
+        purchaseDate: addMemberForm.purchaseDate || new Date().toISOString().split('T')[0],
+        productPrice: Number(addMemberForm.productPrice || 12500),
+        initialPaidAmount: Number(addMemberForm.initialPaidAmount || 0),
+        hasEMI: Boolean(addMemberForm.hasEmi),
+        emiAmount: Number(addMemberForm.emiAmount || 0),
+        emiTenureMonths: 12,
+        nextEMIDueDate: addMemberForm.nextEmiDueDate,
         emiDetails: {
           hasEmi: Boolean(addMemberForm.hasEmi),
-          emiAmount: Number(addMemberForm.emiAmount),
-          frequency: addMemberForm.emiFrequency,
+          emiAmount: Number(addMemberForm.emiAmount || 0),
+          frequency: addMemberForm.emiFrequency || 'Monthly',
           nextDueDate: addMemberForm.nextEmiDueDate,
-          dueAmount: Number(addMemberForm.dueAmount),
+          dueAmount: Number(addMemberForm.dueAmount || 0),
         },
       };
 
       const res = await createAdminMember(payload);
-      triggerToast(`Member ${res.profile?.memberId || payload.memberId} registered successfully!`);
+      const createdMember = res.member || res.profile;
+      const createdId = createdMember?.memberId || payload.memberId;
+      triggerToast(`Member ${createdId} registered successfully!`);
       setShowAddMemberModal(false);
-      handleMembersSearch(1);
+
+      if (createdMember) {
+        setMembers((prev) => [createdMember, ...prev.filter((m) => m.memberId !== createdMember.memberId)]);
+        setMembersPagination((prev) => ({ ...prev, total: (prev.total || 0) + 1 }));
+      }
+      setMemberSearch('');
+      setMemberStatusFilter('');
+      handleMembersSearch(1, { search: '', packageType: '', status: '' });
     } catch (err) {
       triggerToast(err.message || 'Failed to register member', 'error');
     } finally {
@@ -445,6 +479,12 @@ export default function EmployeeDashboardPage() {
               icon: Shield,
               perm: null,
             },
+            {
+              id: 'availability',
+              label: `Trip Calendar (${availabilities.length})`,
+              icon: Calendar,
+              perm: null,
+            },
           ].map((tab) => {
             if (tab.perm && !hasPerm(tab.perm)) return null;
             const Icon = tab.icon;
@@ -518,9 +558,26 @@ export default function EmployeeDashboardPage() {
                   onChange={(e) => setMemberPackageFilter(e.target.value)}
                   className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary"
                 >
-                  <option value="">All Packages</option>
-                  <option value="Gold">Gold Tier</option>
-                  <option value="Silver">Silver Tier</option>
+                  <option value="">All Tiers (7 Tiers)</option>
+                  <option value="Titanium">Titanium</option>
+                  <option value="Platinum+">Platinum+</option>
+                  <option value="Platinum">Platinum</option>
+                  <option value="Gold Plus">Gold Plus</option>
+                  <option value="Gold">Gold</option>
+                  <option value="Silver Plus">Silver Plus</option>
+                  <option value="Silver">Silver</option>
+                </select>
+
+                <select
+                  value={memberStatusFilter}
+                  onChange={(e) => setMemberStatusFilter(e.target.value)}
+                  className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary font-medium"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="Open">Open</option>
+                  <option value="Close">Close</option>
+                  <option value="Deactive">Deactive</option>
+                  <option value="Cancel">Cancel</option>
                 </select>
 
                 <button
@@ -535,11 +592,12 @@ export default function EmployeeDashboardPage() {
             {/* Members Table */}
             <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px] text-left text-xs">
+                <table className="w-full min-w-[780px] text-left text-xs">
                   <thead className="bg-surface-50 text-text-tertiary font-bold uppercase tracking-wider border-b border-border">
                     <tr>
                       <th className="py-3.5 px-4">Member ID</th>
                       <th className="py-3.5 px-4">Registered Name</th>
+                      <th className="py-3.5 px-4">Membership Status</th>
                       <th className="py-3.5 px-4">Tier</th>
                       <th className="py-3.5 px-4">Available Nights</th>
                       <th className="py-3.5 px-4">Travel Card</th>
@@ -557,6 +615,32 @@ export default function EmployeeDashboardPage() {
                         </td>
                         <td className="py-3.5 px-4">
                           <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                              (m.membershipStatus || m.status) === 'Open' || (m.membershipStatus || m.status) === 'Active'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : (m.membershipStatus || m.status) === 'Close'
+                                ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                                : (m.membershipStatus || m.status) === 'Deactive'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-red-50 text-red-700 border border-red-200'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                (m.membershipStatus || m.status) === 'Open' || (m.membershipStatus || m.status) === 'Active'
+                                  ? 'bg-emerald-500'
+                                  : (m.membershipStatus || m.status) === 'Close'
+                                  ? 'bg-slate-500'
+                                  : (m.membershipStatus || m.status) === 'Deactive'
+                                  ? 'bg-amber-500'
+                                  : 'bg-red-500'
+                              }`}
+                            />
+                            {m.membershipStatus || m.status || 'Open'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
                             className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                               m.packageType === 'Gold'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -567,7 +651,7 @@ export default function EmployeeDashboardPage() {
                             {m.packageType}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-text-primary">{m.nightsAvailable} nights</td>
+                        <td className="py-3.5 px-4 font-bold text-text-primary">{m.nightsAvailable ?? m.availableNights ?? 0} nights</td>
                         <td className="py-3.5 px-4">
                           {m.travelCardBenefit ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">
@@ -757,27 +841,42 @@ export default function EmployeeDashboardPage() {
               <form onSubmit={handleAddMemberSubmit} className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-semibold text-text-secondary mb-1">
-                      Member ID (Login Identifier) *
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-semibold text-text-secondary">Member ID (Login Identifier) *</label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAddMemberForm((prev) => ({
+                            ...prev,
+                            memberId: `NEX-M-${Math.floor(2000 + Math.random() * 8000)}`,
+                          }))
+                        }
+                        className="text-[10px] text-accent-primary hover:underline font-bold"
+                      >
+                        Auto-Generate ID
+                      </button>
+                    </div>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. NEX-M-1002"
+                      placeholder="e.g. NEX-M-2026"
                       value={addMemberForm.memberId}
                       onChange={(e) => setAddMemberForm({ ...addMemberForm, memberId: e.target.value })}
                       className="w-full px-3 py-2 rounded-xl border border-border font-mono font-bold uppercase focus:border-accent-primary"
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Temporary Password *</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-semibold text-text-secondary">Initial Password *</label>
+                      <span className="text-[10px] text-text-muted">Min 4 chars (Default: Member123!)</span>
+                    </div>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. MemberPassword2026!"
+                      placeholder="Member123!"
                       value={addMemberForm.password}
                       onChange={(e) => setAddMemberForm({ ...addMemberForm, password: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                      className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary font-mono"
                     />
                   </div>
                 </div>
@@ -817,7 +916,20 @@ export default function EmployeeDashboardPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Membership Status *</label>
+                    <select
+                      value={addMemberForm.membershipStatus || 'Open'}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, membershipStatus: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold text-accent-primary"
+                    >
+                      <option value="Open">Open</option>
+                      <option value="Close">Close</option>
+                      <option value="Deactive">Deactive</option>
+                      <option value="Cancel">Cancel</option>
+                    </select>
+                  </div>
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Package Tier *</label>
                     <select
@@ -825,7 +937,12 @@ export default function EmployeeDashboardPage() {
                       onChange={(e) => setAddMemberForm({ ...addMemberForm, packageType: e.target.value })}
                       className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold"
                     >
+                      <option value="Titanium">Titanium</option>
+                      <option value="Platinum+">Platinum+</option>
+                      <option value="Platinum">Platinum</option>
+                      <option value="Gold Plus">Gold Plus</option>
                       <option value="Gold">Gold</option>
+                      <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
                     </select>
                   </div>
@@ -957,6 +1074,7 @@ export default function EmployeeDashboardPage() {
                       setCrField(e.target.value);
                       if (e.target.value === 'nightsAvailable') setCrNewValue(crTargetMember.nightsAvailable);
                       if (e.target.value === 'packageType') setCrNewValue(crTargetMember.packageType);
+                      if (e.target.value === 'membershipStatus') setCrNewValue(crTargetMember.membershipStatus || 'Open');
                       if (e.target.value === 'travelCardBenefit')
                         setCrNewValue(crTargetMember.travelCardBenefit ? 'yes' : 'no');
                       if (e.target.value === 'extraOffers') setCrNewValue(crTargetMember.extraOffers || '');
@@ -965,7 +1083,8 @@ export default function EmployeeDashboardPage() {
                     className="w-full px-3 py-2 rounded-xl border border-border font-bold"
                   >
                     <option value="nightsAvailable">Available Nights Pool</option>
-                    <option value="packageType">Package Tier (Gold / Silver)</option>
+                    <option value="packageType">Package Tier (All 7 Tiers)</option>
+                    <option value="membershipStatus">Membership Status (Open, Close, Deactive, Cancel)</option>
                     <option value="travelCardBenefit">Travel Card Benefit (Yes / No)</option>
                     <option value="extraOffers">Contract Extra Offers</option>
                     <option value="tenurePeriod">Tenure Period</option>
@@ -975,13 +1094,29 @@ export default function EmployeeDashboardPage() {
 
                 <div>
                   <label className="block font-semibold text-text-secondary mb-1">Proposed New Value *</label>
-                  {crField === 'packageType' ? (
+                  {crField === 'membershipStatus' ? (
+                    <select
+                      value={crNewValue}
+                      onChange={(e) => setCrNewValue(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold text-accent-primary"
+                    >
+                      <option value="Open">Open</option>
+                      <option value="Close">Close</option>
+                      <option value="Deactive">Deactive</option>
+                      <option value="Cancel">Cancel</option>
+                    </select>
+                  ) : crField === 'packageType' ? (
                     <select
                       value={crNewValue}
                       onChange={(e) => setCrNewValue(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border border-border font-bold"
                     >
+                      <option value="Titanium">Titanium</option>
+                      <option value="Platinum+">Platinum+</option>
+                      <option value="Platinum">Platinum</option>
+                      <option value="Gold Plus">Gold Plus</option>
                       <option value="Gold">Gold</option>
+                      <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
                     </select>
                   ) : crField === 'travelCardBenefit' ? (
@@ -1066,6 +1201,22 @@ export default function EmployeeDashboardPage() {
                     className="w-full px-3 py-2 rounded-xl border border-border"
                   />
                 </div>
+
+                {hasPerm('update_membership_status') && (
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Membership Status</label>
+                    <select
+                      value={directEditForm.membershipStatus || selectedMember.membershipStatus || 'Open'}
+                      onChange={(e) => setDirectEditForm({ ...directEditForm, membershipStatus: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold text-accent-primary"
+                    >
+                      <option value="Open">Open</option>
+                      <option value="Close">Close</option>
+                      <option value="Deactive">Deactive</option>
+                      <option value="Cancel">Cancel</option>
+                    </select>
+                  </div>
+                )}
 
                 <div className="bg-surface-50 p-3 rounded-xl border border-border text-[11px] text-text-secondary leading-relaxed">
                   <strong>Notice:</strong> Membership tiers (Gold/Silver), available nights pool, tenure periods, and financial balances cannot be changed directly. Use the <strong>Request Package Change</strong> button to submit updates for Master Head review.
@@ -1428,6 +1579,130 @@ export default function EmployeeDashboardPage() {
               <p className="text-xs text-text-tertiary pt-2">
                 Need additional permissions? Contact the Master Head administrator to request permission updates.
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* ============================== TAB 6: TRIP AVAILABILITY CALENDAR ============================== */}
+        {activeTab === 'availability' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-text-primary">Trip &amp; Plan Availability Calendar</h1>
+                <p className="text-sm text-text-secondary">
+                  Live availability directory. Dates marked in <strong className="text-emerald-700">Green</strong> are open for reservation requests by members.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setActiveTab('my-change-requests');
+                  triggerToast('Submit your availability modification proposal to Master Head Admin.');
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover rounded-xl shadow-xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Request Availability Change</span>
+              </button>
+            </div>
+
+            <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 text-xs text-amber-900 flex items-start gap-3">
+              <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Role-Based Governance Notice:</p>
+                <p className="mt-0.5 text-text-secondary">
+                  Direct creation and editing of trip periods is reserved for Master Head authority. Employees can inspect all scheduled periods and submit formal change proposals for administrative review.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-border flex items-center justify-between">
+                <h2 className="text-sm font-bold text-text-primary">Scheduled Travel Periods ({availabilities.length})</h2>
+                <span className="text-xs text-emerald-700 font-semibold">Green = Available to Members</span>
+              </div>
+
+              {availabilities.length === 0 ? (
+                <div className="p-12 text-center text-text-tertiary text-xs">
+                  No availability periods currently published.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface-50 text-text-secondary border-b border-border font-semibold">
+                      <tr>
+                        <th className="py-3.5 px-4">Trip Title</th>
+                        <th className="py-3.5 px-4">Target Member</th>
+                        <th className="py-3.5 px-4">Destination</th>
+                        <th className="py-3.5 px-4">Dates</th>
+                        <th className="py-3.5 px-4">Status</th>
+                        <th className="py-3.5 px-4">Spots</th>
+                        <th className="py-3.5 px-4">Eligible Tiers</th>
+                        <th className="py-3.5 px-4 text-right">Change Request</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {availabilities.map((item) => (
+                        <tr key={item._id || item.id} className="hover:bg-surface-50/50">
+                          <td className="py-3.5 px-4 font-bold text-text-primary">
+                            {item.title}
+                            <span className="block text-[11px] text-text-tertiary font-normal">
+                              {item.planType || 'Holiday Package'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="px-2 py-0.5 rounded-full font-mono font-bold text-[10px] bg-slate-100 text-slate-700">
+                              {item.memberName || (item.memberId === 'ALL' ? 'All Members' : item.memberId) || 'All Members'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-semibold text-text-primary">
+                            {item.destination || item.destinationOrPlan}
+                          </td>
+                          <td className="py-3.5 px-4 text-text-secondary">
+                            <span className="font-medium text-emerald-700">
+                              {new Date(item.startDate).toLocaleDateString()}
+                            </span>{' '}
+                            &rarr;{' '}
+                            <span className="font-medium text-emerald-700">
+                              {new Date(item.endDate).toLocaleDateString()}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                                item.status === 'Available' || item.isAvailable
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+                              }`}
+                            >
+                              {item.status || (item.isAvailable !== false ? 'Available' : 'Unavailable')}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-text-secondary">
+                            <strong className="text-text-primary">{item.availableSlots ?? 10}</strong> / {item.totalSlots ?? 10}
+                          </td>
+                          <td className="py-3.5 px-4 text-text-tertiary">
+                            <span className="line-clamp-1 max-w-[150px]">
+                              {item.tierEligibility?.join(', ') || 'All 7 Tiers'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              onClick={() => {
+                                setActiveTab('my-change-requests');
+                                triggerToast(`Submit change proposal for ${item.title}`);
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary hover:bg-surface-50 text-[11px] font-semibold"
+                            >
+                              <FileEdit className="w-3.5 h-3.5" />
+                              <span>Propose Change</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}

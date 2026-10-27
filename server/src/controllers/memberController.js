@@ -76,9 +76,10 @@ export const createMember = async (req, res, next) => {
   try {
     const validation = validateCreateMember(req.body);
     if (!validation.success) {
+      const errorSummary = validation.error.errors.map((e) => e.message).join(' • ');
       return res.status(400).json({
         success: false,
-        message: 'Invalid member data provided.',
+        message: errorSummary || 'Invalid member data provided.',
         errors: validation.error.errors.map((e) => ({ field: e.path.join('.'), message: e.message })),
       });
     }
@@ -90,6 +91,7 @@ export const createMember = async (req, res, next) => {
       success: true,
       message: `Member account '${member.memberId}' created successfully.`,
       member,
+      profile: member,
     });
   } catch (error) {
     next(error);
@@ -115,6 +117,7 @@ export const updateMember = async (req, res, next) => {
         'packageType',
         'productPrice',
         'nightsAvailable',
+        'availableNights',
         'tenurePeriod',
         'extraOffers',
         'travelCardBenefit',
@@ -133,6 +136,21 @@ export const updateMember = async (req, res, next) => {
           message:
             'Employees cannot directly alter package tiers, nights, or financial terms. Please submit an Employee Change Request for Master Head approval.',
         });
+      }
+
+      if (validation.data.membershipStatus !== undefined) {
+        const permissions = await store.getEmployeePermissions(req.user.id);
+        const canUpdateStatus = permissions && permissions.some(
+          (p) => ['update_membership_status', 'manage_members', 'manage_membership_status'].includes(p.toLowerCase())
+        );
+        if (!canUpdateStatus) {
+          return res.status(403).json({
+            success: false,
+            requiresApproval: true,
+            message:
+              'Employees cannot directly change membership status without authorization. Please submit an Employee Change Request for Master Head approval.',
+          });
+        }
       }
     }
 
@@ -171,6 +189,7 @@ export const recordPayment = async (req, res, next) => {
       message: `Payment of AED ${payment.amount} recorded for member '${memberId}'.`,
       payment,
       member: updatedMember,
+      profile: updatedMember,
     });
   } catch (error) {
     next(error);

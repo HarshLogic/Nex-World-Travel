@@ -68,6 +68,10 @@ import {
   fetchDestinations,
   fetchTerms,
   updateTerms,
+  fetchAvailabilities,
+  createAvailability,
+  updateAvailability,
+  deleteAvailability,
 } from '../../../lib/api';
 import { getAuthUser, clearAuth } from '../../../lib/auth';
 
@@ -124,6 +128,7 @@ export default function AdminDashboardPage() {
     purchaseDate: new Date().toISOString().split('T')[0],
     productPrice: 12500,
     initialPaidAmount: 5000,
+    membershipStatus: 'Open',
     hasEmi: true,
     emiAmount: 1250,
     emiFrequency: 'Monthly',
@@ -137,6 +142,7 @@ export default function AdminDashboardPage() {
     paymentMethod: 'Bank Transfer',
     transactionReference: '',
     notes: '',
+    membershipStatus: '',
   });
 
   // Employees state
@@ -194,6 +200,23 @@ export default function AdminDashboardPage() {
   const [terms, setTerms] = useState(null);
   const [termsContent, setTermsContent] = useState('');
 
+  // Availability state (Master Head Trip & Plan Calendar management)
+  const [availabilities, setAvailabilities] = useState([]);
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [editingAvailability, setEditingAvailability] = useState(null);
+  const [availabilityForm, setAvailabilityForm] = useState({
+    title: '',
+    destination: '',
+    planType: 'Holiday Package',
+    startDate: '',
+    endDate: '',
+    status: 'Available',
+    totalSlots: 10,
+    availableSlots: 10,
+    tierEligibility: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'],
+    notes: '',
+  });
+
   // Show toast notification
   const triggerToast = (msg, type = 'success') => {
     setToastMessage(msg);
@@ -215,7 +238,7 @@ export default function AdminDashboardPage() {
   const loadAllDashboardData = async () => {
     setLoading(true);
     try {
-      const [metricsData, membersData, empsData, crsData, bksData, reqsData, termsData, destsData] =
+      const [metricsData, membersData, empsData, crsData, bksData, reqsData, termsData, destsData, availsData] =
         await Promise.all([
           fetchDashboardMetrics().catch(() => null),
           fetchAdminMembers({ page: 1, limit: 15 }).catch(() => ({ members: [], pagination: {} })),
@@ -225,6 +248,7 @@ export default function AdminDashboardPage() {
           fetchAdminMemberRequests().catch(() => []),
           fetchTerms().catch(() => null),
           fetchDestinations().catch(() => []),
+          fetchAvailabilities().catch(() => []),
         ]);
 
       if (metricsData) setMetrics(metricsData);
@@ -241,6 +265,7 @@ export default function AdminDashboardPage() {
         setTermsContent(termsData.content || '');
       }
       if (destsData) setDestinations(destsData);
+      if (availsData) setAvailabilities(availsData);
     } catch (err) {
       triggerToast(err.message || 'Error loading dashboard data', 'error');
     } finally {
@@ -282,6 +307,7 @@ export default function AdminDashboardPage() {
         password: addMemberForm.password,
         packageType: addMemberForm.packageType,
         nightsAvailable: Number(addMemberForm.nightsAvailable),
+        membershipStatus: addMemberForm.membershipStatus || 'Open',
         extraOffers: addMemberForm.extraOffers,
         tenurePeriod: addMemberForm.tenurePeriod,
         travelCardBenefit: Boolean(addMemberForm.travelCardBenefit),
@@ -298,9 +324,19 @@ export default function AdminDashboardPage() {
       };
 
       const res = await createAdminMember(payload);
-      triggerToast(`Member ${res.profile.memberId} registered successfully!`);
+      const newMember = res.member || res.profile;
+      triggerToast(`Member ${newMember?.memberId || payload.memberId} registered successfully!`);
       setShowAddMemberModal(false);
+
+      // Instantly unshift to local state for zero-latency visibility
+      if (newMember) {
+        setMembers((prev) => [newMember, ...prev.filter((m) => m.memberId !== newMember.memberId)]);
+        setMembersPagination((prev) => ({ ...prev, total: (prev.total || 0) + 1 }));
+      }
+      setMemberSearch('');
+      setMemberStatusFilter('');
       handleMembersSearch(1);
+
       // Reload metrics
       fetchDashboardMetrics().then(setMetrics).catch(() => {});
     } catch (err) {
@@ -321,12 +357,15 @@ export default function AdminDashboardPage() {
         paymentMethod: paymentForm.paymentMethod,
         transactionReference: paymentForm.transactionReference,
         notes: paymentForm.notes,
+        membershipStatus: paymentForm.membershipStatus || selectedMember.membershipStatus || 'Open',
       });
 
-      triggerToast(`Payment of $${paymentForm.amount} recorded! New balance: $${res.profile.outstandingBalance}`);
+      const updated = res.member || res.profile || selectedMember;
+      triggerToast(`Payment of $${paymentForm.amount} recorded! New balance: $${updated.outstandingBalance ?? selectedMember.outstandingBalance}`);
       setShowPaymentModal(false);
-      setSelectedMember(res.profile);
-      setPaymentForm({ amount: '', paymentMethod: 'Bank Transfer', transactionReference: '', notes: '' });
+      setSelectedMember(updated);
+      setMembers((prev) => prev.map((m) => (m.memberId === selectedMember.memberId ? updated : m)));
+      setPaymentForm({ amount: '', paymentMethod: 'Bank Transfer', transactionReference: '', notes: '', membershipStatus: '' });
       handleMembersSearch(membersPagination.page);
       fetchDashboardMetrics().then(setMetrics).catch(() => {});
     } catch (err) {
@@ -516,6 +555,102 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // Availability Calendar Management Handlers
+  const handleOpenAddAvailability = () => {
+    setEditingAvailability(null);
+    setAvailabilityForm({
+      memberId: 'ALL',
+      memberName: 'All Members',
+      title: '',
+      destination: '',
+      planType: 'Holiday Package',
+      startDate: '',
+      endDate: '',
+      status: 'Available',
+      totalSlots: 10,
+      availableSlots: 10,
+      tierEligibility: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'],
+      notes: '',
+    });
+    setShowAvailabilityModal(true);
+  };
+
+  const handleOpenEditAvailability = (item) => {
+    setEditingAvailability(item);
+    setAvailabilityForm({
+      memberId: item.memberId || 'ALL',
+      memberName: item.memberName || 'All Members',
+      title: item.title,
+      destination: item.destination || item.destinationOrPlan || '',
+      planType: item.planType || 'Holiday Package',
+      startDate: item.startDate ? new Date(item.startDate).toISOString().split('T')[0] : '',
+      endDate: item.endDate ? new Date(item.endDate).toISOString().split('T')[0] : '',
+      status: item.status || (item.isAvailable !== false ? 'Available' : 'Unavailable'),
+      totalSlots: item.totalSlots || 10,
+      availableSlots: item.availableSlots || 10,
+      tierEligibility: item.tierEligibility || ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'],
+      notes: item.notes || '',
+    });
+    setShowAvailabilityModal(true);
+  };
+
+  const handleSaveAvailability = async (e) => {
+    e.preventDefault();
+    if (!availabilityForm.title || !availabilityForm.destination || !availabilityForm.startDate || !availabilityForm.endDate) {
+      return triggerToast('Title, Destination, Start Date, and End Date are required.', 'error');
+    }
+    const s = new Date(availabilityForm.startDate);
+    const ed = new Date(availabilityForm.endDate);
+    if (ed <= s) {
+      return triggerToast('End Date must be strictly after Start Date.', 'error');
+    }
+
+    const payload = {
+      ...availabilityForm,
+      destinationOrPlan: availabilityForm.destination,
+      isAvailable: availabilityForm.status === 'Available',
+      memberId: availabilityForm.memberId || 'ALL',
+      memberName:
+        availabilityForm.memberName ||
+        (availabilityForm.memberId && availabilityForm.memberId !== 'ALL'
+          ? members.find((m) => m.memberId === availabilityForm.memberId)?.registeredName || availabilityForm.memberId
+          : 'All Members'),
+    };
+
+    setActionLoading(true);
+    try {
+      if (editingAvailability) {
+        await updateAvailability(editingAvailability._id || editingAvailability.id, payload);
+        triggerToast('Trip availability updated successfully!');
+      } else {
+        await createAvailability(payload);
+        triggerToast('New trip availability period published to calendar!');
+      }
+      setShowAvailabilityModal(false);
+      const updated = await fetchAvailabilities();
+      setAvailabilities(updated);
+    } catch (err) {
+      triggerToast(err.message || 'Failed to save availability', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteAvailability = async (id) => {
+    if (!confirm('Are you sure you want to remove this availability record?')) return;
+    setActionLoading(true);
+    try {
+      await deleteAvailability(id);
+      triggerToast('Trip availability record removed.');
+      const updated = await fetchAvailabilities();
+      setAvailabilities(updated);
+    } catch (err) {
+      triggerToast(err.message || 'Failed to delete availability', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Export CSV Helper
   const exportMembersCSV = () => {
     if (!members.length) return triggerToast('No member records to export', 'error');
@@ -626,6 +761,7 @@ export default function AdminDashboardPage() {
               icon: MessageSquare,
             },
             { id: 'terms', label: 'Terms & Conditions', icon: FileText },
+            { id: 'availability', label: `Trip Calendar (${availabilities.length})`, icon: Calendar },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -970,9 +1106,14 @@ export default function AdminDashboardPage() {
                   }}
                   className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary focus:outline-none focus:border-accent-primary"
                 >
-                  <option value="">All Tiers (Gold & Silver)</option>
-                  <option value="Gold">Gold Tier</option>
-                  <option value="Silver">Silver Tier</option>
+                  <option value="">All Tiers (7 Tiers)</option>
+                  <option value="Titanium">Titanium</option>
+                  <option value="Platinum+">Platinum+</option>
+                  <option value="Platinum">Platinum</option>
+                  <option value="Gold Plus">Gold Plus</option>
+                  <option value="Gold">Gold</option>
+                  <option value="Silver Plus">Silver Plus</option>
+                  <option value="Silver">Silver</option>
                 </select>
 
                 <select
@@ -980,11 +1121,13 @@ export default function AdminDashboardPage() {
                   onChange={(e) => {
                     setMemberStatusFilter(e.target.value);
                   }}
-                  className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary focus:outline-none focus:border-accent-primary"
+                  className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary focus:outline-none focus:border-accent-primary font-medium"
                 >
                   <option value="">All Statuses</option>
-                  <option value="active">Active Only</option>
-                  <option value="suspended">Suspended Only</option>
+                  <option value="Open">Open</option>
+                  <option value="Close">Close</option>
+                  <option value="Deactive">Deactive</option>
+                  <option value="Cancel">Cancel</option>
                 </select>
 
                 <button
@@ -999,11 +1142,12 @@ export default function AdminDashboardPage() {
             {/* Members Table */}
             <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[750px] text-left text-xs">
+                <table className="w-full min-w-[850px] text-left text-xs">
                   <thead className="bg-surface-50 text-text-tertiary font-bold uppercase tracking-wider border-b border-border">
                     <tr>
                       <th className="py-3.5 px-4">Member ID</th>
                       <th className="py-3.5 px-4">Registered Name</th>
+                      <th className="py-3.5 px-4">Membership Status</th>
                       <th className="py-3.5 px-4">Package</th>
                       <th className="py-3.5 px-4">Nights Left</th>
                       <th className="py-3.5 px-4">Travel Card</th>
@@ -1023,6 +1167,32 @@ export default function AdminDashboardPage() {
                         </td>
                         <td className="py-3.5 px-4">
                           <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                              (m.membershipStatus || m.status) === 'Open' || (m.membershipStatus || m.status) === 'Active'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : (m.membershipStatus || m.status) === 'Close'
+                                ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                                : (m.membershipStatus || m.status) === 'Deactive'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-red-50 text-red-700 border border-red-200'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                (m.membershipStatus || m.status) === 'Open' || (m.membershipStatus || m.status) === 'Active'
+                                  ? 'bg-emerald-500'
+                                  : (m.membershipStatus || m.status) === 'Close'
+                                  ? 'bg-slate-500'
+                                  : (m.membershipStatus || m.status) === 'Deactive'
+                                  ? 'bg-amber-500'
+                                  : 'bg-red-500'
+                              }`}
+                            />
+                            {m.membershipStatus || m.status || 'Open'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
                             className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                               m.packageType === 'Gold'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -1033,7 +1203,7 @@ export default function AdminDashboardPage() {
                             {m.packageType}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-text-primary">{m.nightsAvailable} nights</td>
+                        <td className="py-3.5 px-4 font-bold text-text-primary">{m.nightsAvailable ?? m.availableNights ?? 0} nights</td>
                         <td className="py-3.5 px-4">
                           {m.travelCardBenefit ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1081,7 +1251,7 @@ export default function AdminDashboardPage() {
                     ))}
                     {members.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="py-12 text-center text-text-tertiary">
+                        <td colSpan={10} className="py-12 text-center text-text-tertiary">
                           No members found matching your search.
                         </td>
                       </tr>
@@ -1183,8 +1353,30 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
                 <div className="bg-surface-50 p-3.5 rounded-xl border border-border">
-                  <span className="text-text-tertiary">Account Status</span>
-                  <p className="text-sm font-bold text-emerald-600 mt-0.5 uppercase">{selectedMember.status}</p>
+                  <span className="text-text-tertiary">Membership Status</span>
+                  <div className="mt-1">
+                    <select
+                      value={selectedMember.membershipStatus || 'Open'}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value;
+                        try {
+                          const res = await updateAdminMember(selectedMember.memberId, { membershipStatus: newStatus });
+                          const updated = res.member || res.profile || { ...selectedMember, membershipStatus: newStatus };
+                          setSelectedMember(updated);
+                          setMembers((prev) => prev.map((m) => (m.memberId === selectedMember.memberId ? updated : m)));
+                          triggerToast(`Membership status updated to ${newStatus}`);
+                        } catch (err) {
+                          triggerToast(err.message || 'Failed to update status', 'error');
+                        }
+                      }}
+                      className="text-xs font-bold rounded-lg px-2.5 py-1 border border-border bg-white text-text-primary focus:border-accent-primary"
+                    >
+                      <option value="Open">Open</option>
+                      <option value="Close">Close</option>
+                      <option value="Deactive">Deactive</option>
+                      <option value="Cancel">Cancel</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -1294,6 +1486,9 @@ export default function AdminDashboardPage() {
                     <option value="Cash">Cash Deposit</option>
                     <option value="Cheque">Bank Cheque</option>
                     <option value="UPI / Online Gateway">Online Payment Gateway</option>
+                    <option value="Tabby">Tabby</option>
+                    <option value="Tamara">Tamara</option>
+                    <option value="POS Swipe">POS Swipe</option>
                   </select>
                 </div>
 
@@ -1306,6 +1501,23 @@ export default function AdminDashboardPage() {
                     placeholder="e.g. TXN-998273"
                     className="w-full px-3 py-2 rounded-xl border border-border"
                   />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Membership Status</label>
+                  <select
+                    value={paymentForm.membershipStatus || selectedMember.membershipStatus || 'Open'}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, membershipStatus: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-border font-bold text-accent-primary"
+                  >
+                    <option value="Open">Open</option>
+                    <option value="Close">Close</option>
+                    <option value="Deactive">Deactive</option>
+                    <option value="Cancel">Cancel</option>
+                  </select>
+                  <p className="text-[11px] text-text-tertiary mt-1">
+                    Optionally update the member's status upon recording payment.
+                  </p>
                 </div>
 
                 <div>
@@ -1420,7 +1632,20 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Membership Status *</label>
+                    <select
+                      value={addMemberForm.membershipStatus || 'Open'}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, membershipStatus: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold text-accent-primary"
+                    >
+                      <option value="Open">Open</option>
+                      <option value="Close">Close</option>
+                      <option value="Deactive">Deactive</option>
+                      <option value="Cancel">Cancel</option>
+                    </select>
+                  </div>
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Package Tier *</label>
                     <select
@@ -1428,7 +1653,12 @@ export default function AdminDashboardPage() {
                       onChange={(e) => setAddMemberForm({ ...addMemberForm, packageType: e.target.value })}
                       className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold"
                     >
+                      <option value="Titanium">Titanium</option>
+                      <option value="Platinum+">Platinum+</option>
+                      <option value="Platinum">Platinum</option>
+                      <option value="Gold Plus">Gold Plus</option>
                       <option value="Gold">Gold</option>
+                      <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
                     </select>
                   </div>
@@ -2485,6 +2715,321 @@ export default function AdminDashboardPage() {
                   Save Changes
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================== TAB 9: TRIP AVAILABILITY CALENDAR ============================== */}
+        {activeTab === 'availability' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-text-primary">Trip &amp; Plan Availability Calendar Management</h1>
+                <p className="text-sm text-text-secondary">
+                  Create, publish, edit, and manage available travel dates and trip periods displayed across Member Portals.
+                </p>
+              </div>
+              <button
+                onClick={handleOpenAddAvailability}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Travel Availability Period</span>
+              </button>
+            </div>
+
+            {/* Quick KPI stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-border shadow-xs">
+                <span className="text-xs text-text-tertiary">Total Configured Travel Periods</span>
+                <p className="text-2xl font-black text-text-primary mt-1">{availabilities.length}</p>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-xs">
+                <span className="text-xs text-emerald-800 font-semibold">Live Available Periods (Green Highlighting)</span>
+                <p className="text-2xl font-black text-emerald-700 mt-1">
+                  {availabilities.filter((a) => a.status === 'Available').length}
+                </p>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-border shadow-xs">
+                <span className="text-xs text-text-tertiary">Audit Trail Status</span>
+                <p className="text-xs font-bold text-text-primary mt-2 flex items-center gap-1.5 text-emerald-700">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>MongoDB Audit Logging Active</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Availabilities Table */}
+            <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-border flex items-center justify-between">
+                <h2 className="text-sm font-bold text-text-primary">Configured Trip Periods ({availabilities.length})</h2>
+                <span className="text-xs text-text-tertiary">Member portal displays open dates in green</span>
+              </div>
+
+              {availabilities.length === 0 ? (
+                <div className="p-12 text-center text-text-tertiary text-xs">
+                  No trip availability periods configured yet. Click above to create your first period.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface-50 text-text-secondary border-b border-border font-semibold">
+                      <tr>
+                        <th className="py-3.5 px-4">Trip / Plan Title</th>
+                        <th className="py-3.5 px-4">Target Member</th>
+                        <th className="py-3.5 px-4">Destination</th>
+                        <th className="py-3.5 px-4">Travel Period</th>
+                        <th className="py-3.5 px-4">Status</th>
+                        <th className="py-3.5 px-4">Slots</th>
+                        <th className="py-3.5 px-4">Eligible Tiers</th>
+                        <th className="py-3.5 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {availabilities.map((item) => (
+                        <tr key={item._id || item.id} className="hover:bg-surface-50/50">
+                          <td className="py-3.5 px-4">
+                            <span className="font-bold text-text-primary block">{item.title}</span>
+                            <span className="text-[11px] text-text-tertiary">{item.planType || 'Holiday Package'}</span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="px-2 py-0.5 rounded-full font-mono font-bold text-[10px] bg-slate-100 text-slate-700">
+                              {item.memberName || (item.memberId === 'ALL' ? 'All Members' : item.memberId) || 'All Members'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-semibold text-text-primary">
+                            {item.destination || item.destinationOrPlan}
+                          </td>
+                          <td className="py-3.5 px-4 text-text-secondary">
+                            <span className="font-medium text-emerald-700">
+                              {new Date(item.startDate).toLocaleDateString()}
+                            </span>{' '}
+                            &rarr;{' '}
+                            <span className="font-medium text-emerald-700">
+                              {new Date(item.endDate).toLocaleDateString()}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                                item.status === 'Available' || item.isAvailable
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+                              }`}
+                            >
+                              {item.status || (item.isAvailable !== false ? 'Available' : 'Unavailable')}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-text-secondary">
+                            <strong className="text-text-primary">{item.availableSlots ?? 10}</strong> / {item.totalSlots ?? 10}
+                          </td>
+                          <td className="py-3.5 px-4 text-text-tertiary">
+                            <span className="line-clamp-1 max-w-[140px]">
+                              {item.tierEligibility?.join(', ') || 'All 7 Tiers'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleOpenEditAvailability(item)}
+                                className="p-1.5 rounded-lg hover:bg-surface-100 text-text-secondary hover:text-accent-primary"
+                                title="Edit Availability"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAvailability(item._id || item.id)}
+                                className="p-1.5 rounded-lg hover:bg-red-50 text-text-secondary hover:text-red-600"
+                                title="Delete Availability"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Add / Edit Availability Period */}
+        {showAvailabilityModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 border border-border shadow-xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
+                <h3 className="font-bold text-text-primary text-base">
+                  {editingAvailability ? 'Edit Travel Availability Period' : 'New Trip / Plan Availability'}
+                </h3>
+                <button
+                  onClick={() => setShowAvailabilityModal(false)}
+                  className="p-1.5 rounded-xl hover:bg-surface-50 text-text-tertiary"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveAvailability} className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Target Member / Scope *</label>
+                  <select
+                    value={availabilityForm.memberId || 'ALL'}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      const selectedM = members.find((m) => m.memberId === selectedId);
+                      setAvailabilityForm({
+                        ...availabilityForm,
+                        memberId: selectedId,
+                        memberName: selectedId === 'ALL' ? 'All Members' : (selectedM?.registeredName || selectedId),
+                      });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-border font-bold text-accent-primary"
+                  >
+                    <option value="ALL">All Members (Global Public Calendar)</option>
+                    {members.map((m) => (
+                      <option key={m.memberId} value={m.memberId}>
+                        {m.memberId} — {m.registeredName || m.userId?.name || 'Member'} ({m.packageType})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-text-tertiary mt-1">
+                    Select a specific member to configure their personal travel period, or assign to All Members.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Trip / Plan Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Swiss Alps Winter Retreat"
+                    value={availabilityForm.title}
+                    onChange={(e) => setAvailabilityForm({ ...availabilityForm, title: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-border"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Destination *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Switzerland"
+                      value={availabilityForm.destination}
+                      onChange={(e) => setAvailabilityForm({ ...availabilityForm, destination: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Plan Type</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Holiday Package"
+                      value={availabilityForm.planType}
+                      onChange={(e) => setAvailabilityForm({ ...availabilityForm, planType: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Start Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={availabilityForm.startDate}
+                      onChange={(e) => setAvailabilityForm({ ...availabilityForm, startDate: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">End Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={availabilityForm.endDate}
+                      onChange={(e) => setAvailabilityForm({ ...availabilityForm, endDate: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Status *</label>
+                    <select
+                      value={availabilityForm.status}
+                      onChange={(e) => setAvailabilityForm({ ...availabilityForm, status: e.target.value })}
+                      className="w-full px-2 py-2 rounded-xl border border-border font-bold text-emerald-800"
+                    >
+                      <option value="Available">Available (Green)</option>
+                      <option value="Unavailable">Unavailable</option>
+                      <option value="Booked">Booked</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Total Slots</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={availabilityForm.totalSlots}
+                      onChange={(e) =>
+                        setAvailabilityForm({ ...availabilityForm, totalSlots: Number(e.target.value) })
+                      }
+                      className="w-full px-2 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Available Slots</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={availabilityForm.availableSlots}
+                      onChange={(e) =>
+                        setAvailabilityForm({ ...availabilityForm, availableSlots: Number(e.target.value) })
+                      }
+                      className="w-full px-2 py-2 rounded-xl border border-border font-bold text-emerald-700"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Notes / Highlights</label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Luxury chalet accommodation, private ski pass included..."
+                    value={availabilityForm.notes}
+                    onChange={(e) => setAvailabilityForm({ ...availabilityForm, notes: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-border resize-none"
+                  />
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-surface-50 border border-border text-[11px] text-text-tertiary">
+                  Audit note: Modifying availability creates an audit log entry in MongoDB under your Master Head session.
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setShowAvailabilityModal(false)}
+                    className="px-4 py-2 rounded-xl text-text-secondary hover:bg-surface-50 font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold disabled:opacity-50"
+                  >
+                    {actionLoading ? 'Saving...' : editingAvailability ? 'Update Period' : 'Publish Period'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

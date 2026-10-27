@@ -15,6 +15,7 @@ import bookingRoutes from './routes/bookingRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import termsRoutes from './routes/termsRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
+import availabilityRoutes from './routes/availabilityRoutes.js';
 
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 import { getDBStatus } from './config/db.js';
@@ -94,6 +95,7 @@ const mountRoutes = (prefix) => {
   app.use(`${prefix}/contact`, contactRoutes);
   app.use(`${prefix}/terms`, termsRoutes);
   app.use(`${prefix}/dashboard`, dashboardRoutes);
+  app.use(`${prefix}/availability`, availabilityRoutes);
 };
 
 mountRoutes('/api/v1');

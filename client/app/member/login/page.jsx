@@ -9,8 +9,8 @@ import { loginMember } from '../../../lib/api';
 
 export default function MemberLoginPage() {
   const router = useRouter();
-  const [memberId, setMemberId] = useState('NEX-M-1001');
-  const [password, setPassword] = useState('MemberPassword2026!');
+  const [memberId, setMemberId] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 

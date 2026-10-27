@@ -2,6 +2,9 @@ import mongoose from 'mongoose';
 
 const paymentTransactionSchema = new mongoose.Schema(
   {
+    _id: {
+      type: mongoose.Schema.Types.Mixed,
+    },
     transactionId: {
       type: String,
       required: true,
@@ -30,7 +33,17 @@ const paymentTransactionSchema = new mongoose.Schema(
     paymentMethod: {
       type: String,
       required: true,
-      enum: ['Bank Transfer', 'Credit Card', 'Debit Card', 'Cheque', 'Cash', 'Account Adjustment'],
+      enum: [
+        'Bank Transfer',
+        'Credit Card',
+        'Debit Card',
+        'Cheque',
+        'Cash',
+        'Tabby',
+        'Tamara',
+        'POS Swipe',
+        'Account Adjustment',
+      ],
       default: 'Bank Transfer',
     },
     referenceNumber: {

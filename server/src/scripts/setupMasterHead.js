@@ -4,6 +4,7 @@
  * Usage: node server/src/scripts/setupMasterHead.js [email] [password] [name]
  * Or configure via environment variables: MASTER_HEAD_EMAIL, MASTER_HEAD_PASSWORD, MASTER_HEAD_NAME
  */
+import fs from 'fs';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
@@ -11,11 +12,15 @@ import { User } from '../models/User.js';
 import { AuditLog } from '../models/AuditLog.js';
 import { store } from '../services/storeService.js';
 
-dotenv.config();
+if (fs.existsSync('server/.env')) {
+  dotenv.config({ path: 'server/.env' });
+} else {
+  dotenv.config();
+}
 
-const EMAIL = process.argv[2] || process.env.MASTER_HEAD_EMAIL || 'admin@nexworldtravel.com';
-const PASSWORD = process.argv[3] || process.env.MASTER_HEAD_PASSWORD || 'AdminPassword2026!';
-const NAME = process.argv[4] || process.env.MASTER_HEAD_NAME || 'Master Administrator';
+const EMAIL = process.argv[2] || process.env.MASTER_HEAD_EMAIL || 'adityar@nexworldtravel.com';
+const PASSWORD = process.argv[3] || process.env.MASTER_HEAD_PASSWORD || 'Aditiya@1993';
+const NAME = process.argv[4] || process.env.MASTER_HEAD_NAME || 'Aditya R';
 
 async function setup() {
   console.log('--- Nex World Travel: Master Head Setup ---');
@@ -25,7 +30,7 @@ async function setup() {
   let isMongo = false;
 
   try {
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 2000 });
+    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 8000 });
     isMongo = true;
     console.log('Connected to MongoDB.');
   } catch (err) {

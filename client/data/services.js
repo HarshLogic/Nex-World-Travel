@@ -33,15 +33,26 @@ export const servicesData = [
     features: ['Skip-the-line attraction tickets', 'Certified professional guides', 'Exclusive access to cultural sites'],
   },
   {
-    id: 'travel-insurance-visa',
-    title: 'Travel Insurance & Visa Assistance',
-    category: 'Care & Peace of Mind',
-    tagline: 'Comprehensive Global Protection & Seamless Documentation',
+    id: 'visa-consultancy',
+    title: 'Professional Visa Consultancy',
+    category: 'Documentation & Fast-Track',
+    tagline: 'End-to-End Visa Processing for Schengen, UK, USA, Japan & Global Destinations',
     description:
-      'Travel with supreme confidence. Our team provides fast, professional visa assistance and international travel protection policies covering medical, cancellation, and baggage safety.',
+      'Fast, meticulous visa facilitation backed by seasoned immigration and visa consultants. We guide you through document preparation, embassy appointment slots, and submission approvals.',
+    imageUrl: '/images/visa-services.jpg',
+    actionText: 'Inquire Visa Assistance',
+    features: ['Schengen, UK, US, Canada & Japan expertise', 'Embassy appointment booking & file audit', 'Express documentation review'],
+  },
+  {
+    id: 'travel-insurance',
+    title: 'Comprehensive Travel Insurance',
+    category: 'Care & Peace of Mind',
+    tagline: 'Global Emergency Protection & Comprehensive Journey Coverage',
+    description:
+      'Travel with supreme confidence. International travel protection policies covering medical emergencies, trip cancellations, flight delays, and baggage protection worldwide.',
     imageUrl: '/images/services/insurance.jpg',
     actionText: 'Learn About Protection',
-    features: ['24/7 global emergency helpline', 'Hassle-free visa documentation review', 'Comprehensive medical & trip coverage'],
+    features: ['24/7 global emergency assistance', 'Multi-trip & single-trip medical coverage', 'Lost passport & flight delay reimbursement'],
   },
 ];
 

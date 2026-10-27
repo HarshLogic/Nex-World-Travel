@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { UserCheck, Shield, Briefcase, Lock, Key, ArrowRight, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
+import { UserCheck, Shield, Briefcase, Lock, Key, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import { loginMember, loginStaff } from '../../lib/api';
 
 export default function LoginPage() {
@@ -59,23 +59,6 @@ export default function LoginPage() {
       setError(err.message || 'Invalid staff credentials.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fillDemo = (role) => {
-    setError('');
-    if (role === 'member') {
-      setActiveTab('member');
-      setMemberId('NEX-M-1001');
-      setMemberPassword('MemberPassword2026!');
-    } else if (role === 'master_head') {
-      setActiveTab('master_head');
-      setStaffEmail('admin@nexworldtravel.com');
-      setStaffPassword('AdminPassword2026!');
-    } else if (role === 'employee') {
-      setActiveTab('employee');
-      setStaffEmail('staff@nexworldtravel.com');
-      setStaffPassword('StaffPassword2026!');
     }
   };
 
@@ -216,7 +199,7 @@ export default function LoginPage() {
                 <input
                   type="email"
                   required
-                  placeholder={activeTab === 'master_head' ? 'admin@nexworldtravel.com' : 'staff@nexworldtravel.com'}
+                  placeholder={activeTab === 'master_head' ? 'adityar@nexworldtravel.com' : 'staff@nexworldtravel.com'}
                   value={staffEmail}
                   onChange={(e) => setStaffEmail(e.target.value)}
                   className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
@@ -256,37 +239,6 @@ export default function LoginPage() {
               </button>
             </form>
           )}
-
-          {/* Demo Quick-Fill Buttons */}
-          <div className="mt-8 pt-6 border-t border-border">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5 mb-2.5">
-              <Sparkles className="w-3.5 h-3.5 text-accent-secondary" />
-              Demo Quick-Fill Credentials:
-            </span>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => fillDemo('member')}
-                className="px-3 py-1.5 rounded-lg bg-surface-50 hover:bg-accent-primary-light hover:text-accent-primary border border-border font-medium transition-colors"
-              >
-                Gold Member (NEX-M-1001)
-              </button>
-              <button
-                type="button"
-                onClick={() => fillDemo('master_head')}
-                className="px-3 py-1.5 rounded-lg bg-surface-50 hover:bg-accent-primary-light hover:text-accent-primary border border-border font-medium transition-colors"
-              >
-                Master Head (Admin)
-              </button>
-              <button
-                type="button"
-                onClick={() => fillDemo('employee')}
-                className="px-3 py-1.5 rounded-lg bg-surface-50 hover:bg-accent-primary-light hover:text-accent-primary border border-border font-medium transition-colors"
-              >
-                Staff (Employee)
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Support Help */}

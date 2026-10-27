@@ -1,10 +1,11 @@
 import './globals.css';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
+import FloatingWhatsApp from '../components/common/FloatingWhatsApp';
 
 export const metadata = {
   metadataBase: new URL('https://nexworldtravel.com'),
-  title: 'Nex World Travel & Tourism | Premium Next-Gen Travel Booking & Tours',
+  title: 'Nex World Travel & Tourism',
   description:
     'Experience extraordinary global travel with Nex World Travel & Tourism, Abu Dhabi. Customized vacation packages, luxury cruises, adventures, and personalized itineraries across Asia, Europe, Africa, Australia, and UAE.',
   icons: {
@@ -52,6 +53,7 @@ export default function RootLayout({ children }) {
         <Navbar />
         <main className="flex-grow">{children}</main>
         <Footer />
+        <FloatingWhatsApp />
       </body>
     </html>
   );

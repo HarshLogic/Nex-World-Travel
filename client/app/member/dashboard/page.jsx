@@ -29,8 +29,10 @@ import {
   acknowledgeMemberTerms,
   submitMemberRequest,
   fetchMyMemberRequests,
+  submitBookingEnquiry,
 } from '../../../lib/api';
 import { getAuthUser, clearAuth } from '../../../lib/auth';
+import AvailabilityCalendar from '../../../components/member/AvailabilityCalendar';
 
 const REQUEST_TYPES = [
   'Booking Assistance',
@@ -41,6 +43,58 @@ const REQUEST_TYPES = [
   'Membership & Plan Inquiry',
   'Other Support Enquiry',
 ];
+
+const TIER_CONFIG = {
+  Titanium: {
+    icon: '💎',
+    badge: 'bg-slate-900 text-slate-100 border border-slate-700',
+    headerBadge: 'bg-slate-900 text-slate-100 border border-slate-700',
+    card: 'bg-gradient-to-br from-slate-900/5 via-white to-slate-800/10 border-slate-300',
+    textColor: 'text-slate-900',
+  },
+  'Platinum+': {
+    icon: '✨',
+    badge: 'bg-indigo-100 text-indigo-900 border border-indigo-300',
+    headerBadge: 'bg-indigo-100 text-indigo-800 border border-indigo-300',
+    card: 'bg-gradient-to-br from-indigo-50/70 via-white to-indigo-100/40 border-indigo-200',
+    textColor: 'text-indigo-900',
+  },
+  Platinum: {
+    icon: '⭐',
+    badge: 'bg-slate-200 text-slate-800 border border-slate-300',
+    headerBadge: 'bg-slate-200 text-slate-800 border border-slate-300',
+    card: 'bg-gradient-to-br from-slate-100/60 via-white to-slate-200/40 border-slate-200',
+    textColor: 'text-slate-800',
+  },
+  'Gold Plus': {
+    icon: '👑',
+    badge: 'bg-amber-200 text-amber-900 border border-amber-400',
+    headerBadge: 'bg-amber-200 text-amber-900 border border-amber-400',
+    card: 'bg-gradient-to-br from-amber-100/60 via-white to-amber-200/40 border-amber-300',
+    textColor: 'text-amber-900',
+  },
+  Gold: {
+    icon: '👑',
+    badge: 'bg-amber-100 text-amber-800 border border-amber-300',
+    headerBadge: 'bg-amber-100 text-amber-800 border border-amber-300',
+    card: 'bg-gradient-to-br from-amber-50/70 via-white to-amber-100/40 border-amber-200',
+    textColor: 'text-amber-800',
+  },
+  'Silver Plus': {
+    icon: '🎖️',
+    badge: 'bg-zinc-200 text-zinc-800 border border-zinc-300',
+    headerBadge: 'bg-zinc-200 text-zinc-800 border border-zinc-300',
+    card: 'bg-gradient-to-br from-zinc-100/60 via-white to-zinc-200/40 border-zinc-200',
+    textColor: 'text-zinc-800',
+  },
+  Silver: {
+    icon: '🥈',
+    badge: 'bg-slate-100 text-slate-700 border border-slate-200',
+    headerBadge: 'bg-slate-100 text-slate-700 border border-slate-200',
+    card: 'bg-white border-border',
+    textColor: 'text-slate-700',
+  },
+};
 
 export default function MemberDashboard() {
   const router = useRouter();
@@ -60,6 +114,18 @@ export default function MemberDashboard() {
   const [requestMessage, setRequestMessage] = useState('');
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [requestSuccessMsg, setRequestSuccessMsg] = useState('');
+  const [formValidationErr, setFormValidationErr] = useState('');
+
+  // Standard Booking Request Format fields
+  const [bookingFields, setBookingFields] = useState({
+    memberName: '',
+    spouseName: '',
+    kidsAges: '',
+    checkInDate: '',
+    checkOutDate: '',
+    destination: '',
+    guestsCount: 2,
+  });
 
   useEffect(() => {
     loadMemberData();
@@ -72,6 +138,12 @@ export default function MemberDashboard() {
       const result = await fetchMemberProfile();
       setData(result);
       setTermsAgreed(result.member.termsAccepted);
+      if (result.member?.registeredName) {
+        setBookingFields((prev) => ({
+          ...prev,
+          memberName: result.member.registeredName,
+        }));
+      }
       const reqList = await fetchMyMemberRequests();
       setRequests(reqList);
     } catch (err) {
@@ -100,8 +172,100 @@ export default function MemberDashboard() {
     }
   };
 
+  const handleCalendarSelectPeriod = (plan) => {
+    const checkIn = new Date(plan.startDate).toISOString().split('T')[0];
+    const checkOut = new Date(plan.endDate).toISOString().split('T')[0];
+    setRequestType('Booking Assistance');
+    setRequestSubject(`Booking Request: ${plan.title} (${plan.destination})`);
+    setBookingFields({
+      memberName: data?.member?.registeredName || '',
+      spouseName: '',
+      kidsAges: '',
+      checkInDate: checkIn,
+      checkOutDate: checkOut,
+      destination: plan.destination,
+      guestsCount: 2,
+    });
+    setRequestMessage(`Booking request for ${plan.title} in ${plan.destination}. Configured available dates: ${checkIn} to ${checkOut}.`);
+    setFormValidationErr('');
+    setShowRequestModal(true);
+  };
+
   const handleRequestSubmit = async (e) => {
     e.preventDefault();
+    setFormValidationErr('');
+
+    if (requestType === 'Booking Assistance') {
+      if (!bookingFields.memberName.trim()) {
+        setFormValidationErr('Member Name is mandatory.');
+        return;
+      }
+      if (!bookingFields.destination.trim()) {
+        setFormValidationErr('Destination / Location is mandatory.');
+        return;
+      }
+      if (!bookingFields.checkInDate || !bookingFields.checkOutDate) {
+        setFormValidationErr('Both Check-in and Check-out dates are required.');
+        return;
+      }
+      const cIn = new Date(bookingFields.checkInDate);
+      const cOut = new Date(bookingFields.checkOutDate);
+      if (cOut <= cIn) {
+        setFormValidationErr('Check-out date must be strictly after Check-in date.');
+        return;
+      }
+      if (!bookingFields.guestsCount || Number(bookingFields.guestsCount) < 1) {
+        setFormValidationErr('Number of guests (PAX) must be a positive number.');
+        return;
+      }
+
+      setRequestSubmitting(true);
+      setRequestSuccessMsg('');
+
+      try {
+        const payload = {
+          memberName: bookingFields.memberName.trim(),
+          spouseName: bookingFields.spouseName?.trim() || '',
+          kidsAges: bookingFields.kidsAges?.trim() || '',
+          checkInDate: bookingFields.checkInDate,
+          checkOutDate: bookingFields.checkOutDate,
+          destination: bookingFields.destination.trim(),
+          destinationOrPackage: bookingFields.destination.trim(),
+          guestsCount: Number(bookingFields.guestsCount),
+          email: data?.member?.email || 'member@nexworldtravel.com',
+          phone: data?.member?.phone || '+97126395908',
+          activitiesRequired: requestMessage || 'Member holiday booking request',
+          notes: requestMessage,
+        };
+
+        const res = await submitBookingEnquiry(payload);
+
+        // Also record under member requests for dashboard tracking
+        await submitMemberRequest({
+          requestType: 'Booking Assistance',
+          subject: `Booking Request: ${bookingFields.destination} (Ref: ${res.data?.referenceNumber || res.data?.enquiryNumber || 'NWT'})`,
+          message: `Standard Booking Request:\n- Member Name: ${bookingFields.memberName}\n- Spouse Name: ${bookingFields.spouseName || 'N/A'}\n- Kids & Ages: ${bookingFields.kidsAges || 'None'}\n- Check-in Date: ${bookingFields.checkInDate}\n- Check-out Date: ${bookingFields.checkOutDate}\n- Destination: ${bookingFields.destination}\n- Guests (PAX): ${bookingFields.guestsCount}\n\nAdditional Notes: ${requestMessage || 'Standard Request'}`,
+        });
+
+        setRequestSuccessMsg(
+          res.closingMessage ||
+            'Once your request is received, our Reservations Team will check availability and assist you accordingly.'
+        );
+
+        const updatedReqs = await fetchMyMemberRequests();
+        setRequests(updatedReqs);
+        setTimeout(() => {
+          setShowRequestModal(false);
+          setRequestSuccessMsg('');
+        }, 5000);
+      } catch (err) {
+        setFormValidationErr(err.message || 'Failed to submit booking request.');
+      } finally {
+        setRequestSubmitting(false);
+      }
+      return;
+    }
+
     if (!requestSubject.trim() || !requestMessage.trim()) return;
     setRequestSubmitting(true);
     setRequestSuccessMsg('');
@@ -111,7 +275,7 @@ export default function MemberDashboard() {
         subject: requestSubject,
         message: requestMessage,
       });
-      setRequestSuccessMsg(res.message); // "Your request has been submitted successfully. Our team will contact you within 24 hours."
+      setRequestSuccessMsg(res.message);
       setRequestSubject('');
       setRequestMessage('');
       const updatedReqs = await fetchMyMemberRequests();
@@ -141,7 +305,13 @@ export default function MemberDashboard() {
   }
 
   const { member, payments = [], terms } = data;
-  const isGold = member.packageType === 'Gold';
+  const currentTierStyle = TIER_CONFIG[member.packageType] || {
+    icon: '⭐',
+    badge: 'bg-slate-100 text-slate-800 border border-slate-300',
+    headerBadge: 'bg-slate-100 text-slate-800 border border-slate-300',
+    card: 'bg-white border-border',
+    textColor: 'text-text-primary',
+  };
 
   return (
     <div className="py-8 md:py-14 bg-surface-50 min-h-screen">
@@ -149,10 +319,8 @@ export default function MemberDashboard() {
         {/* Top Member Header */}
         <div className="bg-white rounded-3xl p-5 sm:p-8 border border-border shadow-card flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-start sm:items-center gap-3 sm:gap-4 w-full md:w-auto">
-            <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-extrabold text-lg sm:text-xl shadow-sm shrink-0 ${
-              isGold ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 text-slate-700 border border-slate-300'
-            }`}>
-              {isGold ? '👑' : '⭐'}
+            <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-extrabold text-lg sm:text-xl shadow-sm shrink-0 ${currentTierStyle.badge}`}>
+              {currentTierStyle.icon}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
@@ -163,6 +331,9 @@ export default function MemberDashboard() {
                   member.membershipStatus === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                 }`}>
                   {member.membershipStatus} Membership
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${currentTierStyle.badge}`}>
+                  Tier: {member.packageType}
                 </span>
               </div>
               <h1 className="text-xl sm:text-3xl font-extrabold text-text-primary break-words">
@@ -176,11 +347,15 @@ export default function MemberDashboard() {
 
           <div className="flex flex-wrap items-center gap-3 self-stretch md:self-auto">
             <button
-              onClick={() => setShowRequestModal(true)}
+              onClick={() => {
+                setRequestType('Booking Assistance');
+                setFormValidationErr('');
+                setShowRequestModal(true);
+              }}
               className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-sm transition-all"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>Submit Support Request</span>
+              <span>Submit Booking / Support Request</span>
             </button>
             <button
               onClick={handleLogout}
@@ -195,22 +370,16 @@ export default function MemberDashboard() {
         {/* SECTION A: Membership Overview Card */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Package Type Card */}
-          <div className={`rounded-3xl p-6 border shadow-card transition-all ${
-            isGold
-              ? 'bg-gradient-to-br from-amber-50/70 via-white to-amber-100/40 border-amber-200'
-              : 'bg-white border-border'
-          }`}>
+          <div className={`rounded-3xl p-6 border shadow-card transition-all ${currentTierStyle.card}`}>
             <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
               Package Type
             </span>
             <div className="flex items-center justify-between mt-2">
-              <h3 className={`text-2xl font-black ${isGold ? 'text-amber-800' : 'text-slate-800'}`}>
-                {member.packageType} Package
+              <h3 className={`text-2xl font-black ${currentTierStyle.textColor}`}>
+                {member.packageType} Tier
               </h3>
-              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                isGold ? 'bg-amber-200/80 text-amber-900' : 'bg-slate-200 text-slate-800'
-              }`}>
-                {member.packageType}
+              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${currentTierStyle.badge}`}>
+                {currentTierStyle.icon} {member.packageType}
               </span>
             </div>
             <p className="text-xs text-text-secondary mt-3">
@@ -292,6 +461,13 @@ export default function MemberDashboard() {
             </div>
           </div>
         )}
+
+        {/* SECTION B: Available Trip & Plan Calendar */}
+        <AvailabilityCalendar
+          memberName={member.registeredName}
+          memberId={member.memberId}
+          onSelectPeriod={handleCalendarSelectPeriod}
+        />
 
         {/* SECTION C: Amount and Payment Section */}
         <div className="bg-white rounded-4xl p-6 sm:p-8 border border-border shadow-card">
@@ -520,36 +696,50 @@ export default function MemberDashboard() {
         </div>
       </div>
 
-      {/* Support Request Submission Modal */}
+      {/* Support / Booking Request Submission Modal */}
       {showRequestModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 border border-border shadow-2xl relative">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 border border-border shadow-2xl relative my-8 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-text-primary mb-1">
-              Submit Membership Request
+              {requestType === 'Booking Assistance' ? 'Standard Booking Request' : 'Submit Membership Request'}
             </h3>
             <p className="text-xs text-text-secondary mb-5">
-              Our travel concierge will review your inquiry and follow up promptly.
+              {requestType === 'Booking Assistance'
+                ? 'Submit your itinerary request to our Reservations Team.'
+                : 'Our travel concierge will review your inquiry and follow up promptly.'}
             </p>
 
             {requestSuccessMsg ? (
-              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold flex items-start gap-2.5">
-                <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600 mt-0.5" />
-                <div>
-                  <p className="font-bold">{requestSuccessMsg}</p>
-                  <p className="text-[11px] font-normal text-emerald-700 mt-0.5">
-                    Your request has been safely assigned to our Abu Dhabi travel operations desk.
-                  </p>
+              <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold space-y-2">
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-sm">Booking Request Saved</p>
+                    <p className="text-xs font-normal text-emerald-800 mt-1 leading-relaxed">
+                      {requestSuccessMsg}
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : (
               <form onSubmit={handleRequestSubmit} className="space-y-4">
+                {formValidationErr && (
+                  <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{formValidationErr}</span>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">
                     Request Category
                   </label>
                   <select
                     value={requestType}
-                    onChange={(e) => setRequestType(e.target.value)}
+                    onChange={(e) => {
+                      setRequestType(e.target.value);
+                      setFormValidationErr('');
+                    }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-surface-50 text-xs font-semibold text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
                   >
                     {REQUEST_TYPES.map((t) => (
@@ -558,43 +748,202 @@ export default function MemberDashboard() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">
-                    Subject Summary
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Booking inquiry for Bali trip in October"
-                    value={requestSubject}
-                    onChange={(e) => setRequestSubject(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
-                  />
-                </div>
+                {requestType === 'Booking Assistance' ? (
+                  <div className="space-y-4">
+                    {/* Standard Booking Request Format Message */}
+                    <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 text-xs">
+                      <p className="font-semibold text-amber-900 mb-2">
+                        To ensure a smooth and timely booking process, kindly submit your request in the below standard format:
+                      </p>
+                      <div className="bg-white/80 rounded-xl p-3 border border-amber-200/50">
+                        <p className="font-bold uppercase tracking-wider text-amber-800 mb-1.5 text-[11px]">
+                          Booking Request Format
+                        </p>
+                        <ul className="grid grid-cols-2 gap-1 text-[11px] text-text-secondary list-disc list-inside">
+                          <li>Member Name</li>
+                          <li>Spouse Name</li>
+                          <li>Kids &amp; Ages</li>
+                          <li>Check-in Date</li>
+                          <li>Check-out Date</li>
+                          <li>Destination/Location</li>
+                          <li>Number of Guests (PAX)</li>
+                        </ul>
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">
-                    Details & Message
-                  </label>
-                  <textarea
-                    rows={4}
-                    required
-                    placeholder="Please specify dates, preferred hotels, number of family members, or specific questions..."
-                    value={requestMessage}
-                    onChange={(e) => setRequestMessage(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none resize-none"
-                  />
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-text-secondary mb-1">
+                          Member Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={bookingFields.memberName}
+                          onChange={(e) =>
+                            setBookingFields({ ...bookingFields, memberName: e.target.value })
+                          }
+                          placeholder="Registered Member Name"
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                        />
+                      </div>
 
-                <div className="p-3 rounded-xl bg-surface-50 border border-border text-[11px] text-text-secondary flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-accent-primary flex-shrink-0" />
-                  <span>Business commitment: Our team contacts you within 24 hours.</span>
-                </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-text-secondary mb-1">
+                          Spouse Name <span className="text-text-muted font-normal">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={bookingFields.spouseName}
+                          onChange={(e) =>
+                            setBookingFields({ ...bookingFields, spouseName: e.target.value })
+                          }
+                          placeholder="Spouse Name"
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-text-secondary mb-1">
+                          Kids &amp; Ages <span className="text-text-muted font-normal">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={bookingFields.kidsAges}
+                          onChange={(e) =>
+                            setBookingFields({ ...bookingFields, kidsAges: e.target.value })
+                          }
+                          placeholder="e.g. 2 kids (ages 4 and 9)"
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-text-secondary mb-1">
+                          Destination / Location <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={bookingFields.destination}
+                          onChange={(e) =>
+                            setBookingFields({ ...bookingFields, destination: e.target.value })
+                          }
+                          placeholder="e.g. Switzerland / Maldives"
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-text-secondary mb-1">
+                          Check-in Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          value={bookingFields.checkInDate}
+                          onChange={(e) =>
+                            setBookingFields({ ...bookingFields, checkInDate: e.target.value })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-text-secondary mb-1">
+                          Check-out Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          value={bookingFields.checkOutDate}
+                          onChange={(e) =>
+                            setBookingFields({ ...bookingFields, checkOutDate: e.target.value })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-semibold text-text-secondary mb-1">
+                          Number of Guests (PAX) <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          required
+                          value={bookingFields.guestsCount}
+                          onChange={(e) =>
+                            setBookingFields({ ...bookingFields, guestsCount: e.target.value })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-semibold text-text-secondary mb-1">
+                          Additional Requirements or Preferred Hotels <span className="text-text-muted font-normal">(Optional)</span>
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={requestMessage}
+                          onChange={(e) => setRequestMessage(e.target.value)}
+                          placeholder="e.g. Need family adjoining rooms, airport pickup, vegetarian breakfast..."
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none resize-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Standard Closing Message */}
+                    <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-xs font-medium leading-relaxed">
+                      &ldquo;Once your request is received, our Reservations Team will check availability and assist you accordingly.&rdquo;
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-text-secondary mb-1">
+                        Subject Summary
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Plan inquiry, payment question, personal info update..."
+                        value={requestSubject}
+                        onChange={(e) => setRequestSubject(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-text-secondary mb-1">
+                        Details &amp; Message
+                      </label>
+                      <textarea
+                        rows={4}
+                        required
+                        placeholder="Please specify your question or request in detail..."
+                        value={requestMessage}
+                        onChange={(e) => setRequestMessage(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-surface-50 text-xs text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none resize-none"
+                      />
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-surface-50 border border-border text-[11px] text-text-secondary flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-accent-primary flex-shrink-0" />
+                      <span>Business commitment: Our team contacts you within 24 hours.</span>
+                    </div>
+                  </>
+                )}
 
                 <div className="flex items-center justify-end gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => setShowRequestModal(false)}
+                    onClick={() => {
+                      setShowRequestModal(false);
+                      setFormValidationErr('');
+                    }}
                     className="px-4 py-2.5 rounded-xl text-xs font-semibold text-text-secondary hover:bg-surface-50"
                   >
                     Cancel
@@ -604,7 +953,11 @@ export default function MemberDashboard() {
                     disabled={requestSubmitting}
                     className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-sm disabled:opacity-50"
                   >
-                    {requestSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Submit Request</span>}
+                    {requestSubmitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <span>{requestType === 'Booking Assistance' ? 'Submit Booking Request' : 'Submit Request'}</span>
+                    )}
                   </button>
                 </div>
               </form>

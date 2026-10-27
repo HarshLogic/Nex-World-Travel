@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { Ship, Palette, Compass, ShieldCheck, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Ship, Palette, Compass, ShieldCheck, FileCheck, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { servicesData } from '../../data/services';
 
 const SERVICE_ICONS = {
   'cruise-service': Ship,
   'custom-holidays': Palette,
   'activities-entertainment': Compass,
+  'visa-consultancy': FileCheck,
+  'travel-insurance': ShieldCheck,
   'travel-insurance-visa': ShieldCheck,
 };
 
@@ -20,14 +22,14 @@ export default function ServicesSection() {
             <span>Dedicated Excellence</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-text-primary tracking-tight">
-            Our Travel Services
+            Our Travel Services & Visa Pillars
           </h2>
           <p className="text-text-secondary text-base mt-3 leading-relaxed">
-            From bespoke international tours and ocean cruises to theme park ticketing and visa facilitation, we orchestrate seamless journeys backed by professional expertise.
+            From bespoke international tours and ocean cruises to dedicated visa consultancy and travel insurance, we orchestrate seamless journeys backed by professional expertise.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
           {servicesData.map((service) => {
             const Icon = SERVICE_ICONS[service.id] || Compass;
             return (

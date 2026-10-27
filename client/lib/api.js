@@ -494,3 +494,47 @@ export async function submitContactMessage(payload) {
   }
   return result;
 }
+
+// ==================== TRIP & PLAN AVAILABILITY CALENDAR ====================
+export async function fetchAvailabilities(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const url = `${BASE_URL}/api/v1/availability${query ? `?${query}` : ''}`;
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to fetch trip availability.');
+  return data.data || [];
+}
+
+export async function createAvailability(payload) {
+  const res = await fetch(`${BASE_URL}/api/v1/availability`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to create trip availability.');
+  return data.data;
+}
+
+export async function updateAvailability(id, payload) {
+  const res = await fetch(`${BASE_URL}/api/v1/availability/${id}`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to update trip availability.');
+  return data.data;
+}
+
+export async function deleteAvailability(id) {
+  const res = await fetch(`${BASE_URL}/api/v1/availability/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to delete trip availability.');
+  return data;
+}
