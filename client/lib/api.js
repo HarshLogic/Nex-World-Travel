@@ -3,9 +3,13 @@ import { activitiesData } from '../data/activities';
 import { packagesData } from '../data/packages';
 import { getAuthHeaders, saveAuth, clearAuth } from './auth';
 
-// Get backend API root URL with automatic slash trimming to prevent `//api/...` errors
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-const cleanApiUrl = rawApiUrl.replace(/\/+$/, '');
+// Get backend API root URL with automatic slash and prefix normalization
+// Prevents '//api' and '/api/v1/api/v1' errors regardless of how NEXT_PUBLIC_API_URL is formatted
+const rawApiUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+const cleanApiUrl = rawApiUrl
+  .replace(/\/+$/, '')
+  .replace(/\/api\/v1$/, '')
+  .replace(/\/api$/, '');
 const BASE_URL = cleanApiUrl;
 
 // ==================== AUTHENTICATION ====================

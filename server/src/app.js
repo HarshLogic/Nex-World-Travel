@@ -24,11 +24,28 @@ const app = express();
 
 // Security and utility middleware
 app.use(helmet());
+
+// Clean and normalize incoming URLs (handles double-slashes '//' and accidental duplicated prefixes)
+app.use((req, res, next) => {
+  if (req.url.includes('//')) {
+    req.url = req.url.replace(/\/+/g, '/');
+  }
+  if (req.url.startsWith('/api/v1/api/v1')) {
+    req.url = req.url.replace('/api/v1/api/v1', '/api/v1');
+  }
+  next();
+});
+
+// Robust CORS supporting production Vercel domains, custom domains, and localhost
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || '*',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      return callback(null, true);
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
@@ -40,13 +57,21 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Health check endpoint
-app.get(['/api/health', '/api/v1/health'], (req, res) => {
+// Health and Welcome endpoint (handles root '/', '/api', '/api/v1', and health routes)
+app.get(['/', '/health', '/api', '/api/v1', '/api/health', '/api/v1/health'], (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'Nex World Travel REST API',
     version: '2.0.0',
+    endpoints: {
+      auth: '/api/v1/auth',
+      members: '/api/v1/members',
+      employees: '/api/v1/employees',
+      destinations: '/api/v1/destinations',
+      packages: '/api/v1/packages',
+      bookings: '/api/v1/bookings',
+    },
     database: getDBStatus(),
   });
 });

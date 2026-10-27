@@ -27,7 +27,7 @@ export default function Footer() {
             <div className="flex items-center gap-2 pt-2 text-xs font-medium text-text-secondary">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent-primary-light text-accent-primary font-semibold">
                 <Sparkles className="w-3.5 h-3.5" />
-                Next-Gen Travel
+                Nex-World Travel
               </span>
               <span>Official Travel Partner for Lulu Events</span>
             </div>
@@ -159,7 +159,7 @@ export default function Footer() {
         <div className="pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-text-secondary text-center sm:text-left">
           <p>© {new Date().getFullYear()} Nex World Travel & Tourism. All rights reserved.</p>
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-6">
-            <span>Next-Gen Travel Architecture</span>
+            <span>Nex-World Travel </span>
             <div className="flex items-center gap-1.5 text-emerald-600 font-medium">
               <ShieldCheck className="w-4 h-4 shrink-0" />
               <span>Verified Agency Service</span>

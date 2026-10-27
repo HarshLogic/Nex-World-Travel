@@ -15,8 +15,11 @@ const nextConfig = {
     unoptimized: true,
   },
   async rewrites() {
-    const rawBackendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-    const backendUrl = rawBackendUrl.replace(/\/+$/, '');
+    const rawBackendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').trim();
+    const backendUrl = rawBackendUrl
+      .replace(/\/+$/, '')
+      .replace(/\/api\/v1$/, '')
+      .replace(/\/api$/, '');
     return [
       {
         source: '/api/:path*',

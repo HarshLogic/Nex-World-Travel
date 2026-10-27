@@ -27,7 +27,7 @@ export const metadata = {
   ],
   authors: [{ name: 'Nex World Travel & Tourism' }],
   openGraph: {
-    title: 'Nex World Travel & Tourism | Next-Gen Travel Experiences',
+    title: 'Nex World Travel & Tourism',
     description:
       'Curated holidays, bespoke itineraries, and global travel adventures from Abu Dhabi to the world.',
     url: 'https://nexworldtravel.com',
