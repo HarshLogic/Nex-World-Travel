@@ -218,7 +218,7 @@ export default function Footer() {
             <div className="space-y-1.5 text-xs text-text-secondary">
               <strong className="block text-text-primary font-semibold flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-accent-primary shrink-0" />
-                <span>Headquarter (UAE)</span>
+                <span>Branch Office (UAE)</span>
               </strong>
               <p className="text-[11px] leading-relaxed">
                 Office 1203, 12th Floor, Bin Hamooda Tower, Khalifa Bin Zayed The First St (St 2), Al Danah Zone 1, Abu Dhabi, U.A.E.
@@ -231,11 +231,12 @@ export default function Footer() {
               </div>
             </div>
 
-            {/* Branch Office India */}
+
+            {/* Headquarter Office India */}
             <div className="pt-3 border-t border-border/70 space-y-1.5 text-xs text-text-secondary">
               <strong className="block text-text-primary font-semibold flex items-center gap-1.5">
                 <Building className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Branch Office (IND)</span>
+                <span>Headquarter (IND)</span>
               </strong>
               <p className="text-[11px] leading-relaxed">
                 Akshay Complex, 151/152/153, Dholepatil Road, near Ruby Hall, Sangamvadi, Pune, Maharashtra 411001, India

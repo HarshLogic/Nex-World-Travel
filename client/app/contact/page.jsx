@@ -121,8 +121,8 @@ export default function ContactPage() {
                     <div className="space-y-1 mt-0.5">
                       <div>
                         <span className="text-[11px] font-bold text-accent-primary uppercase tracking-wider block">Customer Care & Support:</span>
-                        <a href="mailto:customercare@nexworldtravel.com" className="text-xs text-text-secondary hover:text-accent-primary">
-                          customercare@nexworldtravel.com
+                        <a href="mailto:enquiry@nexworldtravel.com" className="text-xs text-text-secondary hover:text-accent-primary">
+                          enquiry@nexworldtravel.com
                         </a>
                       </div>
                     </div>
