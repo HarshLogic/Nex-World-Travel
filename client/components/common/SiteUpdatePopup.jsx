@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { X, Sparkles, ArrowRight, Phone, Mail, Clock } from 'lucide-react';
+import { X, Sparkles, ArrowRight, Phone, Clock } from 'lucide-react';
 
 export default function SiteUpdatePopup() {
   const [isOpen, setIsOpen] = useState(false);
@@ -107,30 +107,21 @@ export default function SiteUpdatePopup() {
           We are enhancing our digital experience with new destination packages, live activity bookings, and exclusive membership benefits. You may continue exploring our website while updates are underway.
         </p>
 
-        {/* Quick Contact & Assistance Bar */}
-        <div className="p-3.5 rounded-2xl bg-surface-50 border border-border text-left mb-6 space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-text-primary">
+        {/* Quick Assistance Bar */}
+        <div className="p-3 rounded-2xl bg-surface-50 border border-border flex items-center justify-between mb-6 text-xs">
+          <div className="flex items-center gap-1.5 font-bold text-text-primary">
             <Clock className="w-3.5 h-3.5 text-accent-primary" />
-            <span>Direct Reservations & Support</span>
+            <span>Immediate Assistance</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-text-secondary">
-            <a
-              href="mailto:reservation@nexworldtravel.com"
-              className="flex items-center gap-1.5 hover:text-accent-primary transition-colors truncate"
-            >
-              <Mail className="w-3.5 h-3.5 text-text-muted shrink-0" />
-              <span className="truncate">reservation@nexworldtravel.com</span>
-            </a>
-            <a
-              href="https://wa.me/971501234567"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 hover:text-accent-primary transition-colors truncate"
-            >
-              <Phone className="w-3.5 h-3.5 text-text-muted shrink-0" />
-              <span>WhatsApp / Support</span>
-            </a>
-          </div>
+          <a
+            href="https://wa.me/971501234567"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 font-semibold text-accent-primary hover:underline"
+          >
+            <Phone className="w-3.5 h-3.5" />
+            <span>WhatsApp Support</span>
+          </a>
         </div>
 
         {/* CTA Button */}
