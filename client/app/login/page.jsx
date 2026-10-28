@@ -199,7 +199,7 @@ export default function LoginPage() {
                 <input
                   type="email"
                   required
-                  placeholder={activeTab === 'master_head' ? 'adityar@nexworldtravel.com' : 'staff@nexworldtravel.com'}
+                  placeholder={activeTab === 'master_head' ? 'admin@nex.com' : 'staff@nexworldtravel.com'}
                   value={staffEmail}
                   onChange={(e) => setStaffEmail(e.target.value)}
                   className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
