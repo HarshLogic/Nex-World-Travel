@@ -16,7 +16,10 @@ const nextConfig = {
   },
   async rewrites() {
     const rawBackendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').trim();
-    const backendUrl = rawBackendUrl
+    const withProtocol = /^https?:\/\//i.test(rawBackendUrl)
+      ? rawBackendUrl
+      : `${/^(localhost|127\.0\.0\.1)/i.test(rawBackendUrl) ? 'http' : 'https'}://${rawBackendUrl}`;
+    const backendUrl = withProtocol
       .replace(/\/+$/, '')
       .replace(/\/api\/v1$/, '')
       .replace(/\/api$/, '');
