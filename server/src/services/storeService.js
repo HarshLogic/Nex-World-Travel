@@ -34,7 +34,19 @@ class ResilientStore {
       isDeleted: false,
       displayOrder: i + 1,
     }))];
-    this.activities = [...seedActivities];
+    this.activities = [...seedActivities.map((a, i) => ({
+      ...a,
+      _id: `act-${i + 1}`,
+      shortDescription: a.description ? (a.description.length > 140 ? `${a.description.slice(0, 137)}...` : a.description) : '',
+      coverImage: a.imageUrl,
+      displayOrder: i + 1,
+      publicationStatus: 'published',
+      isDeleted: false,
+      createdBy: 'Master Head',
+      updatedBy: 'Master Head',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }))];
     this.packages = [...seedPackages];
     this.bookings = [];
     this.contacts = [];
@@ -423,8 +435,24 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
           await MemberProfile.create({ ...memberProfile, userId: memberUser._id });
           await EmployeePermission.create(this.permissions[0]);
           await Destination.insertMany(this.destinations);
+          await Activity.insertMany(this.activities);
           await TermsCondition.create(this.terms);
-          console.log('[StoreService] Successfully seeded MongoDB with initial accounts and destinations.');
+          console.log('[StoreService] Successfully seeded MongoDB with initial accounts, destinations and activities.');
+        } else {
+          // If already seeded, make sure activities exist in MongoDB
+          const actCount = await Activity.countDocuments();
+          if (actCount === 0) {
+            await Activity.insertMany(this.activities);
+          }
+          // Ensure Europe and Africa image swap is persisted in live Mongo
+          await Destination.updateOne(
+            { slug: 'europe' },
+            { $set: { imageUrl: '/images/destinations/africa.jpg', coverImage: '/images/destinations/africa.jpg' } }
+          );
+          await Destination.updateOne(
+            { slug: 'africa' },
+            { $set: { imageUrl: '/images/destinations/europe.jpg', coverImage: '/images/destinations/europe.jpg' } }
+          );
         }
       } catch (err) {
         console.warn('[StoreService] Mongo seeding warning:', err.message);
@@ -1247,6 +1275,174 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
     await this.logAudit('DESTINATION_DELETED', author, 'destination', dest.slug);
     return { success: true, message: `Destination '${dest.title}' soft-deleted successfully.` };
+  }
+
+  // ==================== ACTIVITIES MANAGEMENT ====================
+  async getActivities(filter = {}) {
+    await this.initializeSeedAccounts();
+    if (this.isMongoLive()) {
+      try {
+        const q = { isDeleted: { $ne: true } };
+        if (filter.category && filter.category !== 'All') {
+          q.category = new RegExp(`^${filter.category.trim()}$`, 'i');
+        }
+        if (filter.region && filter.region !== 'All') {
+          q.region = new RegExp(`^${filter.region.trim()}$`, 'i');
+        }
+        if (filter.featured !== undefined) q.featured = filter.featured;
+        if (filter.publicationStatus) q.publicationStatus = filter.publicationStatus;
+        if (filter.search) {
+          const s = filter.search.trim();
+          q.$or = [
+            { title: { $regex: s, $options: 'i' } },
+            { location: { $regex: s, $options: 'i' } },
+            { description: { $regex: s, $options: 'i' } },
+          ];
+        }
+        const docs = await Activity.find(q).sort({ displayOrder: 1, createdAt: -1 }).lean();
+        if (docs && docs.length > 0) return docs;
+      } catch (e) {}
+    }
+
+    let results = this.activities.filter((a) => !a.isDeleted);
+    if (filter.category && filter.category !== 'All') {
+      results = results.filter((a) => a.category?.toLowerCase() === filter.category.toLowerCase());
+    }
+    if (filter.region && filter.region !== 'All') {
+      results = results.filter((a) => a.region?.toLowerCase() === filter.region.toLowerCase());
+    }
+    if (filter.featured !== undefined) {
+      results = results.filter((a) => Boolean(a.featured) === Boolean(filter.featured));
+    }
+    if (filter.publicationStatus) {
+      results = results.filter((a) => a.publicationStatus === filter.publicationStatus);
+    }
+    if (filter.search) {
+      const s = filter.search.toLowerCase();
+      results = results.filter(
+        (a) =>
+          (a.title && a.title.toLowerCase().includes(s)) ||
+          (a.location && a.location.toLowerCase().includes(s)) ||
+          (a.description && a.description.toLowerCase().includes(s))
+      );
+    }
+    return results.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+  }
+
+  async getActivityBySlug(slugOrId) {
+    await this.initializeSeedAccounts();
+    const clean = String(slugOrId).toLowerCase().trim();
+    if (this.isMongoLive()) {
+      try {
+        const found = await Activity.findOne({
+          $or: [{ slug: clean }, { _id: slugOrId }],
+          isDeleted: { $ne: true },
+        }).lean();
+        if (found) return found;
+      } catch (e) {}
+    }
+    return (
+      this.activities.find(
+        (a) => (a.slug?.toLowerCase() === clean || a._id === slugOrId || a.id === slugOrId) && !a.isDeleted
+      ) || null
+    );
+  }
+
+  async getActivityById(id) {
+    return this.getActivityBySlug(id);
+  }
+
+  async createActivity(data, author = 'Master Head') {
+    const slug =
+      data.slug ||
+      data.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+    const record = {
+      ...data,
+      _id: `act-${Date.now()}`,
+      slug,
+      shortDescription:
+        data.shortDescription ||
+        (data.description ? (data.description.length > 140 ? `${data.description.slice(0, 137)}...` : data.description) : ''),
+      coverImage: data.coverImage || data.imageUrl || '/images/hero/hero-bg.jpg',
+      imageUrl: data.imageUrl || data.coverImage || '/images/hero/hero-bg.jpg',
+      displayOrder: Number(data.displayOrder) || this.activities.length + 1,
+      publicationStatus: data.publicationStatus || 'published',
+      isDeleted: false,
+      createdBy: author,
+      updatedBy: author,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (this.isMongoLive()) {
+      try {
+        const doc = await Activity.create(record);
+        return doc.toObject();
+      } catch (e) {}
+    }
+    this.activities.unshift(record);
+    await this.logAudit('ACTIVITY_CREATED', author, 'activity', slug, { title: data.title });
+    return record;
+  }
+
+  async updateActivity(idOrSlug, updateData, author = 'Master Head') {
+    const act = this.activities.find(
+      (a) =>
+        a._id === idOrSlug ||
+        a.id === idOrSlug ||
+        a.slug === idOrSlug ||
+        a.title?.toLowerCase() === String(idOrSlug).toLowerCase()
+    );
+
+    if (this.isMongoLive()) {
+      try {
+        const doc = await Activity.findOneAndUpdate(
+          { $or: [{ _id: idOrSlug }, { slug: idOrSlug }] },
+          { ...updateData, updatedBy: author, updatedAt: new Date().toISOString() },
+          { new: true }
+        ).lean();
+        if (doc) {
+          if (act) Object.assign(act, doc);
+          await this.logAudit('ACTIVITY_UPDATED', author, 'activity', doc.slug, {
+            updatedFields: Object.keys(updateData),
+          });
+          return doc;
+        }
+      } catch (e) {}
+    }
+
+    if (!act) throw new Error(`Activity '${idOrSlug}' not found.`);
+
+    Object.assign(act, updateData, { updatedBy: author, updatedAt: new Date().toISOString() });
+    await this.logAudit('ACTIVITY_UPDATED', author, 'activity', act.slug, {
+      updatedFields: Object.keys(updateData),
+    });
+    return act;
+  }
+
+  async deleteActivity(idOrSlug, author = 'Master Head') {
+    const act = this.activities.find((a) => a._id === idOrSlug || a.id === idOrSlug || a.slug === idOrSlug);
+
+    if (this.isMongoLive()) {
+      try {
+        await Activity.findOneAndUpdate(
+          { $or: [{ _id: idOrSlug }, { slug: idOrSlug }] },
+          { isDeleted: true, publicationStatus: 'archived', updatedBy: author }
+        );
+      } catch (e) {}
+    }
+
+    if (act) {
+      act.isDeleted = true;
+      act.publicationStatus = 'archived';
+      act.updatedBy = author;
+    }
+
+    await this.logAudit('ACTIVITY_DELETED', author, 'activity', String(idOrSlug));
+    return { success: true, message: `Activity deleted/archived successfully.` };
   }
 
   // ==================== BOOKING ENQUIRIES ====================

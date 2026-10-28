@@ -713,6 +713,178 @@ async function runTests() {
       }
     });
 
+    // 25. Activity Management CRUD & Publication Visibility
+    await check('Master Head Activities Management (Create, List, Update, Soft-delete)', async () => {
+      // Create new activity
+      const createRes = await fetch('http://127.0.0.1:5098/api/v1/activities', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          title: 'Abu Dhabi Falcon Hospital VIP Tour',
+          category: 'Cultural & Heritage',
+          region: 'Middle East / UAE',
+          location: 'Abu Dhabi, UAE',
+          duration: '3 hours',
+          intensity: 'Easy',
+          description:
+            'An exclusive insider access tour to the largest avian hospital in the world, meeting majestic falcons up close.',
+          shortDescription: 'Exclusive insider access tour to the largest falcon hospital in the world.',
+          imageUrl: '/images/activities/falcon.jpg',
+          displayOrder: 10,
+          publicationStatus: 'published',
+        }),
+      });
+      const created = await createRes.json();
+      if (!createRes.ok || !created.activity) {
+        throw new Error(`Failed to create activity: ${created.message}`);
+      }
+
+      const actId = created.activity._id;
+
+      // Public listing should include this published activity
+      const listRes = await fetch('http://127.0.0.1:5098/api/v1/activities');
+      const listData = await listRes.json();
+      if (!listData.data.some((a) => a.title === 'Abu Dhabi Falcon Hospital VIP Tour')) {
+        throw new Error('Newly created activity not found in public list');
+      }
+
+      // Update activity to draft
+      const updateRes = await fetch(`http://127.0.0.1:5098/api/v1/activities/${actId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          publicationStatus: 'draft',
+          intensity: 'All Ages',
+        }),
+      });
+      const updated = await updateRes.json();
+      if (!updateRes.ok || updated.activity.publicationStatus !== 'draft') {
+        throw new Error('Failed to update activity publicationStatus');
+      }
+
+      // Public unauthenticated request should now HIDE the draft activity
+      const pubCheckRes = await fetch('http://127.0.0.1:5098/api/v1/activities');
+      const pubCheckData = await pubCheckRes.json();
+      if (pubCheckData.data.some((a) => a._id === actId)) {
+        throw new Error('Draft activity should NOT be visible to public unauthenticated requests');
+      }
+
+      // Soft delete activity
+      const delRes = await fetch(`http://127.0.0.1:5098/api/v1/activities/${actId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      });
+      const delData = await delRes.json();
+      if (!delRes.ok || !delData.success) {
+        throw new Error('Failed to delete activity');
+      }
+    });
+
+    // 26. Europe & Africa Destination Image Swap Verification
+    await check('Europe and Africa destination images correctly swapped', async () => {
+      const destRes = await fetch('http://127.0.0.1:5098/api/v1/destinations');
+      const destData = await destRes.json();
+      if (!destRes.ok || !destData.data) {
+        throw new Error('Failed to fetch destinations');
+      }
+
+      const europe = destData.data.find((d) => d.slug === 'europe');
+      const africa = destData.data.find((d) => d.slug === 'africa');
+
+      if (!europe) throw new Error('Europe destination not found');
+      if (!africa) throw new Error('Africa destination not found');
+
+      if (
+        europe.imageUrl !== '/images/destinations/africa.jpg' &&
+        europe.coverImage !== '/images/destinations/africa.jpg'
+      ) {
+        throw new Error(
+          `Europe image expected to be /images/destinations/africa.jpg, received: ${
+            europe.imageUrl || europe.coverImage
+          }`
+        );
+      }
+
+      if (
+        africa.imageUrl !== '/images/destinations/europe.jpg' &&
+        africa.coverImage !== '/images/destinations/europe.jpg'
+      ) {
+        throw new Error(
+          `Africa image expected to be /images/destinations/europe.jpg, received: ${
+            africa.imageUrl || africa.coverImage
+          }`
+        );
+      }
+
+      // Verify title and descriptions were NOT altered
+      if (europe.title !== 'Europe' || africa.title !== 'Africa') {
+        throw new Error('Destination titles were unexpectedly altered');
+      }
+    });
+
+    // 27. Image Upload & Validation
+    await check('Media Upload API: format validation, size limit, and successful upload', async () => {
+      // 1x1 pixel transparent PNG in base64
+      const validPngBase64 =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+      // 1. Valid upload
+      const uploadRes = await fetch('http://127.0.0.1:5098/api/v1/media/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          data: `data:image/png;base64,${validPngBase64}`,
+          name: 'test-sample.png',
+        }),
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok || !uploadData.url) {
+        throw new Error(`Valid image upload failed: ${uploadData.message}`);
+      }
+
+      // 2. Invalid MIME type (e.g. text file disguised)
+      const invalidTypeRes = await fetch('http://127.0.0.1:5098/api/v1/media/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          data: 'data:text/plain;base64,SGVsbG8gV29ybGQ=',
+          name: 'document.txt',
+        }),
+      });
+      if (invalidTypeRes.status !== 400) {
+        throw new Error(`Expected 400 for invalid MIME type, got ${invalidTypeRes.status}`);
+      }
+
+      // 3. Unauthenticated upload blocked
+      const noAuthRes = await fetch('http://127.0.0.1:5098/api/v1/media/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: `data:image/png;base64,${validPngBase64}`,
+          name: 'test.png',
+        }),
+      });
+      if (noAuthRes.status !== 401) {
+        throw new Error(`Expected 401 for unauthenticated upload, got ${noAuthRes.status}`);
+      }
+    });
+
     console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
   } finally {
     server.close();

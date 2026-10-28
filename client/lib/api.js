@@ -378,6 +378,64 @@ export async function deleteDestination(id) {
   return data;
 }
 
+export async function createActivity(payload) {
+  const res = await fetch(`${BASE_URL}/api/v1/activities`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to create activity.');
+  return data;
+}
+
+export async function updateActivity(id, payload) {
+  const res = await fetch(`${BASE_URL}/api/v1/activities/${id}`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to update activity.');
+  return data;
+}
+
+export async function deleteActivity(id) {
+  const res = await fetch(`${BASE_URL}/api/v1/activities/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to delete activity.');
+  return data;
+}
+
+export async function uploadMedia(fileOrBase64, filename, mimeType) {
+  let dataPayload = fileOrBase64;
+  let type = mimeType;
+  let name = filename;
+
+  if (typeof window !== 'undefined' && fileOrBase64 instanceof File) {
+    name = filename || fileOrBase64.name;
+    type = mimeType || fileOrBase64.type;
+    dataPayload = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(fileOrBase64);
+    });
+  }
+
+  const res = await fetch(`${BASE_URL}/api/v1/media/upload`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ data: dataPayload, name, type }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to upload image.');
+  return data;
+}
+
 export async function fetchTerms() {
   const res = await fetch(`${BASE_URL}/api/v1/terms`);
   const data = await res.json();

@@ -2,6 +2,7 @@ import './globals.css';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import FloatingWhatsApp from '../components/common/FloatingWhatsApp';
+import SiteUpdatePopup from '../components/common/SiteUpdatePopup';
 
 export const metadata = {
   metadataBase: new URL('https://nexworldtravel.com'),
@@ -54,6 +55,7 @@ export default function RootLayout({ children }) {
         <main className="flex-grow">{children}</main>
         <Footer />
         <FloatingWhatsApp />
+        <SiteUpdatePopup />
       </body>
     </html>
   );

@@ -29,8 +29,8 @@ export const destinationsData = [
     tagline: 'Timeless Art, Architectural Splendour & Iconic Romance',
     description:
       'Experience the pinnacle of European elegance across Paris, Rome, Barcelona, and Amsterdam. Walk amongst Roman history, admire Parisian art, and cruise Amsterdam’s romantic canal waterways.',
-    heroImage: '/images/destinations/europe.jpg',
-    thumbnail: '/images/destinations/europe.jpg',
+    heroImage: '/images/destinations/africa.jpg',
+    thumbnail: '/images/destinations/africa.jpg',
     popularCities: ['Paris', 'Rome', 'Barcelona', 'Amsterdam', 'Vienna'],
     highlights: [
       'Private access views of the Eiffel Tower & Seine river cruise',
@@ -51,8 +51,8 @@ export const destinationsData = [
     tagline: 'Untamed Wildlife, Majestic Landscapes & Deep Cultural Roots',
     description:
       'Embark on premier wildlife safaris, witness the breathtaking Great Migration, explore majestic savannas, and enjoy world-class luxury eco-lodges with private guides.',
-    heroImage: '/images/destinations/africa.jpg',
-    thumbnail: '/images/destinations/africa.jpg',
+    heroImage: '/images/destinations/europe.jpg',
+    thumbnail: '/images/destinations/europe.jpg',
     popularCities: ['Serengeti', 'Cape Town', 'Nairobi', 'Zanzibar'],
     highlights: [
       'Big Five wildlife game drives in the Serengeti & Maasai Mara',

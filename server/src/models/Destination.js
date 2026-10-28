@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const destinationSchema = new mongoose.Schema(
   {
+    _id: { type: mongoose.Schema.Types.Mixed },
     title: { type: String, required: true, trim: true, index: true },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
     countryOrRegion: { type: String, default: '' },

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Compass, Clock, MapPin, Sparkles, ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { activitiesData } from '../../data/activities';
+import { fetchActivities } from '../../lib/api';
 
 const CATEGORIES = [
   'All',
@@ -17,10 +18,21 @@ const CATEGORIES = [
 
 export default function ActivitiesPage() {
   const [activeCategory, setActiveCategory] = useState('All');
+  const [activities, setActivities] = useState(activitiesData);
 
-  const filtered = activeCategory === 'All'
-    ? activitiesData
-    : activitiesData.filter((a) => a.category.toLowerCase() === activeCategory.toLowerCase());
+  useEffect(() => {
+    fetchActivities()
+      .then((data) => {
+        if (data && data.length > 0) setActivities(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const published = activities.filter((a) => a.publicationStatus !== 'draft' && !a.isDeleted);
+  const filtered =
+    activeCategory === 'All'
+      ? published
+      : published.filter((a) => a.category?.toLowerCase() === activeCategory.toLowerCase());
 
   return (
     <div className="py-12 md:py-20 bg-surface-50 min-h-screen">
@@ -60,13 +72,13 @@ export default function ActivitiesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filtered.map((activity) => (
             <div
-              key={activity.id}
+              key={activity.id || activity._id || activity.slug}
               className="group bg-white rounded-4xl border border-border overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col"
             >
               {/* Image */}
               <div className="relative aspect-[16/10] w-full overflow-hidden bg-surface-200">
                 <Image
-                  src={activity.imageUrl}
+                  src={activity.imageUrl || activity.coverImage || '/images/hero/hero-bg.jpg'}
                   alt={activity.title}
                   fill
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

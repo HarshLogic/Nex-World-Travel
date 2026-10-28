@@ -1,10 +1,26 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Sparkles, Clock, MapPin, Gauge, ArrowRight } from 'lucide-react';
 import { activitiesData } from '../../data/activities';
+import { fetchActivities } from '../../lib/api';
 
 export default function ExperiencesSection() {
-  const featured = activitiesData.slice(0, 4);
+  const [activities, setActivities] = useState(activitiesData);
+
+  useEffect(() => {
+    fetchActivities()
+      .then((data) => {
+        if (data && data.length > 0) setActivities(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const featured = activities
+    .filter((a) => a.publicationStatus !== 'draft' && !a.isDeleted)
+    .slice(0, 4);
 
   return (
     <section className="py-20 bg-white">
@@ -36,12 +52,12 @@ export default function ExperiencesSection() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {featured.map((item) => (
             <div
-              key={item.id}
+              key={item.id || item._id || item.slug}
               className="group bg-surface-50 rounded-3xl overflow-hidden border border-border hover:border-accent-primary/40 shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col"
             >
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-surface-200">
                 <Image
-                  src={item.imageUrl}
+                  src={item.imageUrl || item.coverImage || '/images/hero/hero-bg.jpg'}
                   alt={item.title}
                   fill
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
@@ -73,7 +89,7 @@ export default function ExperiencesSection() {
                 <div className="pt-3 border-t border-border flex items-center justify-between text-xs">
                   <span className="flex items-center gap-1 text-text-secondary">
                     <Clock className="w-3.5 h-3.5 text-accent-secondary" />
-                    <span>{item.duration}</span>
+                    <span>{item.duration || 'Flexible'}</span>
                   </span>
 
                   <Link
@@ -91,4 +107,3 @@ export default function ExperiencesSection() {
     </section>
   );
 }
-

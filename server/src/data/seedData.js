@@ -34,7 +34,7 @@ export const seedDestinations = [
     popularCities: ['Paris', 'Rome', 'Barcelona', 'Amsterdam', 'Vienna'],
     bestTimeToVisit: 'May to October',
     featured: true,
-    imageUrl: '/images/destinations/europe.jpg',
+    imageUrl: '/images/destinations/africa.jpg',
     curatedActivities: ['Seine Evening Dinner Cruise', 'Vatican & Colosseum Guided Journey', 'Barcelona Gothic Quarter Art Walk'],
   },
   {
@@ -53,7 +53,7 @@ export const seedDestinations = [
     popularCities: ['Serengeti', 'Cape Town', 'Nairobi', 'Zanzibar'],
     bestTimeToVisit: 'June to October',
     featured: true,
-    imageUrl: '/images/destinations/africa.jpg',
+    imageUrl: '/images/destinations/europe.jpg',
     curatedActivities: ['Serengeti Sunrise Hot Air Balloon Safari', 'Cape Peninsula Explorer', 'Zanzibar Spice & Coral Reef Expedition'],
   },
   {

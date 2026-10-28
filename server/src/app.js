@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import authRoutes from './routes/authRoutes.js';
 import memberRoutes from './routes/memberRoutes.js';
@@ -16,10 +18,14 @@ import contactRoutes from './routes/contactRoutes.js';
 import termsRoutes from './routes/termsRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import availabilityRoutes from './routes/availabilityRoutes.js';
+import mediaRoutes from './routes/mediaRoutes.js';
 
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 import { getDBStatus } from './config/db.js';
 import { store } from './services/storeService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -77,6 +83,10 @@ app.get(['/', '/health', '/api', '/api/v1', '/api/health', '/api/v1/health'], (r
   });
 });
 
+// Static files serving for uploaded media
+app.use('/uploads', express.static(path.resolve(__dirname, '../public/uploads')));
+app.use('/uploads', express.static(path.resolve(__dirname, '../../client/public/uploads')));
+
 // Seed data initialization hook
 store.initializeSeedAccounts().catch((err) => {
   console.warn('[Server] Seed initialization background notice:', err.message);
@@ -96,6 +106,8 @@ const mountRoutes = (prefix) => {
   app.use(`${prefix}/terms`, termsRoutes);
   app.use(`${prefix}/dashboard`, dashboardRoutes);
   app.use(`${prefix}/availability`, availabilityRoutes);
+  app.use(`${prefix}/media`, mediaRoutes);
+  app.use(`${prefix}/upload`, mediaRoutes);
 };
 
 mountRoutes('/api/v1');

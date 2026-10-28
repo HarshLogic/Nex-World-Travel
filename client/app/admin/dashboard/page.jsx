@@ -42,6 +42,11 @@ import {
   Building,
   ArrowRight,
   TrendingUp,
+  Compass,
+  Upload,
+  EyeOff,
+  Layers,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   fetchDashboardMetrics,
@@ -66,6 +71,11 @@ import {
   updateDestination,
   deleteDestination,
   fetchDestinations,
+  createActivity,
+  updateActivity,
+  deleteActivity,
+  fetchActivities,
+  uploadMedia,
   fetchTerms,
   updateTerms,
   fetchAvailabilities,
@@ -175,14 +185,44 @@ export default function AdminDashboardPage() {
     region: 'Asia',
     category: 'Dream Destinations',
     shortDescription: '',
+    description: '',
     price: 1999,
     duration: '7 Days / 6 Nights',
     rating: 4.9,
     imageUrl: '/images/destinations/tokyo.jpg',
+    displayOrder: 1,
+    publicationStatus: 'published',
     featured: true,
     isTopDestination: false,
     isActive: true,
   });
+
+  // Activities state
+  const [activities, setActivities] = useState([]);
+  const [actCategoryFilter, setActCategoryFilter] = useState('');
+  const [actSearchQuery, setActSearchQuery] = useState('');
+  const [showAddActModal, setShowAddActModal] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState(null);
+  const [previewActivity, setPreviewActivity] = useState(null);
+  const [actForm, setActForm] = useState({
+    title: '',
+    category: 'Desert & Safari',
+    region: 'Middle East / UAE',
+    location: '',
+    duration: '4 hours',
+    intensity: 'Moderate',
+    shortDescription: '',
+    description: '',
+    imageUrl: '',
+    displayOrder: 1,
+    publicationStatus: 'published',
+    highlights: '',
+    featured: false,
+  });
+
+  // Image Uploading & Deletion Dialog
+  const [imageUploading, setImageUploading] = useState(false);
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState(null);
 
   // Bookings state
   const [bookings, setBookings] = useState([]);
@@ -238,7 +278,7 @@ export default function AdminDashboardPage() {
   const loadAllDashboardData = async () => {
     setLoading(true);
     try {
-      const [metricsData, membersData, empsData, crsData, bksData, reqsData, termsData, destsData, availsData] =
+      const [metricsData, membersData, empsData, crsData, bksData, reqsData, termsData, destsData, availsData, actsData] =
         await Promise.all([
           fetchDashboardMetrics().catch(() => null),
           fetchAdminMembers({ page: 1, limit: 15 }).catch(() => ({ members: [], pagination: {} })),
@@ -249,6 +289,7 @@ export default function AdminDashboardPage() {
           fetchTerms().catch(() => null),
           fetchDestinations().catch(() => []),
           fetchAvailabilities().catch(() => []),
+          fetchActivities().catch(() => []),
         ]);
 
       if (metricsData) setMetrics(metricsData);
@@ -266,6 +307,7 @@ export default function AdminDashboardPage() {
       }
       if (destsData) setDestinations(destsData);
       if (availsData) setAvailabilities(availsData);
+      if (actsData) setActivities(actsData);
     } catch (err) {
       triggerToast(err.message || 'Error loading dashboard data', 'error');
     } finally {
@@ -508,16 +550,68 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // Media Upload handler with client-side FileReader instant preview
+  const handleImageFileChange = async (e, formType) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      triggerToast('Image file size exceeds maximum limit of 5MB.', 'error');
+      return;
+    }
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!validTypes.includes(file.type)) {
+      triggerToast('Unsupported format. Please select a JPG, PNG, or WebP image.', 'error');
+      return;
+    }
+
+    // Instant local preview
+    const reader = new FileReader();
+    reader.onload = (loadEvt) => {
+      const dataUrl = loadEvt.target.result;
+      if (formType === 'activity') {
+        setActForm((prev) => ({ ...prev, imageUrl: dataUrl }));
+      } else {
+        setDestForm((prev) => ({ ...prev, imageUrl: dataUrl }));
+      }
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to server / Cloudinary
+    setImageUploading(true);
+    try {
+      const res = await uploadMedia(file, file.name, file.type);
+      if (res.success && res.url) {
+        if (formType === 'activity') {
+          setActForm((prev) => ({ ...prev, imageUrl: res.url, coverImage: res.url }));
+        } else {
+          setDestForm((prev) => ({ ...prev, imageUrl: res.url, coverImage: res.url }));
+        }
+        triggerToast('Image uploaded successfully!');
+      }
+    } catch (err) {
+      triggerToast(err.message || 'Image upload failed. You can paste a manual image URL.', 'error');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   // Destinations Management
   const handleSaveDestination = async (e) => {
     e.preventDefault();
     setActionLoading(true);
     try {
+      const payload = {
+        ...destForm,
+        description: destForm.description || destForm.shortDescription || destForm.title,
+      };
+
       if (selectedDestination) {
-        await updateDestination(selectedDestination.id || selectedDestination._id, destForm);
+        await updateDestination(selectedDestination.id || selectedDestination._id, payload);
         triggerToast('Destination updated successfully!');
       } else {
-        await createDestination(destForm);
+        await createDestination(payload);
         triggerToast('Destination created successfully!');
       }
       setShowAddDestModal(false);
@@ -530,14 +624,77 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleDeleteDestination = async (id) => {
-    if (!confirm('Are you sure you want to deactivate/delete this destination?')) return;
+  const handleToggleDestinationStatus = async (dest) => {
+    const nextStatus = dest.publicationStatus === 'published' ? 'draft' : 'published';
     try {
-      await deleteDestination(id);
-      triggerToast('Destination archived successfully.');
+      await updateDestination(dest.id || dest._id, { publicationStatus: nextStatus });
+      triggerToast(`Destination marked as ${nextStatus}.`);
       fetchDestinations().then(setDestinations).catch(() => {});
     } catch (err) {
-      triggerToast(err.message || 'Failed to delete destination', 'error');
+      triggerToast(err.message || 'Failed to update publication status', 'error');
+    }
+  };
+
+  // Activities Management
+  const handleSaveActivity = async (e) => {
+    e.preventDefault();
+    setActionLoading(true);
+    try {
+      const payload = {
+        ...actForm,
+        highlights:
+          typeof actForm.highlights === 'string'
+            ? actForm.highlights.split(',').map((s) => s.trim()).filter(Boolean)
+            : actForm.highlights || [],
+      };
+
+      if (selectedActivity) {
+        await updateActivity(selectedActivity.id || selectedActivity._id || selectedActivity.slug, payload);
+        triggerToast('Activity updated successfully!');
+      } else {
+        await createActivity(payload);
+        triggerToast('Activity created successfully!');
+      }
+      setShowAddActModal(false);
+      setSelectedActivity(null);
+      fetchActivities().then(setActivities).catch(() => {});
+    } catch (err) {
+      triggerToast(err.message || 'Failed to save activity', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleToggleActivityStatus = async (act) => {
+    const nextStatus = act.publicationStatus === 'published' ? 'draft' : 'published';
+    try {
+      await updateActivity(act.id || act._id || act.slug, { publicationStatus: nextStatus });
+      triggerToast(`Activity status changed to ${nextStatus}.`);
+      fetchActivities().then(setActivities).catch(() => {});
+    } catch (err) {
+      triggerToast(err.message || 'Failed to change activity status', 'error');
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmItem) return;
+    const { type, id } = deleteConfirmItem;
+    setActionLoading(true);
+    try {
+      if (type === 'activity') {
+        await deleteActivity(id);
+        triggerToast('Activity deleted/archived successfully.');
+        fetchActivities().then(setActivities).catch(() => {});
+      } else {
+        await deleteDestination(id);
+        triggerToast('Destination archived successfully.');
+        fetchDestinations().then(setDestinations).catch(() => {});
+      }
+      setDeleteConfirmItem(null);
+    } catch (err) {
+      triggerToast(err.message || `Failed to delete ${type}`, 'error');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -750,6 +907,7 @@ export default function AdminDashboardPage() {
               icon: FileEdit,
             },
             { id: 'destinations', label: `Destinations (${destinations.length})`, icon: MapPin },
+            { id: 'activities', label: `Activities (${activities.length})`, icon: Compass },
             {
               id: 'bookings',
               label: `Bookings ${bookings.filter((b) => b.status === 'New').length > 0 ? `(${bookings.filter((b) => b.status === 'New').length})` : ''}`,
@@ -2150,7 +2308,7 @@ export default function AdminDashboardPage() {
               <div>
                 <h1 className="text-2xl font-bold text-text-primary">Destinations Content Management</h1>
                 <p className="text-sm text-text-secondary">
-                  Manage Dream Destinations vs Top Destinations showcased on the public website.
+                  Manage Dream Destinations vs Top Destinations Showcase, images, regional assignments, and publication statuses.
                 </p>
               </div>
               <button
@@ -2162,10 +2320,13 @@ export default function AdminDashboardPage() {
                     region: 'Asia',
                     category: 'Dream Destinations',
                     shortDescription: '',
+                    description: '',
                     price: 1999,
                     duration: '7 Days / 6 Nights',
                     rating: 4.9,
                     imageUrl: '/images/destinations/tokyo.jpg',
+                    displayOrder: destinations.length + 1,
+                    publicationStatus: 'published',
                     featured: true,
                     isTopDestination: false,
                     isActive: true,
@@ -2198,7 +2359,12 @@ export default function AdminDashboardPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {destinations
-                .filter((d) => (!destCategoryFilter ? true : d.category === destCategoryFilter || (destCategoryFilter === 'Top Destinations' && d.isTopDestination)))
+                .filter(
+                  (d) =>
+                    !destCategoryFilter ||
+                    d.category === destCategoryFilter ||
+                    (destCategoryFilter === 'Top Destinations' && d.isTopDestination)
+                )
                 .map((dest) => (
                   <div
                     key={dest.id || dest._id}
@@ -2207,14 +2373,14 @@ export default function AdminDashboardPage() {
                     <div>
                       <div className="relative h-44 w-full bg-surface-100">
                         <Image
-                          src={dest.imageUrl || '/images/hero/hero-bg.jpg'}
+                          src={dest.imageUrl || dest.coverImage || dest.heroImage || '/images/hero/hero-bg.jpg'}
                           alt={dest.title}
                           fill
                           sizes="(max-width: 768px) 100vw, 33vw"
                           className="object-cover"
                         />
-                        <div className="absolute top-3 left-3 flex gap-1.5">
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-black/60 backdrop-blur-xs text-white">
+                        <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-black/70 backdrop-blur-xs text-white">
                             {dest.category}
                           </span>
                           {dest.isTopDestination && (
@@ -2222,55 +2388,311 @@ export default function AdminDashboardPage() {
                               Top Pick
                             </span>
                           )}
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              dest.publicationStatus === 'draft'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            }`}
+                          >
+                            {dest.publicationStatus === 'draft' ? 'Draft' : 'Published'}
+                          </span>
                         </div>
+                        {dest.displayOrder && (
+                          <div className="absolute top-3 right-3">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/60 text-white backdrop-blur-xs">
+                              Order #{dest.displayOrder}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="p-4 space-y-2">
                         <div className="flex items-center justify-between">
                           <h3 className="font-bold text-text-primary text-sm">{dest.title}</h3>
-                          <span className="font-bold text-accent-primary text-xs">${dest.price}</span>
+                          <span className="font-bold text-accent-primary text-xs">
+                            {dest.price ? `$${dest.price}` : dest.region}
+                          </span>
                         </div>
-                        <p className="text-xs text-text-secondary line-clamp-2">{dest.shortDescription}</p>
+                        <p className="text-xs text-text-secondary line-clamp-2">
+                          {dest.shortDescription || dest.tagline || dest.description}
+                        </p>
                         <div className="flex items-center gap-3 text-[11px] text-text-tertiary pt-1">
-                          <span>{dest.country}</span>
+                          <span>{dest.country || dest.region}</span>
                           <span>•</span>
-                          <span>{dest.duration}</span>
+                          <span>{dest.duration || 'Flexible'}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-4 pt-0 border-t border-border/50 flex items-center justify-end gap-2 mt-2">
+                    <div className="p-4 pt-0 border-t border-border/50 flex items-center justify-between gap-2 mt-2">
                       <button
-                        onClick={() => {
-                          setSelectedDestination(dest);
-                          setDestForm({
-                            title: dest.title || '',
-                            country: dest.country || '',
-                            region: dest.region || 'Asia',
-                            category: dest.category || 'Dream Destinations',
-                            shortDescription: dest.shortDescription || '',
-                            price: dest.price || 1999,
-                            duration: dest.duration || '7 Days / 6 Nights',
-                            rating: dest.rating || 4.9,
-                            imageUrl: dest.imageUrl || '',
-                            featured: Boolean(dest.featured),
-                            isTopDestination: Boolean(dest.isTopDestination),
-                            isActive: Boolean(dest.isActive),
-                          });
-                          setShowAddDestModal(true);
-                        }}
-                        className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary"
-                        title="Edit Destination"
+                        onClick={() => handleToggleDestinationStatus(dest)}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                          dest.publicationStatus === 'draft'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                        }`}
+                        title={dest.publicationStatus === 'draft' ? 'Publish to public site' : 'Unpublish to draft'}
                       >
-                        <Edit className="w-4 h-4" />
+                        {dest.publicationStatus === 'draft' ? 'Publish' : 'Unpublish'}
                       </button>
-                      <button
-                        onClick={() => handleDeleteDestination(dest.id || dest._id)}
-                        className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-red-600"
-                        title="Delete Destination"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setSelectedDestination(dest);
+                            setDestForm({
+                              title: dest.title || '',
+                              country: dest.country || dest.region || '',
+                              region: dest.region || 'Asia',
+                              category: dest.category || 'Dream Destinations',
+                              shortDescription: dest.shortDescription || dest.tagline || '',
+                              description: dest.description || dest.shortDescription || '',
+                              price: dest.price || 1999,
+                              duration: dest.duration || '7 Days / 6 Nights',
+                              rating: dest.rating || 4.9,
+                              imageUrl: dest.imageUrl || dest.coverImage || dest.heroImage || '',
+                              displayOrder: dest.displayOrder || 1,
+                              publicationStatus: dest.publicationStatus || 'published',
+                              featured: Boolean(dest.featured),
+                              isTopDestination: Boolean(dest.isTopDestination),
+                              isActive: Boolean(dest.isActive),
+                            });
+                            setShowAddDestModal(true);
+                          }}
+                          className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary"
+                          title="Edit Destination"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setDeleteConfirmItem({
+                              type: 'destination',
+                              id: dest.id || dest._id,
+                              title: dest.title,
+                            })
+                          }
+                          className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-red-600"
+                          title="Delete Destination"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* ============================== TAB 5.5: ACTIVITIES ============================== */}
+        {activeTab === 'activities' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-text-primary">Activities & Excursions Content Management</h1>
+                <p className="text-sm text-text-secondary">
+                  Manage curated excursions, desert safaris, marine dives, and theme park passes showcased on the website.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedActivity(null);
+                  setActForm({
+                    title: '',
+                    category: 'Desert & Safari',
+                    region: 'Middle East / UAE',
+                    location: '',
+                    duration: '4 hours',
+                    intensity: 'Moderate',
+                    shortDescription: '',
+                    description: '',
+                    imageUrl: '/images/activities/desert-safari.webp',
+                    displayOrder: activities.length + 1,
+                    publicationStatus: 'published',
+                    highlights: '',
+                    featured: false,
+                  });
+                  setShowAddActModal(true);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover rounded-xl shadow-xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Activity</span>
+              </button>
+            </div>
+
+            {/* Filter pills and search */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  'All',
+                  'Desert & Safari',
+                  'Cultural & Heritage',
+                  'Water Sports & Marine',
+                  'Adventure & Adrenaline',
+                  'Theme Parks & Attractions',
+                ].map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setActCategoryFilter(cat === 'All' ? '' : cat)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                      (cat === 'All' && !actCategoryFilter) || actCategoryFilter === cat
+                        ? 'bg-text-primary text-white'
+                        : 'bg-white text-text-secondary border border-border hover:bg-surface-50'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative max-w-xs w-full">
+                <Search className="w-4 h-4 text-text-tertiary absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={actSearchQuery}
+                  onChange={(e) => setActSearchQuery(e.target.value)}
+                  placeholder="Search activities..."
+                  className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-border text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Activities Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {activities
+                .filter((a) => (!actCategoryFilter ? true : a.category === actCategoryFilter))
+                .filter((a) => {
+                  if (!actSearchQuery) return true;
+                  const s = actSearchQuery.toLowerCase();
+                  return (
+                    a.title?.toLowerCase().includes(s) ||
+                    a.location?.toLowerCase().includes(s) ||
+                    a.category?.toLowerCase().includes(s)
+                  );
+                })
+                .map((act) => (
+                  <div
+                    key={act.id || act._id || act.slug}
+                    className="bg-white rounded-2xl border border-border overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="relative h-44 w-full bg-surface-100">
+                        <Image
+                          src={act.imageUrl || act.coverImage || '/images/hero/hero-bg.jpg'}
+                          alt={act.title}
+                          fill
+                          sizes="(max-width: 768px) 100vw, 33vw"
+                          className="object-cover"
+                        />
+                        <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-black/70 backdrop-blur-xs text-white">
+                            {act.category}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white">
+                            {act.intensity || 'Moderate'}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              act.publicationStatus === 'draft'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            }`}
+                          >
+                            {act.publicationStatus === 'draft' ? 'Draft' : 'Published'}
+                          </span>
+                        </div>
+                        {act.displayOrder && (
+                          <div className="absolute top-3 right-3">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/60 text-white backdrop-blur-xs">
+                              Order #{act.displayOrder}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-text-primary text-sm line-clamp-1">{act.title}</h3>
+                          <span className="text-[11px] font-semibold text-accent-primary">{act.duration}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-text-tertiary">
+                          <MapPin className="w-3 h-3 text-accent-primary flex-shrink-0" />
+                          <span className="line-clamp-1">{act.location}</span>
+                        </div>
+                        <p className="text-xs text-text-secondary line-clamp-2">
+                          {act.shortDescription || act.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 pt-0 border-t border-border/50 flex items-center justify-between gap-2 mt-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleToggleActivityStatus(act)}
+                          className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                            act.publicationStatus === 'draft'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                          }`}
+                          title={act.publicationStatus === 'draft' ? 'Publish to public site' : 'Unpublish to draft'}
+                        >
+                          {act.publicationStatus === 'draft' ? 'Publish' : 'Unpublish'}
+                        </button>
+                        <button
+                          onClick={() => setPreviewActivity(act)}
+                          className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary"
+                          title="Preview Card"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setSelectedActivity(act);
+                            setActForm({
+                              title: act.title || '',
+                              category: act.category || 'Desert & Safari',
+                              region: act.region || 'Middle East / UAE',
+                              location: act.location || '',
+                              duration: act.duration || '4 hours',
+                              intensity: act.intensity || 'Moderate',
+                              shortDescription: act.shortDescription || '',
+                              description: act.description || '',
+                              imageUrl: act.imageUrl || act.coverImage || '',
+                              displayOrder: act.displayOrder || 1,
+                              publicationStatus: act.publicationStatus || 'published',
+                              highlights: Array.isArray(act.highlights)
+                                ? act.highlights.join(', ')
+                                : act.highlights || '',
+                              featured: Boolean(act.featured),
+                            });
+                            setShowAddActModal(true);
+                          }}
+                          className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary"
+                          title="Edit Activity"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setDeleteConfirmItem({
+                              type: 'activity',
+                              id: act.id || act._id || act.slug,
+                              title: act.title,
+                            })
+                          }
+                          className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-red-600"
+                          title="Delete Activity"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -2294,7 +2716,7 @@ export default function AdminDashboardPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveDestination} className="space-y-3 text-xs">
+              <form onSubmit={handleSaveDestination} className="space-y-3.5 text-xs">
                 <div>
                   <label className="block font-semibold text-text-secondary mb-1">Title *</label>
                   <input
@@ -2302,21 +2724,25 @@ export default function AdminDashboardPage() {
                     required
                     value={destForm.title}
                     onChange={(e) => setDestForm({ ...destForm, title: e.target.value })}
-                    placeholder="e.g. Kyoto & Mount Fuji Expedition"
+                    placeholder="e.g. Asia or Swiss Alps Luxury Escape"
                     className="w-full px-3 py-2 rounded-xl border border-border"
                   />
                 </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Country *</label>
-                    <input
-                      type="text"
-                      required
-                      value={destForm.country}
-                      onChange={(e) => setDestForm({ ...destForm, country: e.target.value })}
-                      placeholder="Japan"
-                      className="w-full px-3 py-2 rounded-xl border border-border"
-                    />
+                    <label className="block font-semibold text-text-secondary mb-1">Region *</label>
+                    <select
+                      value={destForm.region}
+                      onChange={(e) => setDestForm({ ...destForm, region: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    >
+                      <option value="Asia">Asia</option>
+                      <option value="Europe">Europe</option>
+                      <option value="Africa">Africa</option>
+                      <option value="Australia">Australia</option>
+                      <option value="Middle East / UAE">Middle East / UAE</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Category *</label>
@@ -2331,48 +2757,111 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Price ($) *</label>
+                    <label className="block font-semibold text-text-secondary mb-1">Display Order</label>
                     <input
                       type="number"
-                      required
                       min="1"
-                      value={destForm.price}
-                      onChange={(e) => setDestForm({ ...destForm, price: e.target.value })}
+                      value={destForm.displayOrder}
+                      onChange={(e) => setDestForm({ ...destForm, displayOrder: Number(e.target.value) })}
                       className="w-full px-3 py-2 rounded-xl border border-border font-bold"
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Duration</label>
+                    <label className="block font-semibold text-text-secondary mb-1">Publication Status</label>
+                    <select
+                      value={destForm.publicationStatus}
+                      onChange={(e) => setDestForm({ ...destForm, publicationStatus: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    >
+                      <option value="published">Published</option>
+                      <option value="draft">Draft (Hidden)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Price ($)</label>
                     <input
-                      type="text"
-                      value={destForm.duration}
-                      onChange={(e) => setDestForm({ ...destForm, duration: e.target.value })}
-                      placeholder="7 Days / 6 Nights"
+                      type="number"
+                      min="0"
+                      value={destForm.price || ''}
+                      onChange={(e) => setDestForm({ ...destForm, price: Number(e.target.value) })}
+                      placeholder="e.g. 1999"
                       className="w-full px-3 py-2 rounded-xl border border-border"
                     />
                   </div>
                 </div>
 
+                {/* Image Upload Dropzone */}
                 <div>
-                  <label className="block font-semibold text-text-secondary mb-1">Image URL Path</label>
+                  <label className="block font-semibold text-text-secondary mb-1">Destination Image</label>
+                  <div className="p-3 border border-dashed border-border rounded-2xl bg-surface-50 space-y-2">
+                    {destForm.imageUrl ? (
+                      <div className="relative h-32 w-full rounded-xl overflow-hidden bg-black/10">
+                        <Image src={destForm.imageUrl} alt="Preview" fill className="object-cover" />
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center gap-2">
+                          <label className="px-3 py-1.5 bg-white text-text-primary text-[11px] font-bold rounded-lg cursor-pointer shadow hover:bg-surface-50">
+                            {imageUploading ? 'Uploading...' : 'Replace Image'}
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/jpg"
+                              onChange={(e) => handleImageFileChange(e, 'destination')}
+                              className="hidden"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setDestForm({ ...destForm, imageUrl: '' })}
+                            className="px-3 py-1.5 bg-red-600 text-white text-[11px] font-bold rounded-lg shadow hover:bg-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-surface-100/50 rounded-xl transition-colors">
+                        <Upload className="w-6 h-6 text-accent-primary mb-1.5" />
+                        <span className="font-bold text-text-primary text-xs">
+                          {imageUploading ? 'Uploading image...' : 'Click or Drag to Upload Image'}
+                        </span>
+                        <span className="text-[10px] text-text-tertiary mt-0.5">JPG, PNG, or WebP up to 5MB</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/jpg"
+                          onChange={(e) => handleImageFileChange(e, 'destination')}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                    <input
+                      type="text"
+                      value={destForm.imageUrl}
+                      onChange={(e) => setDestForm({ ...destForm, imageUrl: e.target.value })}
+                      placeholder="Or enter direct image path / URL..."
+                      className="w-full px-3 py-1.5 text-[11px] rounded-lg border border-border bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Tagline / Short Summary</label>
                   <input
                     type="text"
-                    value={destForm.imageUrl}
-                    onChange={(e) => setDestForm({ ...destForm, imageUrl: e.target.value })}
-                    placeholder="/images/destinations/tokyo.jpg"
+                    value={destForm.shortDescription}
+                    onChange={(e) => setDestForm({ ...destForm, shortDescription: e.target.value })}
+                    placeholder="Brief highlight sentence for cards..."
                     className="w-full px-3 py-2 rounded-xl border border-border"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-text-secondary mb-1">Description</label>
+                  <label className="block font-semibold text-text-secondary mb-1">Full Description *</label>
                   <textarea
                     rows={3}
-                    value={destForm.shortDescription}
-                    onChange={(e) => setDestForm({ ...destForm, shortDescription: e.target.value })}
-                    placeholder="Short description for cards..."
+                    required
+                    value={destForm.description}
+                    onChange={(e) => setDestForm({ ...destForm, description: e.target.value })}
+                    placeholder="Comprehensive description of the destination..."
                     className="w-full px-3 py-2 rounded-xl border border-border"
                   />
                 </div>
@@ -2385,7 +2874,7 @@ export default function AdminDashboardPage() {
                       onChange={(e) => setDestForm({ ...destForm, isTopDestination: e.target.checked })}
                       className="rounded text-accent-primary"
                     />
-                    <span className="font-semibold text-text-secondary">Mark as Top Destination</span>
+                    <span className="font-semibold text-text-secondary">Mark as Top Pick</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -2408,13 +2897,387 @@ export default function AdminDashboardPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={actionLoading}
+                    disabled={actionLoading || imageUploading}
                     className="px-5 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold rounded-xl shadow-xs disabled:opacity-50"
                   >
                     {actionLoading ? 'Saving...' : 'Save Destination'}
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Add/Edit Activity Modal */}
+        {showAddActModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <h3 className="text-base font-bold text-text-primary">
+                  {selectedActivity ? 'Edit Activity / Excursion' : 'Add New Activity'}
+                </h3>
+                <button
+                  onClick={() => setShowAddActModal(false)}
+                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveActivity} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Activity Title *</label>
+                  <input
+                    type="text"
+                    required
+                    value={actForm.title}
+                    onChange={(e) => setActForm({ ...actForm, title: e.target.value })}
+                    placeholder="e.g. VIP Evening Desert Safari & Bedouin Camp"
+                    className="w-full px-3 py-2 rounded-xl border border-border"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Category *</label>
+                    <select
+                      value={actForm.category}
+                      onChange={(e) => setActForm({ ...actForm, category: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    >
+                      <option value="Desert & Safari">Desert & Safari</option>
+                      <option value="Cultural & Heritage">Cultural & Heritage</option>
+                      <option value="Water Sports & Marine">Water Sports & Marine</option>
+                      <option value="Adventure & Adrenaline">Adventure & Adrenaline</option>
+                      <option value="Theme Parks & Attractions">Theme Parks & Attractions</option>
+                      <option value="Wellness & Relaxation">Wellness & Relaxation</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Region *</label>
+                    <select
+                      value={actForm.region}
+                      onChange={(e) => setActForm({ ...actForm, region: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    >
+                      <option value="Middle East / UAE">Middle East / UAE</option>
+                      <option value="Asia">Asia</option>
+                      <option value="Europe">Europe</option>
+                      <option value="Africa">Africa</option>
+                      <option value="Australia">Australia</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Location *</label>
+                    <input
+                      type="text"
+                      required
+                      value={actForm.location}
+                      onChange={(e) => setActForm({ ...actForm, location: e.target.value })}
+                      placeholder="e.g. Dubai & Abu Dhabi, UAE"
+                      className="w-full px-3 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Duration</label>
+                    <input
+                      type="text"
+                      value={actForm.duration}
+                      onChange={(e) => setActForm({ ...actForm, duration: e.target.value })}
+                      placeholder="e.g. 6 to 7 hours"
+                      className="w-full px-3 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Intensity</label>
+                    <select
+                      value={actForm.intensity}
+                      onChange={(e) => setActForm({ ...actForm, intensity: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    >
+                      <option value="Easy">Easy</option>
+                      <option value="Moderate">Moderate</option>
+                      <option value="High">High</option>
+                      <option value="All Ages">All Ages</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Display Order</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={actForm.displayOrder}
+                      onChange={(e) => setActForm({ ...actForm, displayOrder: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Publication Status</label>
+                    <select
+                      value={actForm.publicationStatus}
+                      onChange={(e) => setActForm({ ...actForm, publicationStatus: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    >
+                      <option value="published">Published</option>
+                      <option value="draft">Draft (Hidden from public site)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Activity Image Upload Dropzone */}
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Activity Image</label>
+                  <div className="p-3 border border-dashed border-border rounded-2xl bg-surface-50 space-y-2">
+                    {actForm.imageUrl ? (
+                      <div className="relative h-32 w-full rounded-xl overflow-hidden bg-black/10">
+                        <Image src={actForm.imageUrl} alt="Preview" fill className="object-cover" />
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center gap-2">
+                          <label className="px-3 py-1.5 bg-white text-text-primary text-[11px] font-bold rounded-lg cursor-pointer shadow hover:bg-surface-50">
+                            {imageUploading ? 'Uploading...' : 'Replace Image'}
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/jpg"
+                              onChange={(e) => handleImageFileChange(e, 'activity')}
+                              className="hidden"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setActForm({ ...actForm, imageUrl: '' })}
+                            className="px-3 py-1.5 bg-red-600 text-white text-[11px] font-bold rounded-lg shadow hover:bg-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-surface-100/50 rounded-xl transition-colors">
+                        <Upload className="w-6 h-6 text-accent-primary mb-1.5" />
+                        <span className="font-bold text-text-primary text-xs">
+                          {imageUploading ? 'Uploading image...' : 'Click or Drag to Upload Image'}
+                        </span>
+                        <span className="text-[10px] text-text-tertiary mt-0.5">JPG, PNG, or WebP up to 5MB</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/jpg"
+                          onChange={(e) => handleImageFileChange(e, 'activity')}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                    <input
+                      type="text"
+                      value={actForm.imageUrl}
+                      onChange={(e) => setActForm({ ...actForm, imageUrl: e.target.value })}
+                      placeholder="Or enter direct image path / URL..."
+                      className="w-full px-3 py-1.5 text-[11px] rounded-lg border border-border bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Short Description</label>
+                  <input
+                    type="text"
+                    value={actForm.shortDescription}
+                    onChange={(e) => setActForm({ ...actForm, shortDescription: e.target.value })}
+                    placeholder="Short summary for cards..."
+                    className="w-full px-3 py-2 rounded-xl border border-border"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Full Description *</label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={actForm.description}
+                    onChange={(e) => setActForm({ ...actForm, description: e.target.value })}
+                    placeholder="Full description of the activity and highlights..."
+                    className="w-full px-3 py-2 rounded-xl border border-border"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">
+                    Key Highlights (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={actForm.highlights}
+                    onChange={(e) => setActForm({ ...actForm, highlights: e.target.value })}
+                    placeholder="e.g. 4x4 Luxury Dune Bashing, Camel trekking, Sunset BBQ"
+                    className="w-full px-3 py-2 rounded-xl border border-border"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={actForm.featured}
+                      onChange={(e) => setActForm({ ...actForm, featured: e.target.checked })}
+                      className="rounded text-accent-primary"
+                    />
+                    <span className="font-semibold text-text-secondary">Feature on Homepage</span>
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewActivity({
+                        ...actForm,
+                        highlights:
+                          typeof actForm.highlights === 'string'
+                            ? actForm.highlights.split(',').map((s) => s.trim()).filter(Boolean)
+                            : actForm.highlights,
+                      })
+                    }
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-text-secondary hover:text-accent-primary border border-border rounded-xl hover:bg-surface-50"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Preview Card</span>
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddActModal(false)}
+                      className="px-4 py-2 text-text-secondary hover:bg-surface-50 rounded-xl"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={actionLoading || imageUploading}
+                      className="px-5 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold rounded-xl shadow-xs disabled:opacity-50"
+                    >
+                      {actionLoading ? 'Saving...' : 'Save Activity'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Activity Live Preview Modal */}
+        {previewActivity && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl animate-in zoom-in-95">
+              <div className="p-4 border-b border-border flex items-center justify-between">
+                <span className="text-xs font-bold text-text-secondary">Website Card Preview</span>
+                <button
+                  onClick={() => setPreviewActivity(null)}
+                  className="p-1 rounded-lg text-text-tertiary hover:text-text-primary"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="relative aspect-[16/10] w-full bg-surface-200">
+                <Image
+                  src={previewActivity.imageUrl || previewActivity.coverImage || '/images/hero/hero-bg.jpg'}
+                  alt={previewActivity.title}
+                  fill
+                  className="object-cover"
+                />
+                <div className="absolute top-3 left-3">
+                  <span className="px-2.5 py-1 rounded-full bg-white/95 text-[11px] font-bold text-text-primary shadow-sm">
+                    {previewActivity.category}
+                  </span>
+                </div>
+                <div className="absolute top-3 right-3">
+                  <span className="px-2.5 py-1 rounded-full bg-amber-500 text-[11px] font-bold text-white shadow-sm">
+                    {previewActivity.intensity || 'Moderate'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-3">
+                <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                  <MapPin className="w-3.5 h-3.5 text-accent-primary flex-shrink-0" />
+                  <span className="line-clamp-1">{previewActivity.location || 'Location not specified'}</span>
+                </div>
+
+                <h3 className="text-base font-bold text-text-primary">{previewActivity.title || 'Activity Title'}</h3>
+
+                <p className="text-xs text-text-secondary leading-relaxed line-clamp-3">
+                  {previewActivity.shortDescription || previewActivity.description || 'Description goes here...'}
+                </p>
+
+                {previewActivity.highlights?.length > 0 && (
+                  <div className="pt-2">
+                    <ul className="space-y-1">
+                      {previewActivity.highlights.slice(0, 3).map((hl, i) => (
+                        <li key={i} className="flex items-start gap-1.5 text-[11px] text-text-secondary">
+                          <CheckCircle2 className="w-3 h-3 text-accent-secondary mt-0.5 flex-shrink-0" />
+                          <span>{hl}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-border flex items-center justify-between">
+                  <div className="flex items-center gap-1 text-xs text-text-secondary">
+                    <Clock className="w-3.5 h-3.5 text-accent-primary" />
+                    <span>{previewActivity.duration || 'Flexible'}</span>
+                  </div>
+                  <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-accent-primary text-white">
+                    Enquire
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmItem && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl animate-in zoom-in-95 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary">Confirm Deletion</h3>
+                  <p className="text-xs text-text-secondary capitalize">{deleteConfirmItem.type} Removal</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-text-secondary leading-relaxed">
+                Are you sure you want to delete / archive{' '}
+                <strong className="text-text-primary font-bold">{deleteConfirmItem.title}</strong>? It will be removed
+                from the public website while preserving historical system logs.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmItem(null)}
+                  className="px-4 py-2 text-xs text-text-secondary hover:bg-surface-50 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={handleConfirmDelete}
+                  className="px-4 py-2 text-xs bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-xs disabled:opacity-50"
+                >
+                  {actionLoading ? 'Deleting...' : 'Confirm Delete'}
+                </button>
+              </div>
             </div>
           </div>
         )}

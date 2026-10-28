@@ -1,19 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Compass, Sparkles, MapPin, Calendar, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { destinationsData } from '../../data/destinations';
+import { fetchDestinations } from '../../lib/api';
 
 const REGIONS = ['All', 'Asia', 'Europe', 'Africa', 'Australia', 'Middle East / UAE'];
 
 export default function DestinationsPage() {
   const [selectedRegion, setSelectedRegion] = useState('All');
+  const [destinations, setDestinations] = useState(destinationsData);
 
-  const filteredDestinations = selectedRegion === 'All'
-    ? destinationsData
-    : destinationsData.filter((d) => d.region.toLowerCase() === selectedRegion.toLowerCase());
+  useEffect(() => {
+    fetchDestinations()
+      .then((data) => {
+        if (data && data.length > 0) setDestinations(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const published = destinations.filter((d) => d.publicationStatus !== 'draft' && !d.isDeleted);
+  const filteredDestinations =
+    selectedRegion === 'All'
+      ? published
+      : published.filter((d) => d.region?.toLowerCase() === selectedRegion.toLowerCase());
 
   return (
     <div className="py-12 md:py-20 bg-surface-50 min-h-screen">
@@ -55,15 +67,15 @@ export default function DestinationsPage() {
             const isReversed = idx % 2 === 1;
             return (
               <div
-                key={dest.id}
-                id={dest.id}
+                key={dest.id || dest._id || dest.slug}
+                id={dest.id || dest.slug}
                 className="bg-white rounded-4xl border border-border shadow-card overflow-hidden hover:shadow-card-hover transition-all duration-300"
               >
                 <div className={`grid grid-cols-1 lg:grid-cols-12 gap-0 ${isReversed ? 'lg:flex-row-reverse' : ''}`}>
                   {/* Photo Column */}
                   <div className={`lg:col-span-6 relative aspect-[16/10] lg:aspect-auto lg:min-h-[420px] ${isReversed ? 'lg:order-2' : ''}`}>
                     <Image
-                      src={dest.heroImage}
+                      src={dest.heroImage || dest.imageUrl || dest.coverImage || '/images/hero/hero-bg.jpg'}
                       alt={dest.title}
                       fill
                       sizes="(max-width: 1024px) 100vw, 50vw"

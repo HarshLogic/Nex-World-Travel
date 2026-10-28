@@ -1,9 +1,26 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Compass, Sparkles, MapPin } from 'lucide-react';
 import { destinationsData } from '../../data/destinations';
+import { fetchDestinations } from '../../lib/api';
 
 export default function FeaturedDestinations() {
+  const [destinations, setDestinations] = useState(destinationsData);
+
+  useEffect(() => {
+    fetchDestinations()
+      .then((data) => {
+        if (data && data.length > 0) setDestinations(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const displayList = destinations
+    .filter((d) => d.publicationStatus !== 'draft' && !d.isDeleted);
+
   return (
     <section className="py-20 bg-surface-50 border-y border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -33,11 +50,12 @@ export default function FeaturedDestinations() {
 
         {/* Asymmetrical Grid of Destination Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {destinationsData.map((dest, idx) => {
+          {displayList.map((dest, idx) => {
             const isLarge = idx === 0 || idx === 3;
+            const imgSrc = dest.thumbnail || dest.imageUrl || dest.coverImage || dest.heroImage || '/images/hero/hero-bg.jpg';
             return (
               <div
-                key={dest.id}
+                key={dest.id || dest._id || dest.slug}
                 className={`group relative bg-white rounded-3xl overflow-hidden border border-border shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col ${
                   isLarge ? 'md:col-span-2 lg:col-span-1' : ''
                 }`}
@@ -45,7 +63,7 @@ export default function FeaturedDestinations() {
                 {/* Image Container */}
                 <div className="relative aspect-[16/10] w-full overflow-hidden">
                   <Image
-                    src={dest.thumbnail}
+                    src={imgSrc}
                     alt={`${dest.title} - Nex World Travel`}
                     fill
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -69,7 +87,7 @@ export default function FeaturedDestinations() {
                 <div className="p-6 flex-1 flex flex-col justify-between">
                   <div>
                     <div className="flex flex-wrap gap-1.5 mb-4">
-                      {dest.popularCities.slice(0, 3).map((city) => (
+                      {(dest.popularCities || []).slice(0, 3).map((city) => (
                         <span
                           key={city}
                           className="px-2.5 py-1 rounded-lg bg-surface-50 text-[11px] font-medium text-text-secondary border border-border"
@@ -85,7 +103,7 @@ export default function FeaturedDestinations() {
                   </div>
 
                   <div className="pt-4 border-t border-border flex items-center justify-between text-xs">
-                    <span className="text-text-muted">Best Time: <strong className="text-text-primary font-medium">{dest.bestTimeToVisit}</strong></span>
+                    <span className="text-text-muted">Best Time: <strong className="text-text-primary font-medium">{dest.bestTimeToVisit || 'Year Round'}</strong></span>
                     <Link
                       href={`/destinations/${dest.slug}`}
                       className="inline-flex items-center gap-1 font-semibold text-accent-primary hover:text-accent-primary-hover group-hover:underline"
@@ -103,4 +121,3 @@ export default function FeaturedDestinations() {
     </section>
   );
 }
-

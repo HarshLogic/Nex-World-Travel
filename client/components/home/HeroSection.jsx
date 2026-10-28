@@ -29,9 +29,9 @@ export default function HeroSection() {
         {/* Editorial Headline */}
         <div className="text-center max-w-5xl mx-auto mb-10 px-2 sm:px-0">
           <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold text-text-primary tracking-tight leading-[1.15] sm:leading-[1.1] mb-4 sm:mb-6">
-            Dream Without Limits.{' '}
+            Dream Without Limits,{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-primary via-indigo-600 to-accent-secondary">
-              Discover Endless Possibilities.
+              Discover Endless Possibilities,
             </span>{' '}
             Explore Beyond Boundaries
           </h1>
