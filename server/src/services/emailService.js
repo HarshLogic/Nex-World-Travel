@@ -1,52 +1,94 @@
 import nodemailer from 'nodemailer';
 
-const BOOKING_ASSISTANCE_EMAIL =
+const getBookingEmail = () =>
   process.env.BOOKING_ASSISTANCE_EMAIL ||
   process.env.BUSINESS_BOOKING_EMAIL ||
   'reservation@nexworldtravel.com';
-const CUSTOMER_CARE_EMAIL = process.env.CUSTOMER_CARE_EMAIL || 'customercare@nexworldtravel.com';
-const SMTP_HOST = process.env.SMTP_HOST;
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASSWORD = process.env.SMTP_PASSWORD;
-const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || 'no-reply@nexworldtravel.com';
+
+const getCustomerCareEmail = () =>
+  process.env.CUSTOMER_CARE_EMAIL || 'customercare@nexworldtravel.com';
+
+const getFromAddress = (displayName = 'Nex World Travel') => {
+  const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@nexworldtravel.com';
+  return `"${displayName}" <${fromEmail}>`;
+};
 
 let transporter = null;
 
-const getTransporter = () => {
-  if (transporter) return transporter;
+export const getTransporter = () => {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const password = process.env.SMTP_PASSWORD;
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const isSecure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465;
 
-  if (SMTP_HOST && SMTP_USER && SMTP_PASSWORD) {
-    try {
-      transporter = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: SMTP_PORT === 465,
-        auth: {
-          user: SMTP_USER,
-          pass: SMTP_PASSWORD,
-        },
-      });
-      console.log('[EmailService] Configured SMTP transporter.');
-    } catch (e) {
-      console.warn('[EmailService] SMTP initialization failed:', e.message);
+  if (host && user && password) {
+    if (!transporter || transporter.__simulated) {
+      try {
+        transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure: isSecure,
+          auth: {
+            user,
+            pass: password,
+          },
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
+          tls: {
+            rejectUnauthorized: process.env.NODE_ENV === 'production',
+          },
+        });
+        transporter.__simulated = false;
+        console.log(`[EmailService] Configured SMTP transporter (${host}:${port}, secure=${isSecure}).`);
+      } catch (e) {
+        console.warn('[EmailService] SMTP initialization failed:', e.message);
+      }
     }
   } else {
     // Development/Fallback mock transporter
-    transporter = {
-      sendMail: async (options) => {
-        console.log('\n[EmailService - Simulated Dispatch]');
-        console.log(`To: ${options.to}`);
-        console.log(`From: ${options.from}`);
-        console.log(`Subject: ${options.subject}`);
-        console.log(`Content Preview: ${options.text ? options.text.slice(0, 150) : options.html?.slice(0, 150)}...`);
-        console.log('[EmailService] Notification delivered to simulated logger.\n');
-        return { messageId: 'simulated-' + Date.now() };
-      },
-    };
+    if (!transporter || !transporter.__simulated) {
+      transporter = {
+        __simulated: true,
+        sendMail: async (options) => {
+          console.log('\n[EmailService - Simulated Dispatch]');
+          console.log(`To: ${options.to}`);
+          console.log(`From: ${options.from}`);
+          console.log(`Subject: ${options.subject}`);
+          console.log(`Content Preview: ${options.text ? options.text.slice(0, 150) : options.html?.slice(0, 150)}...`);
+          console.log('[EmailService] Note: SMTP credentials (SMTP_HOST, SMTP_USER, SMTP_PASSWORD) are not set. Notification delivered to simulated logger.\n');
+          return { messageId: 'simulated-' + Date.now() };
+        },
+      };
+    }
   }
 
   return transporter;
+};
+
+export const verifySmtpConnection = async () => {
+  const mailer = getTransporter();
+  if (mailer.__simulated) {
+    return {
+      configured: false,
+      message: 'SMTP credentials missing (SMTP_HOST, SMTP_USER, SMTP_PASSWORD not set in environment). Currently using simulated logger.',
+    };
+  }
+  try {
+    await mailer.verify();
+    return {
+      configured: true,
+      success: true,
+      message: 'SMTP connection verified successfully.',
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      success: false,
+      error: error.message,
+    };
+  }
 };
 
 export const sendBookingNotification = async (booking) => {
@@ -58,8 +100,8 @@ export const sendBookingNotification = async (booking) => {
     const checkOut = booking.checkOutDate || booking.returnDate || 'Flexible';
 
     const mailOptions = {
-      from: `"Nex World Travel Reservations" <${SMTP_FROM_EMAIL}>`,
-      to: BOOKING_ASSISTANCE_EMAIL,
+      from: getFromAddress('Nex World Travel Reservations'),
+      to: getBookingEmail(),
       subject: `🚨 Booking Request [${booking.enquiryNumber}]: ${leadName} — ${booking.destinationOrPackage}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #E6EAF0; border-radius: 16px; background-color: #FFFFFF;">
@@ -98,8 +140,8 @@ export const sendContactNotification = async (contact) => {
   try {
     const mailer = getTransporter();
     const mailOptions = {
-      from: `"Nex World Travel Support" <${SMTP_FROM_EMAIL}>`,
-      to: CUSTOMER_CARE_EMAIL,
+      from: getFromAddress('Nex World Travel Support'),
+      to: getCustomerCareEmail(),
       subject: `📩 General Customer Care Inquiry [${contact.ticketNumber}]: ${contact.subject}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E6EAF0; border-radius: 12px;">
@@ -132,7 +174,7 @@ export const sendPasswordResetEmail = async (email, name, token) => {
     const resetUrl = `${clientUrl}/reset-password?token=${token}`;
 
     const mailOptions = {
-      from: `"Nex World Travel Security" <${SMTP_FROM_EMAIL}>`,
+      from: getFromAddress('Nex World Travel Security'),
       to: email,
       subject: 'Password Reset Request — Nex World Travel',
       html: `
@@ -165,7 +207,7 @@ export const sendAccountActivationEmail = async (email, name, token, role = 'Emp
     const activateUrl = `${clientUrl}/activate?token=${token}`;
 
     const mailOptions = {
-      from: `"Nex World Travel Headquarters" <${SMTP_FROM_EMAIL}>`,
+      from: getFromAddress('Nex World Travel Headquarters'),
       to: email,
       subject: `Activate Your Nex World Travel ${role} Account`,
       html: `
@@ -190,4 +232,3 @@ export const sendAccountActivationEmail = async (email, name, token, role = 'Emp
     return { success: false, error: err.message };
   }
 };
-

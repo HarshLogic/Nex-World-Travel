@@ -72,10 +72,12 @@ import {
   deleteDestination,
   fetchDestinations,
   getDestinationImageUrl,
+  getActivityImageUrl,
   createActivity,
   updateActivity,
   deleteActivity,
   fetchActivities,
+  uploadActivityImage,
   uploadMedia,
   fetchTerms,
   updateTerms,
@@ -681,7 +683,14 @@ export default function AdminDashboardPage() {
     reader.onload = (loadEvt) => {
       const dataUrl = loadEvt.target.result;
       if (formType === 'activity') {
-        setActForm((prev) => ({ ...prev, imageUrl: dataUrl }));
+        // Activity: store raw base64 dataUrl directly so it is written straight to MongoDB binary
+        setActForm((prev) => ({
+          ...prev,
+          imageUrl: dataUrl,
+          coverImage: dataUrl,
+          imageData: dataUrl,
+          imageOriginalName: file.name,
+        }));
       } else {
         // Destination: store raw base64 dataUrl directly so it is written straight to MongoDB
         setDestForm((prev) => ({
@@ -694,8 +703,8 @@ export default function AdminDashboardPage() {
     };
     reader.readAsDataURL(file);
 
-    if (formType === 'destination') {
-      triggerToast('Direct image loaded! It will be stored in MongoDB when you save.', 'success');
+    if (formType === 'destination' || formType === 'activity') {
+      triggerToast('Direct image loaded! It will be stored permanently in MongoDB when you save.', 'success');
       return;
     }
 
@@ -793,6 +802,8 @@ export default function AdminDashboardPage() {
     try {
       const payload = {
         ...actForm,
+        coverImage: actForm.coverImage || actForm.imageUrl || (selectedActivity ? selectedActivity.coverImage || selectedActivity.imageUrl : ''),
+        imageUrl: actForm.imageUrl || actForm.coverImage || (selectedActivity ? selectedActivity.imageUrl || selectedActivity.coverImage : ''),
         highlights:
           typeof actForm.highlights === 'string'
             ? actForm.highlights.split(',').map((s) => s.trim()).filter(Boolean)
@@ -808,7 +819,9 @@ export default function AdminDashboardPage() {
       }
       setShowAddActModal(false);
       setSelectedActivity(null);
-      fetchActivities().then(setActivities).catch(() => {});
+      fetchActivities().then((acts) => {
+        if (acts && acts.length > 0) setActivities(acts);
+      }).catch(() => {});
     } catch (err) {
       triggerToast(err.message || 'Failed to save activity', 'error');
     } finally {
@@ -3111,7 +3124,7 @@ export default function AdminDashboardPage() {
                     <div>
                       <div className="relative h-44 w-full bg-surface-100">
                         <Image
-                          src={act.imageUrl || act.coverImage || '/images/hero/hero-bg.jpg'}
+                          src={getActivityImageUrl(act)}
                           alt={act.title}
                           fill
                           sizes="(max-width: 768px) 100vw, 33vw"
@@ -3194,6 +3207,8 @@ export default function AdminDashboardPage() {
                               shortDescription: act.shortDescription || '',
                               description: act.description || '',
                               imageUrl: act.imageUrl || act.coverImage || '',
+                              coverImage: act.coverImage || act.imageUrl || '',
+                              hasDirectImage: Boolean(act.hasDirectImage),
                               displayOrder: act.displayOrder || 1,
                               publicationStatus: act.publicationStatus || 'published',
                               highlights: Array.isArray(act.highlights)
@@ -3568,7 +3583,7 @@ export default function AdminDashboardPage() {
                   <div className="p-3 border border-dashed border-border rounded-2xl bg-surface-50 space-y-2">
                     {actForm.imageUrl ? (
                       <div className="relative h-32 w-full rounded-xl overflow-hidden bg-black/10">
-                        <Image src={actForm.imageUrl} alt="Preview" fill className="object-cover" />
+                        <Image src={getActivityImageUrl(actForm)} alt="Preview" fill className="object-cover" />
                         <div className="absolute inset-0 bg-black/30 flex items-center justify-center gap-2">
                           <label className="px-3 py-1.5 bg-white text-text-primary text-[11px] font-bold rounded-lg cursor-pointer shadow hover:bg-surface-50">
                             {imageUploading ? 'Uploading...' : 'Replace Image'}
@@ -3717,7 +3732,7 @@ export default function AdminDashboardPage() {
 
               <div className="relative aspect-[16/10] w-full bg-surface-200">
                 <Image
-                  src={previewActivity.imageUrl || previewActivity.coverImage || '/images/hero/hero-bg.jpg'}
+                  src={getActivityImageUrl(previewActivity)}
                   alt={previewActivity.title}
                   fill
                   className="object-cover"

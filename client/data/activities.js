@@ -89,5 +89,22 @@ export const activitiesData = [
     highlights: ['Ferrari World Formula Rossa access', 'Warner Bros World Abu Dhabi immersive zones', 'Quick-pass queue bypass'],
     featured: true,
   },
+  {
+    id: 'act-1793286612880',
+    slug: 'international-tours-activities',
+    title: 'International Tours & Activities',
+    category: 'Adventure & Adrenaline',
+    region: 'Europe',
+    location: 'Globe',
+    shortDescription: 'Explore extraordinary destinations and unforgettable experiences across the globe with Nex World Travel & Tourism.',
+    description: "Explore extraordinary destinations and unforgettable experiences across the globe with Nex World Travel & Tourism. From iconic city tours and cultural discoveries to thrilling adventures, scenic excursions, island escapes, and world-famous attractions, we bring the world closer to you.\n\nWhether you're dreaming of exploring Europe's historic cities, discovering Asia's vibrant cultures, experiencing the natural wonders of the Americas, relaxing on tropical beaches, or embarking on an adventure across Africa and beyond, our international tours and activities help you make every journey extraordinary.\n\nFrom must-see landmarks to hidden gems, discover new perspectives, embrace different cultures, and turn your travel dreams into remarkable experiences.",
+    duration: '8-12 Hrs',
+    intensity: 'High',
+    imageUrl: '/images/services/activities.jpg',
+    coverImage: '/images/services/activities.jpg',
+    hasDirectImage: true,
+    highlights: ['Explore Global Experiences | Discover Your Next Adventure'],
+    featured: true,
+  },
 ];
 

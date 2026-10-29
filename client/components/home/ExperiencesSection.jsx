@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Sparkles, Clock, MapPin, Gauge, ArrowRight } from 'lucide-react';
 import { activitiesData } from '../../data/activities';
-import { fetchActivities } from '../../lib/api';
+import { fetchActivities, getActivityImageUrl } from '../../lib/api';
 
 export default function ExperiencesSection() {
   const [activities, setActivities] = useState(activitiesData);
@@ -57,7 +57,7 @@ export default function ExperiencesSection() {
             >
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-surface-200">
                 <Image
-                  src={item.imageUrl || item.coverImage || '/images/hero/hero-bg.jpg'}
+                  src={getActivityImageUrl(item)}
                   alt={item.title}
                   fill
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"

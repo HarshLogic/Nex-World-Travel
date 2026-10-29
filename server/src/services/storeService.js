@@ -2083,6 +2083,27 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
           };
         }
       } catch (e) {}
+
+      // 1b. Check if any activity in MongoDB has this image data or references it
+      try {
+        const act = await Activity.findOne({
+          $or: [
+            { 'image.originalName': cleanFilename },
+            { coverImage: { $regex: cleanFilename } },
+            { imageUrl: { $regex: cleanFilename } },
+          ],
+          isDeleted: { $ne: true },
+        }).select('+image.data');
+
+        if (act && act.image && act.image.data) {
+          return {
+            buffer: act.image.data,
+            contentType: act.image.contentType || 'image/jpeg',
+            size: act.image.size || act.image.data.length,
+            originalName: act.image.originalName || cleanFilename,
+          };
+        }
+      } catch (e) {}
     }
 
     // 2. Check local disk candidate locations
@@ -2106,6 +2127,41 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
         size: memDest.image.size || memDest.image.data.length,
         originalName: memDest.image.originalName || cleanFilename,
       };
+    }
+
+    const memAct = this.activities.find(
+      (a) =>
+        !a.isDeleted &&
+        (a.image?.originalName === cleanFilename ||
+          a.coverImage?.includes(cleanFilename) ||
+          a.imageUrl?.includes(cleanFilename))
+    );
+    if (memAct && memAct.image && memAct.image.data) {
+      return {
+        buffer: Buffer.isBuffer(memAct.image.data) ? memAct.image.data : Buffer.from(memAct.image.data),
+        contentType: memAct.image.contentType || 'image/jpeg',
+        size: memAct.image.size || memAct.image.data.length,
+        originalName: memAct.image.originalName || cleanFilename,
+      };
+    }
+
+    // 4. High-availability standard asset mapping fallback for known activity/destination assets
+    const filenameLow = cleanFilename.toLowerCase();
+    const knownMappings = [
+      { pattern: /arabian-nights|desert-safari|safari/i, path: 'client/public/images/activities/desert-safari.webp' },
+      { pattern: /dubai-museum|museum/i, path: 'client/public/images/destinations/uae.jpg' },
+      { pattern: /1793285500992|seine|cruise/i, path: 'client/public/images/destinations/europe.jpg' },
+      { pattern: /snorkeling|barrier-reef/i, path: 'client/public/images/destinations/australia.jpg' },
+      { pattern: /maxresdefault|mount-fuji|hakone/i, path: 'client/public/images/destinations/asia.jpg' },
+      { pattern: /yas-waterworld|waterworld|adventure/i, path: 'client/public/images/activities/adventure.jpg' },
+      { pattern: /adventure-trips|international-tours/i, path: 'client/public/images/services/activities.jpg' },
+      { pattern: /azerbaijan|wa0144/i, path: 'client/public/images/hero.jpg' },
+    ];
+    for (const km of knownMappings) {
+      if (km.pattern.test(filenameLow)) {
+        const mapped = await this.readLocalImageFile(km.path);
+        if (mapped) return mapped;
+      }
     }
 
     return null;
@@ -2166,7 +2222,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
             { description: { $regex: s, $options: 'i' } },
           ];
         }
-        const docs = await Activity.find(q).sort({ displayOrder: 1, createdAt: -1 }).lean();
+        const docs = await Activity.find(q).select('-image.data').sort({ displayOrder: 1, createdAt: -1 }).lean();
         if (docs && docs.length > 0) return docs;
       } catch (e) {}
     }
@@ -2193,7 +2249,15 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
           (a.description && a.description.toLowerCase().includes(s))
       );
     }
-    return results.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    const sanitized = results.map((a) => {
+      if (a.image && a.image.data) {
+        const copy = { ...a, image: { ...a.image } };
+        delete copy.image.data;
+        return copy;
+      }
+      return a;
+    });
+    return sanitized.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   }
 
   async getActivityBySlug(slugOrId) {
@@ -2204,19 +2268,194 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
         const found = await Activity.findOne({
           $or: [{ slug: clean }, { _id: slugOrId }],
           isDeleted: { $ne: true },
-        }).lean();
-        if (found) return found;
+        }).select('-image.data').lean();
+        if (found) {
+          if (found.image && found.image.data) delete found.image.data;
+          return found;
+        }
       } catch (e) {}
     }
-    return (
-      this.activities.find(
-        (a) => (a.slug?.toLowerCase() === clean || a._id === slugOrId || a.id === slugOrId) && !a.isDeleted
-      ) || null
+    const memFound = this.activities.find(
+      (a) => (a.slug?.toLowerCase() === clean || a._id === slugOrId || a.id === slugOrId) && !a.isDeleted
     );
+    if (memFound) {
+      if (memFound.image && memFound.image.data) {
+        const copy = { ...memFound, image: { ...memFound.image } };
+        delete copy.image.data;
+        return copy;
+      }
+      return memFound;
+    }
+    return null;
   }
 
   async getActivityById(id) {
     return this.getActivityBySlug(id);
+  }
+
+  async getActivityImage(idOrSlug) {
+    await this.initializeSeedAccounts();
+    if (!idOrSlug) return null;
+    const cleanIdOrSlug = String(idOrSlug).trim();
+    const lowerSlug = cleanIdOrSlug.toLowerCase();
+
+    // 1. Try MongoDB
+    if (this.isMongoLive()) {
+      try {
+        const act = await Activity.findOne({
+          $or: [{ _id: cleanIdOrSlug }, { slug: cleanIdOrSlug }, { slug: lowerSlug }],
+          isDeleted: { $ne: true },
+        }).select('+image.data');
+
+        if (act) {
+          if (act.image && act.image.data) {
+            return {
+              buffer: act.image.data,
+              contentType: act.image.contentType || 'image/jpeg',
+              originalName: act.image.originalName || `${act.slug}.jpg`,
+              size: act.image.size || act.image.data.length,
+              publicationStatus: act.publicationStatus,
+              updatedAt: act.updatedAt || act.createdAt || new Date(),
+              title: act.title,
+              slug: act.slug,
+              _id: act._id,
+            };
+          }
+
+          // Fallback to disk if activity has a local image path
+          const localPath = act.coverImage || act.imageUrl;
+          if (localPath && typeof localPath === 'string') {
+            const diskFile = await this.readLocalImageFile(localPath);
+            if (diskFile) {
+              return {
+                ...diskFile,
+                publicationStatus: act.publicationStatus,
+                updatedAt: act.updatedAt || act.createdAt || new Date(),
+                title: act.title,
+                slug: act.slug,
+                _id: act._id,
+              };
+            }
+          }
+
+          // Fallback to standard asset mapped for this activity
+          const fallbackPath = this.getStandardActivityImagePath(act);
+          if (fallbackPath) {
+            const fallbackFile = await this.readLocalImageFile(fallbackPath);
+            if (fallbackFile) {
+              return {
+                ...fallbackFile,
+                publicationStatus: act.publicationStatus,
+                updatedAt: act.updatedAt || act.createdAt || new Date(),
+                title: act.title,
+                slug: act.slug,
+                _id: act._id,
+              };
+            }
+          }
+          return null;
+        }
+      } catch (e) {
+        console.warn('[StoreService] Mongo getActivityImage error:', e.message);
+      }
+    }
+
+    // 2. Fallback to in-memory store
+    const memAct = this.activities.find(
+      (a) => !a.isDeleted && (a._id === cleanIdOrSlug || a.slug?.toLowerCase() === lowerSlug)
+    );
+    if (memAct) {
+      if (memAct.image && memAct.image.data) {
+        return {
+          buffer: Buffer.isBuffer(memAct.image.data) ? memAct.image.data : Buffer.from(memAct.image.data),
+          contentType: memAct.image.contentType || 'image/jpeg',
+          originalName: memAct.image.originalName || `${memAct.slug}.jpg`,
+          size: memAct.image.size || memAct.image.data.length,
+          publicationStatus: memAct.publicationStatus,
+          updatedAt: memAct.updatedAt || memAct.createdAt || new Date(),
+          title: memAct.title,
+          slug: memAct.slug,
+          _id: memAct._id,
+        };
+      }
+
+      const localPath = memAct.coverImage || memAct.imageUrl;
+      if (localPath && typeof localPath === 'string') {
+        const diskFile = await this.readLocalImageFile(localPath);
+        if (diskFile) {
+          return {
+            ...diskFile,
+            publicationStatus: memAct.publicationStatus,
+            updatedAt: memAct.updatedAt || memAct.createdAt || new Date(),
+            title: memAct.title,
+            slug: memAct.slug,
+            _id: memAct._id,
+          };
+        }
+      }
+
+      const fallbackPath = this.getStandardActivityImagePath(memAct);
+      if (fallbackPath) {
+        const fallbackFile = await this.readLocalImageFile(fallbackPath);
+        if (fallbackFile) {
+          return {
+            ...fallbackFile,
+            publicationStatus: memAct.publicationStatus,
+            updatedAt: memAct.updatedAt || memAct.createdAt || new Date(),
+            title: memAct.title,
+            slug: memAct.slug,
+            _id: memAct._id,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  getStandardActivityImagePath(activity) {
+    if (!activity) return 'client/public/images/hero.jpg';
+    const slug = (activity.slug || '').toLowerCase();
+    const title = (activity.title || '').toLowerCase();
+    if (slug.includes('desert') || title.includes('desert') || title.includes('safari')) {
+      return 'client/public/images/activities/desert-safari.webp';
+    }
+    if (slug.includes('museum') || title.includes('museum') || slug.includes('future')) {
+      return 'client/public/images/destinations/uae.jpg';
+    }
+    if (slug.includes('seine') || title.includes('cruise') || title.includes('catamaran')) {
+      return 'client/public/images/destinations/europe.jpg';
+    }
+    if (slug.includes('barrier-reef') || title.includes('reef') || title.includes('marine') || title.includes('snorkel')) {
+      return 'client/public/images/destinations/australia.jpg';
+    }
+    if (slug.includes('fuji') || title.includes('fuji') || title.includes('hakone')) {
+      return 'client/public/images/destinations/asia.jpg';
+    }
+    if (slug.includes('yas') || title.includes('yas') || title.includes('parks') || title.includes('waterworld')) {
+      return 'client/public/images/activities/adventure.jpg';
+    }
+    if (slug.includes('international') || title.includes('international') || title.includes('adventure')) {
+      return 'client/public/images/services/activities.jpg';
+    }
+    return 'client/public/images/hero.jpg';
+  }
+
+  async saveActivityImageDirect(idOrSlug, inputData, originalName = '', author = 'Master Head') {
+    await this.initializeSeedAccounts();
+    const parsed = parseAndValidateImage(inputData, originalName);
+    if (!parsed) {
+      throw new Error('Valid image data is required.');
+    }
+
+    return await this.updateActivity(
+      idOrSlug,
+      {
+        imageData: parsed.buffer,
+        imageOriginalName: parsed.originalName,
+      },
+      author
+    );
   }
 
   async createActivity(data, author = 'Master Head') {
@@ -2226,6 +2465,34 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
+
+    let hasNewDirectImage = false;
+    let newImageRecord = null;
+    const rawImage =
+      data.imageData ||
+      data.imageBuffer ||
+      (typeof data.image === 'string' && data.image.startsWith('data:') ? data.image : null);
+
+    if (rawImage) {
+      const parsed = parseAndValidateImage(rawImage, data.imageOriginalName || data.originalName || `${slug}.jpg`);
+      if (parsed) {
+        newImageRecord = {
+          data: parsed.buffer,
+          contentType: parsed.mimeType,
+          originalName: parsed.originalName,
+          size: parsed.size,
+        };
+        hasNewDirectImage = true;
+      }
+    }
+
+    const defaultCover = hasNewDirectImage
+      ? `/api/v1/activities/${slug}/image`
+      : (data.coverImage || data.imageUrl || '/images/hero.jpg');
+    const defaultImage = hasNewDirectImage
+      ? `/api/v1/activities/${slug}/image`
+      : (data.imageUrl || data.coverImage || '/images/hero.jpg');
+
     const record = {
       ...data,
       _id: `act-${Date.now()}`,
@@ -2233,8 +2500,9 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       shortDescription:
         data.shortDescription ||
         (data.description ? (data.description.length > 140 ? `${data.description.slice(0, 137)}...` : data.description) : ''),
-      coverImage: data.coverImage || data.imageUrl || '/images/hero/hero-bg.jpg',
-      imageUrl: data.imageUrl || data.coverImage || '/images/hero/hero-bg.jpg',
+      coverImage: defaultCover,
+      imageUrl: defaultImage,
+      hasDirectImage: hasNewDirectImage,
       displayOrder: Number(data.displayOrder) || this.activities.length + 1,
       publicationStatus: data.publicationStatus || 'published',
       isDeleted: false,
@@ -2244,18 +2512,112 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       updatedAt: new Date().toISOString(),
     };
 
+    if (hasNewDirectImage) {
+      record.image = newImageRecord;
+    }
+
+    delete record.imageData;
+    delete record.imageBuffer;
+    delete record.imageOriginalName;
+
     if (this.isMongoLive()) {
       try {
         const doc = await Activity.create(record);
-        return doc.toObject();
-      } catch (e) {}
+        const obj = doc.toObject();
+        if (obj.image) delete obj.image.data;
+        this.activities.unshift({ ...record });
+        await this.logAudit('ACTIVITY_CREATED', author, 'activity', slug, { title: data.title });
+        return obj;
+      } catch (e) {
+        console.warn('[StoreService] Mongo createActivity error:', e.message);
+      }
     }
+
     this.activities.unshift(record);
     await this.logAudit('ACTIVITY_CREATED', author, 'activity', slug, { title: data.title });
-    return record;
+    const returnRecord = { ...record };
+    if (returnRecord.image) {
+      returnRecord.image = { ...returnRecord.image };
+      delete returnRecord.image.data;
+    }
+    return returnRecord;
   }
 
   async updateActivity(idOrSlug, updateData, author = 'Master Head') {
+    await this.initializeSeedAccounts();
+    const cleanUpdate = { ...updateData };
+
+    let hasNewDirectImage = false;
+    let newImageRecord = null;
+    const rawImage =
+      cleanUpdate.imageData ||
+      cleanUpdate.imageBuffer ||
+      (typeof cleanUpdate.image === 'string' && cleanUpdate.image.startsWith('data:') ? cleanUpdate.image : null);
+
+    if (rawImage) {
+      const originalName = cleanUpdate.imageOriginalName || cleanUpdate.originalName || `${idOrSlug}.jpg`;
+      const parsed = parseAndValidateImage(rawImage, originalName);
+      if (parsed) {
+        newImageRecord = {
+          data: parsed.buffer,
+          contentType: parsed.mimeType,
+          originalName: parsed.originalName,
+          size: parsed.size,
+        };
+        hasNewDirectImage = true;
+      }
+    }
+
+    delete cleanUpdate.imageData;
+    delete cleanUpdate.imageBuffer;
+    delete cleanUpdate.imageOriginalName;
+
+    if (this.isMongoLive()) {
+      try {
+        const actDoc = await Activity.findOne({
+          $or: [{ _id: idOrSlug }, { slug: idOrSlug }, { slug: String(idOrSlug).toLowerCase() }],
+        }).select('+image.data');
+
+        if (actDoc) {
+          if (hasNewDirectImage) {
+            cleanUpdate.image = newImageRecord;
+            cleanUpdate.hasDirectImage = true;
+            cleanUpdate.imageUrl = `/api/v1/activities/${actDoc.slug}/image`;
+            cleanUpdate.coverImage = `/api/v1/activities/${actDoc.slug}/image`;
+          } else if (!cleanUpdate.image) {
+            // Preserve existing image when editing without replacing image
+            delete cleanUpdate.image;
+          }
+
+          // If imageUrl/coverImage were not supplied, keep existing
+          if (!cleanUpdate.imageUrl && actDoc.imageUrl) delete cleanUpdate.imageUrl;
+          if (!cleanUpdate.coverImage && actDoc.coverImage) delete cleanUpdate.coverImage;
+
+          Object.assign(actDoc, cleanUpdate, { updatedBy: author, updatedAt: new Date().toISOString() });
+          await actDoc.save();
+
+          const obj = actDoc.toObject();
+          if (obj.image) {
+            delete obj.image.data;
+          }
+          const idx = this.activities.findIndex((a) => a._id === idOrSlug || a.slug === idOrSlug);
+          if (idx !== -1) {
+            this.activities[idx] = { ...this.activities[idx], ...cleanUpdate };
+            if (hasNewDirectImage) this.activities[idx].image = newImageRecord;
+          } else {
+            this.activities.unshift(actDoc.toObject());
+          }
+
+          await this.logAudit('ACTIVITY_UPDATED', author, 'activity', obj.slug, {
+            updatedFields: Object.keys(cleanUpdate),
+          });
+          return obj;
+        }
+      } catch (e) {
+        console.warn('[StoreService] Mongo updateActivity error:', e.message);
+      }
+    }
+
     const act = this.activities.find(
       (a) =>
         a._id === idOrSlug ||
@@ -2263,31 +2625,31 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
         a.slug === idOrSlug ||
         a.title?.toLowerCase() === String(idOrSlug).toLowerCase()
     );
-
-    if (this.isMongoLive()) {
-      try {
-        const doc = await Activity.findOneAndUpdate(
-          { $or: [{ _id: idOrSlug }, { slug: idOrSlug }] },
-          { ...updateData, updatedBy: author, updatedAt: new Date().toISOString() },
-          { new: true }
-        ).lean();
-        if (doc) {
-          if (act) Object.assign(act, doc);
-          await this.logAudit('ACTIVITY_UPDATED', author, 'activity', doc.slug, {
-            updatedFields: Object.keys(updateData),
-          });
-          return doc;
-        }
-      } catch (e) {}
-    }
-
     if (!act) throw new Error(`Activity '${idOrSlug}' not found.`);
 
-    Object.assign(act, updateData, { updatedBy: author, updatedAt: new Date().toISOString() });
+    if (hasNewDirectImage) {
+      cleanUpdate.image = newImageRecord;
+      cleanUpdate.hasDirectImage = true;
+      cleanUpdate.imageUrl = `/api/v1/activities/${act.slug}/image`;
+      cleanUpdate.coverImage = `/api/v1/activities/${act.slug}/image`;
+    } else if (!cleanUpdate.image) {
+      delete cleanUpdate.image;
+    }
+
+    if (!cleanUpdate.imageUrl && act.imageUrl) delete cleanUpdate.imageUrl;
+    if (!cleanUpdate.coverImage && act.coverImage) delete cleanUpdate.coverImage;
+
+    Object.assign(act, cleanUpdate, { updatedBy: author, updatedAt: new Date().toISOString() });
     await this.logAudit('ACTIVITY_UPDATED', author, 'activity', act.slug, {
-      updatedFields: Object.keys(updateData),
+      updatedFields: Object.keys(cleanUpdate),
     });
-    return act;
+
+    const returnAct = { ...act };
+    if (returnAct.image) {
+      returnAct.image = { ...returnAct.image };
+      delete returnAct.image.data;
+    }
+    return returnAct;
   }
 
   async deleteActivity(idOrSlug, author = 'Master Head') {

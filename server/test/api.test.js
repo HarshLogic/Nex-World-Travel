@@ -1261,6 +1261,222 @@ async function runTests() {
       });
     });
 
+    // ==================== ACTIVITY DIRECT IMAGE & SERVING TESTS ====================
+    let testDirectAct = null;
+
+    await check('Activity Image: Create activity with valid direct JPEG image (< 1MB)', async () => {
+      const res = await fetch('http://127.0.0.1:5098/api/v1/activities', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          title: 'Direct Mongo Alpine Trek',
+          location: 'Swiss Alps',
+          category: 'Adventure & Adrenaline',
+          description: 'A curated high-altitude alpine trek with direct binary MongoDB image storage.',
+          imageData: `data:image/jpeg;base64,${validJpegBytes.toString('base64')}`,
+          imageOriginalName: 'alpine-trek.jpg',
+          publicationStatus: 'published',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.activity) {
+        throw new Error(`Failed to create activity with direct image: ${JSON.stringify(data)}`);
+      }
+      testDirectAct = data.activity;
+
+      if (!testDirectAct.hasDirectImage) {
+        throw new Error('Expected hasDirectImage to be true');
+      }
+      if (testDirectAct.image && testDirectAct.image.data) {
+        throw new Error('Security violation: binary image.data must NOT be returned in JSON response!');
+      }
+      if (!testDirectAct.imageUrl.includes('/image')) {
+        throw new Error(`Expected imageUrl to point to /image endpoint, got ${testDirectAct.imageUrl}`);
+      }
+    });
+
+    await check('Activity Image: Serve raw image bytes with ETag and Cache-Control', async () => {
+      const res = await fetch(`http://127.0.0.1:5098/api/v1/activities/${testDirectAct.slug}/image`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch activity image: status ${res.status}`);
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (contentType !== 'image/jpeg') {
+        throw new Error(`Expected content-type image/jpeg, got ${contentType}`);
+      }
+
+      const cacheControl = res.headers.get('cache-control');
+      if (!cacheControl || !cacheControl.includes('public')) {
+        throw new Error(`Expected Cache-Control with public caching, got ${cacheControl}`);
+      }
+
+      const etag = res.headers.get('etag');
+      if (!etag) {
+        throw new Error('Expected ETag header on activity image response');
+      }
+
+      const buffer = await res.arrayBuffer();
+      if (buffer.byteLength !== validJpegBytes.length) {
+        throw new Error(`Image byte length mismatch. Expected ${validJpegBytes.length}, received ${buffer.byteLength}`);
+      }
+
+      const conditionalRes = await fetch(`http://127.0.0.1:5098/api/v1/activities/${testDirectAct.slug}/image`, {
+        headers: { 'If-None-Match': etag },
+      });
+      if (conditionalRes.status !== 304) {
+        throw new Error(`Expected 304 Not Modified with matching ETag, got ${conditionalRes.status}`);
+      }
+    });
+
+    await check('Activity Image: Activities list does NOT include binary image data', async () => {
+      const res = await fetch('http://127.0.0.1:5098/api/v1/activities');
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.data)) {
+        throw new Error('Failed to retrieve activities list');
+      }
+      const match = data.data.find((a) => a.slug === testDirectAct.slug);
+      if (!match) throw new Error('Created direct activity not found in list');
+      if (match.image && match.image.data) {
+        throw new Error('CRITICAL: Activity list endpoint leaked binary image data!');
+      }
+    });
+
+    await check('Activity Image: Direct image upload endpoint POST /:id/image with PNG', async () => {
+      const res = await fetch(`http://127.0.0.1:5098/api/v1/activities/${testDirectAct.slug}/image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          data: validPngBytes.toString('base64'),
+          name: 'alpine-replaced.png',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.activity) {
+        throw new Error(`Image replacement failed: ${JSON.stringify(data)}`);
+      }
+
+      const imgRes = await fetch(`http://127.0.0.1:5098/api/v1/activities/${testDirectAct.slug}/image`);
+      if (imgRes.headers.get('content-type') !== 'image/png') {
+        throw new Error(`Expected updated image/png, got ${imgRes.headers.get('content-type')}`);
+      }
+      const imgBuf = await imgRes.arrayBuffer();
+      if (imgBuf.byteLength !== validPngBytes.length) {
+        throw new Error(`Expected replaced PNG size ${validPngBytes.length}, got ${imgBuf.byteLength}`);
+      }
+    });
+
+    await check('Activity Image: Editing activity without uploading preserves existing image', async () => {
+      const editRes = await fetch(`http://127.0.0.1:5098/api/v1/activities/${testDirectAct.slug}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          description: 'Updated description preserving direct MongoDB binary image.',
+          duration: '6 hours',
+        }),
+      });
+
+      const editData = await editRes.json();
+      if (!editRes.ok || !editData.activity) {
+        throw new Error(`Failed to update activity: ${editData.message}`);
+      }
+
+      const imgRes = await fetch(`http://127.0.0.1:5098/api/v1/activities/${testDirectAct.slug}/image`);
+      if (!imgRes.ok || imgRes.headers.get('content-type') !== 'image/png') {
+        throw new Error('Activity image was lost or corrupted when editing text fields!');
+      }
+    });
+
+    await check('Activity Image: Draft activity image returns 404 for guests, 200 for staff', async () => {
+      await fetch(`http://127.0.0.1:5098/api/v1/activities/${testDirectAct.slug}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ publicationStatus: 'draft' }),
+      });
+
+      const anonRes = await fetch(`http://127.0.0.1:5098/api/v1/activities/${testDirectAct.slug}/image`);
+      if (anonRes.status !== 404) {
+        throw new Error(`Expected 404 for draft activity image to public caller, got ${anonRes.status}`);
+      }
+
+      const staffRes = await fetch(`http://127.0.0.1:5098/api/v1/activities/${testDirectAct.slug}/image`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      if (staffRes.status !== 200) {
+        throw new Error(`Expected 200 for draft activity image to authorized staff, got ${staffRes.status}`);
+      }
+
+      // Cleanup test activity
+      await fetch(`http://127.0.0.1:5098/api/v1/activities/${testDirectAct._id || testDirectAct.slug}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+    });
+
+    await check('Activity Image: All 7 production activities serve live image bytes via direct endpoint', async () => {
+      const slugs = [
+        'vip-evening-desert-safari',
+        'museum-of-the-future-tour',
+        'seine-river-dinner-cruise',
+        'great-barrier-reef-marine-safari',
+        'mount-fuji-hakone-discovery',
+        'yas-island-parks-pass',
+        'international-tours-activities',
+      ];
+
+      for (const slug of slugs) {
+        const res = await fetch(`http://127.0.0.1:5098/api/v1/activities/${slug}/image`);
+        if (res.status !== 200) {
+          throw new Error(`Expected HTTP 200 for activity ${slug}/image, received ${res.status}`);
+        }
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.startsWith('image/')) {
+          throw new Error(`Invalid content-type for ${slug}: ${contentType}`);
+        }
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength < 1000) {
+          throw new Error(`Activity ${slug} image buffer too small (${buf.byteLength} bytes)`);
+        }
+      }
+    });
+
+    await check('Activity Image: Resilient serving of activity /uploads/ paths via static or MongoDB fallback', async () => {
+      const uploadFiles = [
+        'arabian-nights-village-main-im-1793286066253-972b30.jpg',
+        'Dubai-Museum-Of-The-Future-Des-1793286174661-3eff9e.jpg',
+        'jpg-1793285500992-1f4cfc.jpg',
+        'snorkeling-great-barrier-reef--1793285607375-eda95b.jpg',
+        'maxresdefault-1793285661610-6e3dd2.jpg',
+        'Yas-Waterworld-1-1793285894773-2ab772.jpg',
+        'adventure-trips-in-india-1900x-1793286609328-6152b5.jpg',
+      ];
+
+      for (const file of uploadFiles) {
+        const res = await fetch(`http://127.0.0.1:5098/uploads/${file}`);
+        if (res.status !== 200) {
+          throw new Error(`Expected HTTP 200 for upload file ${file}, got ${res.status}`);
+        }
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.startsWith('image/')) {
+          throw new Error(`Invalid content-type for ${file}: ${contentType}`);
+        }
+      }
+    });
+
     // ==================== UPLOADS & AZERBAIJAN PRODUCTION PERSISTENCE TESTS ====================
     await check('Production Asset: GET /uploads/IMG-20250217-WA0144-1793262352561-9604fc.jpg returns HTTP 200', async () => {
       const res = await fetch('http://127.0.0.1:5098/uploads/IMG-20250217-WA0144-1793262352561-9604fc.jpg');

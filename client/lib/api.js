@@ -417,6 +417,30 @@ export async function deleteActivity(id) {
   return data;
 }
 
+export async function uploadActivityImage(id, fileOrBase64, originalName) {
+  let base64Data = fileOrBase64;
+  let name = originalName || 'activity-image.jpg';
+
+  if (typeof window !== 'undefined' && fileOrBase64 instanceof File) {
+    name = fileOrBase64.name;
+    base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(fileOrBase64);
+    });
+  }
+
+  const res = await fetch(`${BASE_URL}/api/v1/activities/${id}/image`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ data: base64Data, name }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to upload activity image.');
+  return data;
+}
+
 export async function uploadMedia(fileOrBase64, filename, mimeType) {
   let dataPayload = fileOrBase64;
   let type = mimeType;
@@ -500,6 +524,67 @@ export function getDestinationImageUrl(dest) {
   return '/images/hero.jpg';
 }
 
+/**
+ * Returns the correct image URL for an activity, prioritizing direct MongoDB
+ * binary image endpoint when hasDirectImage is true, with seamless fallbacks.
+ */
+export function getActivityImageUrl(activity) {
+  if (!activity) return '/images/hero.jpg';
+
+  // 1. Direct MongoDB binary image endpoint (served via same-origin Next.js rewrite or direct backend route)
+  if (activity.hasDirectImage) {
+    const identifier = activity.slug || activity.id || activity._id;
+    return `/api/v1/activities/${identifier}/image`;
+  }
+
+  // 2. Candidate image fields (imageUrl, coverImage, heroImage, thumbnail)
+  const candidate = activity.imageUrl || activity.coverImage || activity.heroImage || activity.thumbnail;
+  if (candidate && typeof candidate === 'string') {
+    // Keep absolute external URLs intact (e.g., Unsplash, Cloudinary, S3)
+    if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
+      return candidate;
+    }
+    // Avoid broken legacy placeholder
+    if (candidate.includes('/images/hero/hero-bg.jpg')) {
+      return '/images/hero.jpg';
+    }
+    // Return root-relative paths for same-origin proxying via Next.js rewrites
+    if (candidate.startsWith('/api/') || candidate.startsWith('/uploads/') || candidate.startsWith('/images/')) {
+      return candidate;
+    }
+    if (candidate.startsWith('/')) {
+      return candidate;
+    }
+    return `/${candidate}`;
+  }
+
+  // 3. Fallback to standard activity image based on slug or title
+  const slug = String(activity.slug || activity.id || activity.title || '').toLowerCase();
+  if (slug.includes('desert') || slug.includes('safari')) {
+    return '/images/activities/desert-safari.webp';
+  }
+  if (slug.includes('museum') || slug.includes('future')) {
+    return '/images/destinations/uae.jpg';
+  }
+  if (slug.includes('seine') || slug.includes('cruise') || slug.includes('catamaran')) {
+    return '/images/destinations/europe.jpg';
+  }
+  if (slug.includes('barrier-reef') || slug.includes('marine') || slug.includes('snorkel')) {
+    return '/images/destinations/australia.jpg';
+  }
+  if (slug.includes('fuji') || slug.includes('hakone')) {
+    return '/images/destinations/asia.jpg';
+  }
+  if (slug.includes('yas') || slug.includes('waterworld') || slug.includes('parks')) {
+    return '/images/activities/adventure.jpg';
+  }
+  if (slug.includes('international') || slug.includes('adventure')) {
+    return '/images/services/activities.jpg';
+  }
+
+  return '/images/hero.jpg';
+}
+
 export async function fetchDestinations(region, category) {
   try {
     const params = new URLSearchParams();
@@ -554,11 +639,11 @@ export async function fetchActivities(category, region) {
   try {
     let url = `${BASE_URL}/api/v1/activities`;
     const params = new URLSearchParams();
-    if (category) params.append('category', category);
-    if (region) params.append('region', region);
+    if (category && category !== 'All') params.append('category', category);
+    if (region && region !== 'All') params.append('region', region);
     if (params.toString()) url += `?${params.toString()}`;
 
-    const res = await fetch(url, { next: { revalidate: 60 } });
+    const res = await fetch(url, { headers: getAuthHeaders(), cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.data?.length > 0) return data.data;
@@ -566,8 +651,8 @@ export async function fetchActivities(category, region) {
   } catch (e) {}
 
   let filtered = [...activitiesData];
-  if (category) filtered = filtered.filter((a) => a.category.toLowerCase() === category.toLowerCase());
-  if (region) filtered = filtered.filter((a) => a.region.toLowerCase() === region.toLowerCase());
+  if (category && category !== 'All') filtered = filtered.filter((a) => a.category?.toLowerCase() === category.toLowerCase());
+  if (region && region !== 'All') filtered = filtered.filter((a) => a.region?.toLowerCase() === region.toLowerCase());
   return filtered;
 }
 

@@ -7,7 +7,9 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "setup:admin": "node src/scripts/setupMasterHead.js",
-    "migrate:images": "node src/scripts/migrateImagesToMongo.js"
+    "migrate:images": "node src/scripts/migrateImagesToMongo.js",
+    "migrate:activity-images": "node src/scripts/migrateActivityImagesToMongo.js",
+    "test:email": "node src/scripts/testEmail.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

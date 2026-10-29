@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Compass, Clock, MapPin, Sparkles, ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { activitiesData } from '../../data/activities';
-import { fetchActivities } from '../../lib/api';
+import { fetchActivities, getActivityImageUrl } from '../../lib/api';
 
 const CATEGORIES = [
   'All',
@@ -78,7 +78,7 @@ export default function ActivitiesPage() {
               {/* Image */}
               <div className="relative aspect-[16/10] w-full overflow-hidden bg-surface-200">
                 <Image
-                  src={activity.imageUrl || activity.coverImage || '/images/hero/hero-bg.jpg'}
+                  src={getActivityImageUrl(activity)}
                   alt={activity.title}
                   fill
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
