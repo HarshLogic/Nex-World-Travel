@@ -3,7 +3,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 import authRoutes from './routes/authRoutes.js';
@@ -83,9 +85,55 @@ app.get(['/', '/health', '/api', '/api/v1', '/api/health', '/api/v1/health'], (r
   });
 });
 
-// Static files serving for uploaded media
-app.use('/uploads', express.static(path.resolve(__dirname, '../public/uploads')));
-app.use('/uploads', express.static(path.resolve(__dirname, '../../client/public/uploads')));
+// Static files serving for uploaded media with Railway Volume & persistent storage support
+const primaryUploadsDir = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : (process.env.RAILWAY_VOLUME_MOUNT_PATH
+    ? path.resolve(process.env.RAILWAY_VOLUME_MOUNT_PATH)
+    : path.resolve(__dirname, '../public/uploads'));
+
+const serverUploadsDir = path.resolve(__dirname, '../public/uploads');
+const clientUploadsDir = path.resolve(__dirname, '../../client/public/uploads');
+
+app.use('/uploads', express.static(primaryUploadsDir));
+if (primaryUploadsDir !== serverUploadsDir) {
+  app.use('/uploads', express.static(serverUploadsDir));
+}
+app.use('/uploads', express.static(clientUploadsDir));
+
+// Resilient Fallback for /uploads/:filename to serve from MongoDB if missing from ephemeral container disk
+app.get('/uploads/:filename', async (req, res, next) => {
+  try {
+    const { filename } = req.params;
+    const fallbackImage = await store.getUploadedImageFallback(filename);
+    if (fallbackImage && fallbackImage.buffer) {
+      const hash = crypto.createHash('md5').update(fallbackImage.buffer).digest('hex');
+      const etag = `"${hash}"`;
+
+      if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+      }
+
+      res.setHeader('Content-Type', fallbackImage.contentType || 'image/jpeg');
+      res.setHeader('Content-Length', fallbackImage.buffer.length);
+      res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+      res.setHeader('ETag', etag);
+
+      // Best effort cache to primary uploads directory so future hits are static
+      try {
+        if (!fs.existsSync(primaryUploadsDir)) {
+          fs.mkdirSync(primaryUploadsDir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(primaryUploadsDir, path.basename(filename)), fallbackImage.buffer);
+      } catch (e) {}
+
+      return res.end(fallbackImage.buffer);
+    }
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
 
 // Seed data initialization hook
 store.initializeSeedAccounts().catch((err) => {

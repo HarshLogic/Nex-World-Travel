@@ -102,19 +102,33 @@ export const uploadMedia = async (req, res, next) => {
       }
     }
 
-    // Local Disk storage fallback
+    // Persistent / Local Disk storage fallback
     const rawName = name ? path.parse(name).name.replace(/[^a-zA-Z0-9_-]/g, '') : 'img';
     const safeBase = rawName.slice(0, 30) || 'img';
     const filename = `${safeBase}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}.${ext}`;
 
-    const serverUploadsDir = path.resolve(__dirname, '../../public/uploads');
-    const clientUploadsDir = path.resolve(__dirname, '../../../client/public/uploads');
+    // Respect Railway volume mount path or custom persistent UPLOADS_DIR
+    const persistentUploadsDir = process.env.UPLOADS_DIR
+      ? path.resolve(process.env.UPLOADS_DIR)
+      : (process.env.RAILWAY_VOLUME_MOUNT_PATH
+        ? path.resolve(process.env.RAILWAY_VOLUME_MOUNT_PATH)
+        : path.resolve(__dirname, '../../public/uploads'));
 
-    ensureDir(serverUploadsDir);
-    const serverFilePath = path.join(serverUploadsDir, filename);
-    fs.writeFileSync(serverFilePath, buffer);
+    ensureDir(persistentUploadsDir);
+    const persistentFilePath = path.join(persistentUploadsDir, filename);
+    fs.writeFileSync(persistentFilePath, buffer);
+
+    // Also mirror to server/public/uploads if different from persistent volume path
+    const serverUploadsDir = path.resolve(__dirname, '../../public/uploads');
+    if (persistentUploadsDir !== serverUploadsDir) {
+      try {
+        ensureDir(serverUploadsDir);
+        fs.writeFileSync(path.join(serverUploadsDir, filename), buffer);
+      } catch (e) {}
+    }
 
     try {
+      const clientUploadsDir = path.resolve(__dirname, '../../../client/public/uploads');
       ensureDir(clientUploadsDir);
       const clientFilePath = path.join(clientUploadsDir, filename);
       fs.writeFileSync(clientFilePath, buffer);

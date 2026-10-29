@@ -1623,6 +1623,59 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     return null;
   }
 
+  async getUploadedImageFallback(filename) {
+    await this.initializeSeedAccounts();
+    const cleanFilename = path.basename(filename);
+
+    // 1. Check if any destination in MongoDB has this image data or references it
+    if (this.isMongoLive()) {
+      try {
+        const dest = await Destination.findOne({
+          $or: [
+            { 'image.originalName': cleanFilename },
+            { coverImage: { $regex: cleanFilename } },
+            { imageUrl: { $regex: cleanFilename } },
+          ],
+          isDeleted: { $ne: true },
+        }).select('+image.data');
+
+        if (dest && dest.image && dest.image.data) {
+          return {
+            buffer: dest.image.data,
+            contentType: dest.image.contentType || 'image/jpeg',
+            size: dest.image.size || dest.image.data.length,
+            originalName: dest.image.originalName || cleanFilename,
+          };
+        }
+      } catch (e) {}
+    }
+
+    // 2. Check local disk candidate locations
+    const diskFile = await this.readLocalImageFile(`/uploads/${cleanFilename}`);
+    if (diskFile) {
+      return diskFile;
+    }
+
+    // 3. Fallback to resilient in-memory store
+    const memDest = this.destinations.find(
+      (d) =>
+        !d.isDeleted &&
+        (d.image?.originalName === cleanFilename ||
+          d.coverImage?.includes(cleanFilename) ||
+          d.imageUrl?.includes(cleanFilename))
+    );
+    if (memDest && memDest.image && memDest.image.data) {
+      return {
+        buffer: Buffer.isBuffer(memDest.image.data) ? memDest.image.data : Buffer.from(memDest.image.data),
+        contentType: memDest.image.contentType || 'image/jpeg',
+        size: memDest.image.size || memDest.image.data.length,
+        originalName: memDest.image.originalName || cleanFilename,
+      };
+    }
+
+    return null;
+  }
+
   async deleteDestination(idOrSlug, author = 'Master Head') {
     await this.initializeSeedAccounts();
     if (this.isMongoLive()) {

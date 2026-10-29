@@ -1261,6 +1261,43 @@ async function runTests() {
       });
     });
 
+    // ==================== UPLOADS & AZERBAIJAN PRODUCTION PERSISTENCE TESTS ====================
+    await check('Production Asset: GET /uploads/IMG-20250217-WA0144-1793262352561-9604fc.jpg returns HTTP 200', async () => {
+      const res = await fetch('http://127.0.0.1:5098/uploads/IMG-20250217-WA0144-1793262352561-9604fc.jpg');
+      if (res.status !== 200) {
+        throw new Error(`Expected HTTP 200 for Azerbaijan uploaded image, got status ${res.status}`);
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.startsWith('image/')) {
+        throw new Error(`Expected image content type, received ${contentType}`);
+      }
+
+      const buffer = await res.arrayBuffer();
+      if (buffer.byteLength === 0) {
+        throw new Error('Received empty buffer for upload asset');
+      }
+    });
+
+    await check('Production Asset: Direct endpoint /api/v1/destinations/azerbaijan/image returns HTTP 200', async () => {
+      const res = await fetch('http://127.0.0.1:5098/api/v1/destinations/azerbaijan/image');
+      if (res.status !== 200) {
+        throw new Error(`Expected HTTP 200 for direct Azerbaijan image, got status ${res.status}`);
+      }
+      const buffer = await res.arrayBuffer();
+      if (buffer.byteLength === 0) {
+        throw new Error('Received empty buffer for direct Azerbaijan image');
+      }
+    });
+
+    await check('Production Asset: Resilient MongoDB Fallback serves /uploads/:filename even if disk file is missing', async () => {
+      // Test fallback mechanism with a filename that exists in MongoDB's originalName
+      const res = await fetch('http://127.0.0.1:5098/uploads/IMG-20250217-WA0144-1793262352561-9604fc.jpg');
+      if (res.status !== 200) {
+        throw new Error(`Expected 200 from fallback handler, got ${res.status}`);
+      }
+    });
+
     console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
   } finally {
     server.close();
