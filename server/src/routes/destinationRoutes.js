@@ -2,16 +2,19 @@ import { Router } from 'express';
 import {
   getDestinations,
   getDestinationBySlug,
+  getDestinationImage,
+  uploadDestinationImage,
   createDestination,
   updateDestination,
   deleteDestination,
 } from '../controllers/destinationController.js';
-import { authenticate, requireRole, requirePermission } from '../middleware/auth.js';
+import { authenticate, optionalAuthenticate, requireRole, requirePermission } from '../middleware/auth.js';
 
 const router = Router();
 
-// Public discovery
+// Public discovery and direct image serving
 router.get('/', getDestinations);
+router.get('/:id/image', optionalAuthenticate, getDestinationImage);
 router.get('/:slug', getDestinationBySlug);
 
 // Staff and Master Head management
@@ -21,6 +24,14 @@ router.post(
   requireRole(['master_head', 'employee']),
   requirePermission('add_destinations'),
   createDestination
+);
+
+router.post(
+  '/:id/image',
+  authenticate,
+  requireRole(['master_head', 'employee']),
+  requirePermission('edit_destinations'),
+  uploadDestinationImage
 );
 
 router.patch(

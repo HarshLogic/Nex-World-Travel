@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Compass, Sparkles, MapPin, Calendar, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { destinationsData } from '../../data/destinations';
-import { fetchDestinations } from '../../lib/api';
+import { fetchDestinations, getDestinationImageUrl } from '../../lib/api';
 
 const REGIONS = ['All', 'Asia', 'Europe', 'Africa', 'Australia', 'Middle East / UAE'];
 
@@ -75,7 +75,7 @@ export default function DestinationsPage() {
                   {/* Photo Column */}
                   <div className={`lg:col-span-6 relative aspect-[16/10] lg:aspect-auto lg:min-h-[420px] ${isReversed ? 'lg:order-2' : ''}`}>
                     <Image
-                      src={dest.heroImage || dest.imageUrl || dest.coverImage || '/images/hero/hero-bg.jpg'}
+                      src={getDestinationImageUrl(dest)}
                       alt={dest.title}
                       fill
                       sizes="(max-width: 1024px) 100vw, 50vw"

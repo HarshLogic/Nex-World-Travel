@@ -1019,6 +1019,248 @@ async function runTests() {
       }
     });
 
+    // ==================== DIRECT MONGODB IMAGE STORAGE & SERVING TESTS ====================
+    const validJpegBytes = Buffer.from([
+      0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48,
+      0x00, 0x48, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08,
+      0x07, 0x07, 0x07, 0x09, 0x09, 0x08, 0x0A, 0x0C, 0x14, 0x0D, 0x0C, 0x0B, 0x0B, 0x0C, 0x19, 0x12,
+      0x13, 0x0F, 0x14, 0x1D, 0x1A, 0x1F, 0x1E, 0x1D, 0x1A, 0x1C, 0x1C, 0x20, 0x24, 0x2E, 0x27, 0x20,
+      0x22, 0x2C, 0x23, 0x1C, 0x1C, 0x28, 0x37, 0x29, 0x2C, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1F, 0x27,
+      0x39, 0x3D, 0x38, 0x32, 0x3C, 0x2E, 0x33, 0x34, 0x32, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01,
+      0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xFF, 0xC4, 0x00, 0x1F, 0x00, 0x00, 0x01, 0x05, 0x01, 0x01,
+      0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04,
+      0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F,
+      0x00, 0x7F, 0x00, 0xFF, 0xD9
+    ]);
+
+    const validPngBytes = Buffer.from([
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+      0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+      0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+      0x42, 0x60, 0x82
+    ]);
+
+    let testDirectDest = null;
+
+    await check('Direct Image: Create destination with valid direct JPEG image (< 1MB)', async () => {
+      const res = await fetch('http://127.0.0.1:5098/api/v1/destinations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          title: 'Direct Mongo Sanctuary',
+          region: 'Asia',
+          category: 'Dream Destinations',
+          description: 'A destination featuring direct binary image persistence in MongoDB.',
+          imageData: `data:image/jpeg;base64,${validJpegBytes.toString('base64')}`,
+          imageOriginalName: 'sanctuary-preview.jpg',
+          publicationStatus: 'published',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.destination) {
+        throw new Error(`Failed to create destination with direct image: ${JSON.stringify(data)}`);
+      }
+      testDirectDest = data.destination;
+
+      if (!testDirectDest.hasDirectImage) {
+        throw new Error('Expected hasDirectImage to be true');
+      }
+      if (testDirectDest.image && testDirectDest.image.data) {
+        throw new Error('Security violation: binary image.data must NOT be returned in JSON response!');
+      }
+      if (!testDirectDest.imageUrl.includes('/image')) {
+        throw new Error(`Expected imageUrl to point to /image endpoint, got ${testDirectDest.imageUrl}`);
+      }
+    });
+
+    await check('Direct Image: Serve raw image bytes with ETag and Cache-Control', async () => {
+      const res = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}/image`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch image: status ${res.status}`);
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (contentType !== 'image/jpeg') {
+        throw new Error(`Expected content-type image/jpeg, got ${contentType}`);
+      }
+
+      const cacheControl = res.headers.get('cache-control');
+      if (!cacheControl || !cacheControl.includes('public')) {
+        throw new Error(`Expected Cache-Control with public caching, got ${cacheControl}`);
+      }
+
+      const etag = res.headers.get('etag');
+      if (!etag) {
+        throw new Error('Expected ETag header on image response');
+      }
+
+      const buffer = await res.arrayBuffer();
+      if (buffer.byteLength !== validJpegBytes.length) {
+        throw new Error(`Image byte length mismatch. Expected ${validJpegBytes.length}, received ${buffer.byteLength}`);
+      }
+
+      // Test conditional request (If-None-Match) returning 304
+      const conditionalRes = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}/image`, {
+        headers: { 'If-None-Match': etag },
+      });
+      if (conditionalRes.status !== 304) {
+        throw new Error(`Expected 304 Not Modified with matching ETag, got ${conditionalRes.status}`);
+      }
+    });
+
+    await check('Direct Image: Destination list does NOT include binary image data', async () => {
+      const res = await fetch('http://127.0.0.1:5098/api/v1/destinations');
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.data)) {
+        throw new Error('Failed to retrieve destinations list');
+      }
+      const match = data.data.find((d) => d.slug === testDirectDest.slug);
+      if (!match) throw new Error('Created direct destination not found in list');
+      if (match.image && match.image.data) {
+        throw new Error('CRITICAL: Destination list endpoint leaked binary image data!');
+      }
+    });
+
+    await check('Direct Image: Direct image upload endpoint POST /:id/image with PNG', async () => {
+      const res = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}/image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          data: validPngBytes.toString('base64'),
+          name: 'replaced.png',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.destination) {
+        throw new Error(`Image replacement failed: ${JSON.stringify(data)}`);
+      }
+
+      // Verify that fetching the image now returns image/png
+      const imgRes = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}/image`);
+      if (imgRes.headers.get('content-type') !== 'image/png') {
+        throw new Error(`Expected updated image/png, got ${imgRes.headers.get('content-type')}`);
+      }
+      const imgBuf = await imgRes.arrayBuffer();
+      if (imgBuf.byteLength !== validPngBytes.length) {
+        throw new Error(`Expected replaced PNG size ${validPngBytes.length}, got ${imgBuf.byteLength}`);
+      }
+    });
+
+    await check('Direct Image: Rejection of images exceeding 1 MB limit (HTTP 400)', async () => {
+      // Create oversized buffer: 1 MB + 1024 bytes with JPEG header
+      const oversized = Buffer.alloc(1024 * 1024 + 1024, 0x55);
+      oversized[0] = 0xFF;
+      oversized[1] = 0xD8;
+      oversized[2] = 0xFF;
+
+      const res = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}/image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          data: oversized.toString('base64'),
+          name: 'huge.jpg',
+        }),
+      });
+
+      if (res.status !== 400) {
+        throw new Error(`Expected HTTP 400 for image > 1MB, got status ${res.status}`);
+      }
+      const data = await res.json();
+      if (!data.message || !data.message.includes('1 MB')) {
+        throw new Error(`Expected error message mentioning 1 MB limit, got "${data.message}"`);
+      }
+    });
+
+    await check('Direct Image: Rejection of invalid/spoofed file format (HTTP 400)', async () => {
+      const spoofed = Buffer.from('MZ Not a genuine JPEG or PNG file header');
+      const res = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}/image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          data: spoofed.toString('base64'),
+          name: 'malicious.jpg',
+        }),
+      });
+
+      if (res.status !== 400) {
+        throw new Error(`Expected HTTP 400 for invalid magic bytes, got status ${res.status}`);
+      }
+      const data = await res.json();
+      if (!data.message || !data.message.toLowerCase().includes('format') && !data.message.toLowerCase().includes('jpeg')) {
+        throw new Error(`Expected format rejection message, got: ${data.message}`);
+      }
+    });
+
+    await check('Direct Image: Editing destination without uploading preserves existing image', async () => {
+      const editRes = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          tagline: 'Preserved Image Tagline Test',
+        }),
+      });
+      const editData = await editRes.json();
+      if (!editRes.ok || !editData.destination) {
+        throw new Error(`Failed to update destination: ${editData.message}`);
+      }
+
+      // Check that image is still served accurately
+      const imgRes = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}/image`);
+      if (!imgRes.ok || imgRes.headers.get('content-type') !== 'image/png') {
+        throw new Error('Image was lost or corrupted when editing text fields!');
+      }
+    });
+
+    await check('Direct Image: Draft destination image returns 404 for guests, 200 for staff', async () => {
+      // Change destination to draft
+      await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ publicationStatus: 'draft' }),
+      });
+
+      // Anonymous request should receive 404
+      const anonRes = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}/image`);
+      if (anonRes.status !== 404) {
+        throw new Error(`Expected 404 for draft image to public caller, got ${anonRes.status}`);
+      }
+
+      // Authorized staff request should receive 200
+      const staffRes = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest.slug}/image`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      if (staffRes.status !== 200) {
+        throw new Error(`Expected 200 for draft image to authorized staff, got ${staffRes.status}`);
+      }
+
+      // Cleanup test destination
+      await fetch(`http://127.0.0.1:5098/api/v1/destinations/${testDirectDest._id || testDirectDest.slug}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+    });
+
     console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
   } finally {
     server.close();

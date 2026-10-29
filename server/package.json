@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "setup:admin": "node src/scripts/setupMasterHead.js"
+    "setup:admin": "node src/scripts/setupMasterHead.js",
+    "migrate:images": "node src/scripts/migrateImagesToMongo.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

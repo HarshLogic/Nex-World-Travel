@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { parseAndValidateImage, detectImageSignature } from '../utils/imageValidator.js';
 import { User } from '../models/User.js';
 import { MemberProfile } from '../models/MemberProfile.js';
 import { PaymentTransaction } from '../models/PaymentTransaction.js';
@@ -1226,19 +1229,43 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     if (filter.region) results = results.filter((d) => d.region?.toLowerCase() === filter.region.toLowerCase());
     if (filter.featured !== undefined) results = results.filter((d) => d.featured === filter.featured);
     if (filter.publicationStatus) results = results.filter((d) => d.publicationStatus === filter.publicationStatus);
-    return results.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+    // Ensure binary buffer is excluded from standard list responses
+    const sanitized = results.map((d) => {
+      if (d.image && d.image.data) {
+        const copy = { ...d, image: { ...d.image } };
+        delete copy.image.data;
+        return copy;
+      }
+      return d;
+    });
+    return sanitized.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   }
 
   async getDestinationBySlug(slug) {
     await this.initializeSeedAccounts();
-    const cleanSlug = slug.toLowerCase().trim();
+    const cleanSlug = String(slug || '').toLowerCase().trim();
     if (this.isMongoLive()) {
       try {
         const found = await Destination.findOne({ slug: cleanSlug, isDeleted: { $ne: true } }).lean();
-        if (found) return found;
+        if (found) {
+          if (found.image && found.image.data) {
+            delete found.image.data;
+          }
+          return found;
+        }
       } catch (e) {}
     }
-    return this.destinations.find((d) => d.slug.toLowerCase() === cleanSlug && !d.isDeleted) || null;
+    const memFound = this.destinations.find((d) => d.slug.toLowerCase() === cleanSlug && !d.isDeleted);
+    if (memFound) {
+      if (memFound.image && memFound.image.data) {
+        const copy = { ...memFound, image: { ...memFound.image } };
+        delete copy.image.data;
+        return copy;
+      }
+      return memFound;
+    }
+    return null;
   }
 
   async createDestination(data, author = 'Master Head') {
@@ -1263,20 +1290,64 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       }
     }
 
+    // Process and validate direct binary image if provided
+    let imageRecord = null;
+    let hasDirectImage = false;
+    const rawImage =
+      data.imageData ||
+      data.imageBuffer ||
+      (data.image &&
+        (typeof data.image === 'string' ||
+          Buffer.isBuffer(data.image) ||
+          data.image.data));
+
+    if (rawImage) {
+      const input = (rawImage && rawImage.data) ? rawImage.data : rawImage;
+      const origName =
+        data.imageOriginalName ||
+        data.originalName ||
+        (data.image && data.image.originalName) ||
+        `${uniqueSlug}.jpg`;
+      const parsed = parseAndValidateImage(input, origName);
+      if (parsed) {
+        imageRecord = {
+          data: parsed.buffer,
+          contentType: parsed.mimeType,
+          originalName: parsed.originalName,
+          size: parsed.size,
+        };
+        hasDirectImage = true;
+      }
+    }
+
+    const cleanData = { ...data };
+    delete cleanData.imageData;
+    delete cleanData.imageBuffer;
+    delete cleanData.imageOriginalName;
+
     const record = {
-      ...data,
-      _id: `dest-${Date.now()}`,
+      ...cleanData,
+      _id: cleanData._id || `dest-${Date.now()}`,
       slug: uniqueSlug,
-      coverImage: data.coverImage || data.imageUrl || '/images/hero.jpg',
-      imageUrl: data.imageUrl || data.coverImage || '/images/hero.jpg',
-      category: data.category || 'Top Destinations',
-      publicationStatus: data.publicationStatus || 'published',
+      coverImage: hasDirectImage
+        ? `/api/v1/destinations/${uniqueSlug}/image`
+        : cleanData.coverImage || cleanData.imageUrl || '/images/hero.jpg',
+      imageUrl: hasDirectImage
+        ? `/api/v1/destinations/${uniqueSlug}/image`
+        : cleanData.imageUrl || cleanData.coverImage || '/images/hero.jpg',
+      category: cleanData.category || 'Top Destinations',
+      publicationStatus: cleanData.publicationStatus || 'published',
+      hasDirectImage,
       isDeleted: false,
       createdBy: author,
       updatedBy: author,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    if (imageRecord) {
+      record.image = imageRecord;
+    }
 
     if (this.isMongoLive()) {
       try {
@@ -1293,7 +1364,10 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
         const doc = await Destination.create(record);
         const obj = doc.toObject();
-        this.destinations.unshift(obj);
+        if (obj.image) {
+          delete obj.image.data;
+        }
+        this.destinations.unshift(record);
         await this.logAudit('DESTINATION_CREATED', author, 'destination', uniqueSlug, { title: data.title });
         return obj;
       } catch (e) {
@@ -1303,22 +1377,85 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
     this.destinations.unshift(record);
     await this.logAudit('DESTINATION_CREATED', author, 'destination', uniqueSlug, { title: data.title });
-    return record;
+    const returnRecord = { ...record };
+    if (returnRecord.image) {
+      returnRecord.image = { ...returnRecord.image };
+      delete returnRecord.image.data;
+    }
+    return returnRecord;
   }
 
   async updateDestination(idOrSlug, updateData, author = 'Master Head') {
     await this.initializeSeedAccounts();
+    const cleanUpdate = { ...updateData };
+
+    // Process optional direct binary image
+    let newImageRecord = null;
+    let hasNewDirectImage = false;
+    const rawImage =
+      updateData.imageData ||
+      updateData.imageBuffer ||
+      (updateData.image &&
+        (typeof updateData.image === 'string' ||
+          Buffer.isBuffer(updateData.image) ||
+          updateData.image.data));
+
+    if (rawImage) {
+      const input = (rawImage && rawImage.data) ? rawImage.data : rawImage;
+      const origName =
+        updateData.imageOriginalName ||
+        updateData.originalName ||
+        (updateData.image && updateData.image.originalName) ||
+        'destination.jpg';
+      const parsed = parseAndValidateImage(input, origName);
+      if (parsed) {
+        newImageRecord = {
+          data: parsed.buffer,
+          contentType: parsed.mimeType,
+          originalName: parsed.originalName,
+          size: parsed.size,
+        };
+        hasNewDirectImage = true;
+      }
+    }
+
+    delete cleanUpdate.imageData;
+    delete cleanUpdate.imageBuffer;
+    delete cleanUpdate.imageOriginalName;
+
     if (this.isMongoLive()) {
       try {
-        const destDoc = await Destination.findOne({ $or: [{ _id: idOrSlug }, { slug: idOrSlug }] });
+        const destDoc = await Destination.findOne({
+          $or: [{ _id: idOrSlug }, { slug: idOrSlug }, { slug: String(idOrSlug).toLowerCase() }],
+        }).select('+image.data');
+
         if (destDoc) {
-          Object.assign(destDoc, updateData, { updatedBy: author, updatedAt: new Date().toISOString() });
+          if (hasNewDirectImage) {
+            cleanUpdate.image = newImageRecord;
+            cleanUpdate.hasDirectImage = true;
+            cleanUpdate.imageUrl = `/api/v1/destinations/${destDoc.slug}/image`;
+            cleanUpdate.coverImage = `/api/v1/destinations/${destDoc.slug}/image`;
+          } else if (!cleanUpdate.image) {
+            // Preserve existing image when editing without replacement
+            delete cleanUpdate.image;
+          }
+
+          Object.assign(destDoc, cleanUpdate, { updatedBy: author, updatedAt: new Date().toISOString() });
           await destDoc.save();
+
           const obj = destDoc.toObject();
+          if (obj.image) {
+            delete obj.image.data;
+          }
           const idx = this.destinations.findIndex((d) => d._id === idOrSlug || d.slug === idOrSlug);
-          if (idx !== -1) this.destinations[idx] = obj;
-          else this.destinations.unshift(obj);
-          await this.logAudit('DESTINATION_UPDATED', author, 'destination', obj.slug, { updatedFields: Object.keys(updateData) });
+          if (idx !== -1) {
+            this.destinations[idx] = { ...this.destinations[idx], ...cleanUpdate };
+            if (hasNewDirectImage) this.destinations[idx].image = newImageRecord;
+          } else {
+            this.destinations.unshift(destDoc.toObject());
+          }
+
+          await this.logAudit('DESTINATION_UPDATED', author, 'destination', obj.slug, { updatedFields: Object.keys(cleanUpdate) });
           return obj;
         }
       } catch (e) {
@@ -1327,13 +1464,163 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     }
 
     const dest = this.destinations.find(
-      (d) => d._id === idOrSlug || d.slug === idOrSlug || d.title.toLowerCase() === idOrSlug.toLowerCase()
+      (d) => d._id === idOrSlug || d.slug === idOrSlug || d.title?.toLowerCase() === String(idOrSlug).toLowerCase()
     );
     if (!dest) throw new Error(`Destination '${idOrSlug}' not found.`);
 
-    Object.assign(dest, updateData, { updatedBy: author, updatedAt: new Date().toISOString() });
-    await this.logAudit('DESTINATION_UPDATED', author, 'destination', dest.slug, { updatedFields: Object.keys(updateData) });
-    return dest;
+    if (hasNewDirectImage) {
+      cleanUpdate.image = newImageRecord;
+      cleanUpdate.hasDirectImage = true;
+      cleanUpdate.imageUrl = `/api/v1/destinations/${dest.slug}/image`;
+      cleanUpdate.coverImage = `/api/v1/destinations/${dest.slug}/image`;
+    } else if (!cleanUpdate.image) {
+      delete cleanUpdate.image;
+    }
+
+    Object.assign(dest, cleanUpdate, { updatedBy: author, updatedAt: new Date().toISOString() });
+    await this.logAudit('DESTINATION_UPDATED', author, 'destination', dest.slug, { updatedFields: Object.keys(cleanUpdate) });
+
+    const returnDest = { ...dest };
+    if (returnDest.image) {
+      returnDest.image = { ...returnDest.image };
+      delete returnDest.image.data;
+    }
+    return returnDest;
+  }
+
+  async getDestinationImage(idOrSlug) {
+    await this.initializeSeedAccounts();
+    const cleanIdOrSlug = String(idOrSlug || '').trim();
+    const lowerSlug = cleanIdOrSlug.toLowerCase();
+
+    // 1. Try MongoDB
+    if (this.isMongoLive()) {
+      try {
+        const dest = await Destination.findOne({
+          $or: [{ _id: cleanIdOrSlug }, { slug: cleanIdOrSlug }, { slug: lowerSlug }],
+          isDeleted: { $ne: true },
+        }).select('+image.data');
+
+        if (dest) {
+          if (dest.image && dest.image.data) {
+            return {
+              buffer: dest.image.data,
+              contentType: dest.image.contentType || 'image/jpeg',
+              originalName: dest.image.originalName || `${dest.slug}.jpg`,
+              size: dest.image.size || dest.image.data.length,
+              publicationStatus: dest.publicationStatus,
+              updatedAt: dest.updatedAt || dest.createdAt || new Date(),
+              title: dest.title,
+              slug: dest.slug,
+              _id: dest._id,
+            };
+          }
+
+          // Fallback to disk if destination has a local image path
+          const localPath = dest.coverImage || dest.imageUrl;
+          if (localPath && typeof localPath === 'string') {
+            const diskFile = await this.readLocalImageFile(localPath);
+            if (diskFile) {
+              return {
+                ...diskFile,
+                publicationStatus: dest.publicationStatus,
+                updatedAt: dest.updatedAt || dest.createdAt || new Date(),
+                title: dest.title,
+                slug: dest.slug,
+                _id: dest._id,
+              };
+            }
+          }
+          return null;
+        }
+      } catch (e) {
+        console.warn('[StoreService] Mongo getDestinationImage error:', e.message);
+      }
+    }
+
+    // 2. Fallback to resilient in-memory store
+    const memDest = this.destinations.find(
+      (d) => !d.isDeleted && (d._id === cleanIdOrSlug || d.slug?.toLowerCase() === lowerSlug)
+    );
+    if (memDest) {
+      if (memDest.image && memDest.image.data) {
+        return {
+          buffer: Buffer.isBuffer(memDest.image.data) ? memDest.image.data : Buffer.from(memDest.image.data),
+          contentType: memDest.image.contentType || 'image/jpeg',
+          originalName: memDest.image.originalName || `${memDest.slug}.jpg`,
+          size: memDest.image.size || memDest.image.data.length,
+          publicationStatus: memDest.publicationStatus,
+          updatedAt: memDest.updatedAt || memDest.createdAt || new Date(),
+          title: memDest.title,
+          slug: memDest.slug,
+          _id: memDest._id,
+        };
+      }
+
+      const localPath = memDest.coverImage || memDest.imageUrl;
+      if (localPath && typeof localPath === 'string') {
+        const diskFile = await this.readLocalImageFile(localPath);
+        if (diskFile) {
+          return {
+            ...diskFile,
+            publicationStatus: memDest.publicationStatus,
+            updatedAt: memDest.updatedAt || memDest.createdAt || new Date(),
+            title: memDest.title,
+            slug: memDest.slug,
+            _id: memDest._id,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  async saveDestinationImageDirect(idOrSlug, inputData, originalName = '', author = 'Master Head') {
+    await this.initializeSeedAccounts();
+    const parsed = parseAndValidateImage(inputData, originalName);
+    if (!parsed) {
+      throw new Error('Valid image data is required.');
+    }
+
+    return await this.updateDestination(
+      idOrSlug,
+      {
+        imageData: parsed.buffer,
+        imageOriginalName: parsed.originalName,
+      },
+      author
+    );
+  }
+
+  async readLocalImageFile(filePath) {
+    try {
+      if (!filePath || filePath.startsWith('http://') || filePath.startsWith('https://')) {
+        return null;
+      }
+      const cleanPath = filePath.replace(/^\/+/, '');
+      const candidates = [
+        path.resolve(cleanPath),
+        path.resolve('server/public', cleanPath),
+        path.resolve('server', cleanPath),
+        path.resolve('client/public', cleanPath),
+        path.resolve('public', cleanPath),
+        path.resolve('../client/public', cleanPath),
+      ];
+      for (const cand of candidates) {
+        if (fs.existsSync(cand) && fs.statSync(cand).isFile()) {
+          const buffer = await fs.promises.readFile(cand);
+          const sig = detectImageSignature(buffer);
+          return {
+            buffer,
+            contentType: sig ? sig.mimeType : 'image/jpeg',
+            originalName: path.basename(cand),
+            size: buffer.length,
+          };
+        }
+      }
+    } catch (e) {}
+    return null;
   }
 
   async deleteDestination(idOrSlug, author = 'Master Head') {

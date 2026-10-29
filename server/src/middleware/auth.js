@@ -45,6 +45,37 @@ export const authenticate = async (req, res, next) => {
   }
 };
 
+export const optionalAuthenticate = async (req, res, next) => {
+  try {
+    let token = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.cookies && req.cookies.token) {
+      token = req.cookies.token;
+    }
+
+    if (token) {
+      const decoded = verifyToken(token);
+      if (decoded && decoded.id) {
+        const user = await store.getUserById(decoded.id);
+        if (user && user.isActive) {
+          req.user = {
+            id: user._id ? user._id.toString() : user.id,
+            role: user.role,
+            email: user.email,
+            memberId: user.memberId,
+            name: user.name,
+          };
+        }
+      }
+    }
+  } catch (error) {
+    // Optional auth - gracefully continue as unauthenticated guest
+  }
+  next();
+};
+
 export const requireRole = (roles) => {
   const allowed = Array.isArray(roles) ? roles : [roles];
   return (req, res, next) => {

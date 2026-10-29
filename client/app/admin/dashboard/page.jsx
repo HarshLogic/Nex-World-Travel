@@ -71,6 +71,7 @@ import {
   updateDestination,
   deleteDestination,
   fetchDestinations,
+  getDestinationImageUrl,
   createActivity,
   updateActivity,
   deleteActivity,
@@ -555,7 +556,16 @@ export default function AdminDashboardPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
+    // Strict 1MB client-side limit for destinations (Direct MongoDB storage)
+    if (formType === 'destination') {
+      if (file.size > 1024 * 1024) {
+        triggerToast(
+          `Image size (${(file.size / 1024).toFixed(1)} KB) exceeds the maximum allowed limit of 1 MB (1024 KB).`,
+          'error'
+        );
+        return;
+      }
+    } else if (file.size > 5 * 1024 * 1024) {
       triggerToast('Image file size exceeds maximum limit of 5MB.', 'error');
       return;
     }
@@ -573,10 +583,21 @@ export default function AdminDashboardPage() {
       if (formType === 'activity') {
         setActForm((prev) => ({ ...prev, imageUrl: dataUrl }));
       } else {
-        setDestForm((prev) => ({ ...prev, imageUrl: dataUrl }));
+        // Destination: store raw base64 dataUrl directly so it is written straight to MongoDB
+        setDestForm((prev) => ({
+          ...prev,
+          imageUrl: dataUrl,
+          imageData: dataUrl,
+          imageOriginalName: file.name,
+        }));
       }
     };
     reader.readAsDataURL(file);
+
+    if (formType === 'destination') {
+      triggerToast('Direct image loaded! It will be stored in MongoDB when you save.', 'success');
+      return;
+    }
 
     // Upload to server / Cloudinary
     setImageUploading(true);
@@ -2409,7 +2430,7 @@ export default function AdminDashboardPage() {
                     <div>
                       <div className="relative h-44 w-full bg-surface-100">
                         <Image
-                          src={dest.imageUrl || dest.coverImage || dest.heroImage || '/images/hero/hero-bg.jpg'}
+                          src={getDestinationImageUrl(dest)}
                           alt={dest.title}
                           fill
                           sizes="(max-width: 768px) 100vw, 33vw"
@@ -2488,7 +2509,7 @@ export default function AdminDashboardPage() {
                               price: dest.price || 1999,
                               duration: dest.duration || '7 Days / 6 Nights',
                               rating: dest.rating || 4.9,
-                              imageUrl: dest.imageUrl || dest.coverImage || dest.heroImage || '',
+                              imageUrl: getDestinationImageUrl(dest),
                               displayOrder: dest.displayOrder || 1,
                               publicationStatus: dest.publicationStatus || 'published',
                               featured: Boolean(dest.featured),
@@ -2830,7 +2851,10 @@ export default function AdminDashboardPage() {
 
                 {/* Image Upload Dropzone */}
                 <div>
-                  <label className="block font-semibold text-text-secondary mb-1">Destination Image</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-text-secondary">Destination Image</label>
+                    <span className="text-[10px] text-text-tertiary font-medium">Max 1 MB (JPG, PNG, WebP) - MongoDB Storage</span>
+                  </div>
                   <div className="p-3 border border-dashed border-border rounded-2xl bg-surface-50 space-y-2">
                     {destForm.imageUrl ? (
                       <div className="relative h-32 w-full rounded-xl overflow-hidden bg-black/10">
@@ -2847,7 +2871,7 @@ export default function AdminDashboardPage() {
                           </label>
                           <button
                             type="button"
-                            onClick={() => setDestForm({ ...destForm, imageUrl: '' })}
+                            onClick={() => setDestForm({ ...destForm, imageUrl: '', imageData: null })}
                             className="px-3 py-1.5 bg-red-600 text-white text-[11px] font-bold rounded-lg shadow hover:bg-red-700"
                           >
                             Remove
@@ -2858,9 +2882,9 @@ export default function AdminDashboardPage() {
                       <label className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-surface-100/50 rounded-xl transition-colors">
                         <Upload className="w-6 h-6 text-accent-primary mb-1.5" />
                         <span className="font-bold text-text-primary text-xs">
-                          {imageUploading ? 'Uploading image...' : 'Click or Drag to Upload Image'}
+                          {imageUploading ? 'Processing image...' : 'Click or Drag to Upload Image'}
                         </span>
-                        <span className="text-[10px] text-text-tertiary mt-0.5">JPG, PNG, or WebP up to 5MB</span>
+                        <span className="text-[10px] text-text-tertiary mt-0.5">JPG, PNG, or WebP up to 1 MB (Direct MongoDB Storage)</span>
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp,image/jpg"

@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Compass, Calendar, Clock, MapPin, CheckCircle2, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
-import { fetchDestinationBySlug } from '../../../lib/api';
+import { fetchDestinationBySlug, getDestinationImageUrl } from '../../../lib/api';
 
 export default async function DestinationDetailPage({ params }) {
   const destination = await fetchDestinationBySlug(params.slug);
@@ -26,7 +26,7 @@ export default async function DestinationDetailPage({ params }) {
         {/* Hero Banner */}
         <div className="relative aspect-[16/8] sm:aspect-[21/9] w-full rounded-4xl overflow-hidden shadow-card border border-border mb-12">
           <Image
-            src={destination.heroImage || destination.imageUrl}
+            src={getDestinationImageUrl(destination)}
             alt={destination.title}
             fill
             sizes="100vw"

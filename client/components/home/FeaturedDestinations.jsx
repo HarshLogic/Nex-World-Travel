@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Compass, Sparkles, MapPin } from 'lucide-react';
 import { destinationsData } from '../../data/destinations';
-import { fetchDestinations } from '../../lib/api';
+import { fetchDestinations, getDestinationImageUrl } from '../../lib/api';
 
 export default function FeaturedDestinations() {
   const [destinations, setDestinations] = useState(destinationsData);
@@ -52,7 +52,7 @@ export default function FeaturedDestinations() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {displayList.map((dest, idx) => {
             const isLarge = idx === 0 || idx === 3;
-            const imgSrc = dest.thumbnail || dest.imageUrl || dest.coverImage || dest.heroImage || '/images/hero/hero-bg.jpg';
+            const imgSrc = getDestinationImageUrl(dest);
             return (
               <div
                 key={dest.id || dest._id || dest.slug}

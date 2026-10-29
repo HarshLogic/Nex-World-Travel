@@ -454,6 +454,36 @@ export async function updateTerms(content) {
 }
 
 // ==================== PUBLIC SITE DESTINATIONS & PACKAGES ====================
+
+/**
+ * Returns the correct image URL for a destination, prioritizing direct MongoDB
+ * binary image endpoint when hasDirectImage is true, with seamless fallbacks.
+ */
+export function getDestinationImageUrl(dest) {
+  if (!dest) return '/images/hero.jpg';
+
+  if (dest.hasDirectImage) {
+    const identifier = dest.slug || dest.id || dest._id;
+    return `${BASE_URL}/api/v1/destinations/${identifier}/image`;
+  }
+
+  const directCandidate = dest.imageUrl || dest.coverImage;
+  if (directCandidate && typeof directCandidate === 'string') {
+    if (directCandidate.startsWith('/api/')) {
+      return `${BASE_URL}${directCandidate}`;
+    }
+    if (directCandidate.startsWith('http://') || directCandidate.startsWith('https://')) {
+      return directCandidate;
+    }
+    if (directCandidate.startsWith('/uploads/')) {
+      return `${BASE_URL}${directCandidate}`;
+    }
+    return directCandidate;
+  }
+
+  return '/images/hero.jpg';
+}
+
 export async function fetchDestinations(region, category) {
   try {
     const params = new URLSearchParams();

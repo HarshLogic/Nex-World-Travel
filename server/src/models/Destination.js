@@ -25,6 +25,13 @@ const destinationSchema = new mongoose.Schema(
     coverImage: { type: String, default: '' },
     imageUrl: { type: String, default: '' },
     additionalImages: [{ type: String }],
+    image: {
+      data: { type: Buffer, select: false },
+      contentType: { type: String, default: '' },
+      originalName: { type: String, default: '' },
+      size: { type: Number, default: 0 },
+    },
+    hasDirectImage: { type: Boolean, default: false, index: true },
     highlights: [{ type: String }],
     popularCities: [{ type: String }],
     bestTimeToVisit: { type: String, default: 'Year Round' },
@@ -43,8 +50,17 @@ const destinationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Fallback coverImage <-> imageUrl
+// Fallback coverImage <-> imageUrl and direct image URL resolution
 destinationSchema.pre('save', function (next) {
+  if (this.hasDirectImage) {
+    const directPath = `/api/v1/destinations/${this.slug || this._id}/image`;
+    if (!this.imageUrl || this.imageUrl.startsWith('/uploads/')) {
+      this.imageUrl = directPath;
+    }
+    if (!this.coverImage || this.coverImage.startsWith('/uploads/')) {
+      this.coverImage = directPath;
+    }
+  }
   if (!this.coverImage && this.imageUrl) this.coverImage = this.imageUrl;
   if (!this.imageUrl && this.coverImage) this.imageUrl = this.coverImage;
   if (!this.shortDescription && this.tagline) this.shortDescription = this.tagline;
