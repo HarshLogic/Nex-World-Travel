@@ -153,7 +153,9 @@ export const getCurrentUser = async (req, res, next) => {
         name: user.name,
         phone: user.phone,
         isActive: user.isActive,
+        permissions: extra.permissions || [],
       },
+      permissions: extra.permissions || [],
       ...extra,
     });
   } catch (error) {

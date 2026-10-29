@@ -22,6 +22,7 @@ export default function Navbar() {
   const [authUser, setAuthUser] = useState(null);
   const pathname = usePathname();
   const drawerRef = useRef(null);
+  const isAdminOrStaff = (pathname || '').startsWith('/admin') || (pathname || '').startsWith('/employee');
 
   // Handle scroll effect
   useEffect(() => {
@@ -180,25 +181,29 @@ export default function Navbar() {
                 <span className="font-mono text-xs">+971 2 639 5908</span>
               </a>
 
-              {/* Plan Your Journey CTA Button */}
-              <Link
-                href="/booking"
-                className="group relative inline-flex items-center gap-1.5 px-4 py-2 xl:px-5 xl:py-2.5 rounded-full text-xs xl:text-sm font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-sm transition-all duration-200 active:scale-95 shrink-0 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-accent-primary"
-              >
-                <span>Plan Your Journey</span>
-                <ArrowUpRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-              </Link>
+              {/* Plan Your Journey CTA Button - Hidden on Admin/Staff Dashboards */}
+              {!isAdminOrStaff && (
+                <Link
+                  href="/booking"
+                  className="group relative inline-flex items-center gap-1.5 px-4 py-2 xl:px-5 xl:py-2.5 rounded-full text-xs xl:text-sm font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-sm transition-all duration-200 active:scale-95 shrink-0 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-accent-primary"
+                >
+                  <span>Plan Your Journey</span>
+                  <ArrowUpRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </Link>
+              )}
             </div>
 
             {/* Mobile Header Elements */}
             <div className="flex lg:hidden items-center gap-2 sm:gap-3">
-              <Link
-                href="/booking"
-                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover rounded-full shadow-sm whitespace-nowrap active:scale-95 transition-all"
-              >
-                <span>Plan Trip</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </Link>
+              {!isAdminOrStaff && (
+                <Link
+                  href="/booking"
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover rounded-full shadow-sm whitespace-nowrap active:scale-95 transition-all"
+                >
+                  <span>Plan Trip</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
 
               <button
                 type="button"
@@ -341,14 +346,16 @@ export default function Navbar() {
               </div>
             </a>
 
-            <Link
-              href="/booking"
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm text-white bg-accent-primary hover:bg-accent-primary-hover shadow-md shadow-accent-primary/20 transition-all active:scale-95"
-            >
-              <span>Plan Your Journey</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </Link>
+            {!isAdminOrStaff && (
+              <Link
+                href="/booking"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm text-white bg-accent-primary hover:bg-accent-primary-hover shadow-md shadow-accent-primary/20 transition-all active:scale-95"
+              >
+                <span>Plan Your Journey</span>
+                <ArrowUpRight className="w-4 h-4" />
+              </Link>
+            )}
           </div>
 
           {/* Location & Partner Note */}

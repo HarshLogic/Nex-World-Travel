@@ -37,6 +37,11 @@ const memberProfileSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    address: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     packageType: {
       type: String,
       required: true,
@@ -48,6 +53,16 @@ const memberProfileSchema = new mongoose.Schema(
       type: Number,
       required: true,
       default: 7,
+      min: 0,
+    },
+    allottedNights: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    usedNights: {
+      type: Number,
+      default: 0,
       min: 0,
     },
     extraOffers: {

@@ -111,46 +111,81 @@ export const updateMember = async (req, res, next) => {
       });
     }
 
-    // Role-based protection: Employees cannot alter package or financial fields directly
+    // Role-based protection: Employees can only edit fields they have explicit permissions for
     if (req.user && req.user.role === 'employee') {
-      const protectedFields = [
+      const permissions = (await store.getEmployeePermissions(req.user.id)) || [];
+      const hasPermCheck = (perm) => {
+        const pLower = perm.toLowerCase();
+        return permissions.some((p) => {
+          const l = p.toLowerCase();
+          if (l === pLower) return true;
+          if (pLower === 'update_financial_info' && l === 'update_membership_financial') return true;
+          if (pLower === 'update_membership_financial' && l === 'update_financial_info') return true;
+          if (pLower === 'create_member' && l === 'register_member') return true;
+          return false;
+        });
+      };
+
+      const canEditPlans = hasPermCheck('edit_membership_plans');
+      const canEditFinancial = hasPermCheck('update_financial_info');
+      const canEditStatus = hasPermCheck('update_membership_status') || hasPermCheck('edit_member_details');
+
+      // Package / plan fields
+      const planFields = [
         'packageType',
-        'productPrice',
         'nightsAvailable',
         'availableNights',
+        'allottedNights',
         'tenurePeriod',
         'extraOffers',
         'travelCardBenefit',
-        'emiDetails',
+      ];
+      // Financial fields
+      const financialFields = [
+        'productPrice',
         'totalAmountPaid',
         'outstandingBalance',
+        'hasEMI',
+        'emiAmount',
+        'emiTenureMonths',
+        'emiPaidMonths',
+        'nextEMIDueDate',
+        'dueAmount',
+        'paymentStatus',
+        'emiDetails',
       ];
-      const hasProtectedField = protectedFields.some(
-        (field) => validation.data[field] !== undefined && validation.data[field] !== null
-      );
 
-      if (hasProtectedField) {
+      const hasPlanFields = planFields.some((f) => validation.data[f] !== undefined && validation.data[f] !== null);
+      const hasFinancialFields = financialFields.some((f) => validation.data[f] !== undefined && validation.data[f] !== null);
+
+      if (hasPlanFields && !canEditPlans) {
         return res.status(403).json({
           success: false,
           requiresApproval: true,
+          permissionNeeded: 'edit_membership_plans',
           message:
-            'Employees cannot directly alter package tiers, nights, or financial terms. Please submit an Employee Change Request for Master Head approval.',
+            'Employees cannot directly alter package tiers, nights, or membership plans without authorization. Please submit an Employee Change Request for Master Head approval.',
         });
       }
 
-      if (validation.data.membershipStatus !== undefined) {
-        const permissions = await store.getEmployeePermissions(req.user.id);
-        const canUpdateStatus = permissions && permissions.some(
-          (p) => ['update_membership_status', 'manage_members', 'manage_membership_status'].includes(p.toLowerCase())
-        );
-        if (!canUpdateStatus) {
-          return res.status(403).json({
-            success: false,
-            requiresApproval: true,
-            message:
-              'Employees cannot directly change membership status without authorization. Please submit an Employee Change Request for Master Head approval.',
-          });
-        }
+      if (hasFinancialFields && !canEditFinancial) {
+        return res.status(403).json({
+          success: false,
+          requiresApproval: true,
+          permissionNeeded: 'update_financial_info',
+          message:
+            'Employees cannot directly modify financial terms without authorization. Please submit an Employee Change Request for Master Head approval.',
+        });
+      }
+
+      if (validation.data.membershipStatus !== undefined && !canEditStatus) {
+        return res.status(403).json({
+          success: false,
+          requiresApproval: true,
+          permissionNeeded: 'update_membership_status',
+          message:
+            'Employees cannot directly change membership status without authorization. Please submit an Employee Change Request for Master Head approval.',
+        });
       }
     }
 
@@ -161,6 +196,7 @@ export const updateMember = async (req, res, next) => {
       success: true,
       message: `Member '${memberId}' updated successfully.`,
       member: updated,
+      profile: updated,
     });
   } catch (error) {
     next(error);

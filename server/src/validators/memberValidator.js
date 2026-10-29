@@ -16,6 +16,7 @@ const createMemberBase = z.object({
     .email('Please enter a valid email address (e.g. name@example.com)')
     .toLowerCase(),
   phone: z.string().trim().optional().default(''),
+  address: z.string().trim().optional().default(''),
   initialPassword: z
     .string()
     .min(4, 'Password must be at least 4 characters')
@@ -24,16 +25,25 @@ const createMemberBase = z.object({
     .enum(['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'])
     .default('Gold'),
   availableNights: z.coerce.number().min(0, 'Available nights cannot be negative').default(14),
+  allottedNights: z.coerce.number().min(0).optional(),
+  usedNights: z.coerce.number().min(0).optional().default(0),
   extraOffers: z.string().trim().optional().default('VIP Airport Meet & Assist + Lounge Access'),
   tenurePeriod: z.string().trim().default('3 Years'),
   travelCardBenefit: z.boolean().default(true),
   purchaseDate: z.string().optional(),
   productPrice: z.coerce.number().min(0, 'Product price must be non-negative').default(12500),
   initialPaidAmount: z.coerce.number().min(0, 'Initial paid amount cannot be negative').default(0),
+  totalAmountPaid: z.coerce.number().min(0).optional(),
+  outstandingBalance: z.coerce.number().min(0).optional(),
   hasEMI: z.boolean().default(false),
   emiAmount: z.coerce.number().min(0).default(0),
   emiTenureMonths: z.coerce.number().min(0).default(12),
+  emiPaidMonths: z.coerce.number().min(0).default(0),
   nextEMIDueDate: z.string().optional().nullable(),
+  dueAmount: z.coerce.number().min(0).optional().default(0),
+  paymentStatus: z
+    .enum(['Up to Date', 'Due Soon', 'Overdue', 'Fully Paid'])
+    .optional(),
   membershipStatus: z
     .enum(['Open', 'Close', 'Deactive', 'Cancel', 'Active', 'Expired', 'Suspended', 'Pending'])
     .default('Open'),
@@ -104,20 +114,30 @@ export const updateMemberSchema = z.object({
   name: z.string().trim().min(2).optional(),
   email: z.string().trim().email().toLowerCase().optional(),
   phone: z.string().trim().optional(),
+  address: z.string().trim().optional(),
   packageType: z
     .enum(['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'])
     .optional(),
   availableNights: z.coerce.number().min(0).optional(),
+  allottedNights: z.coerce.number().min(0).optional(),
+  usedNights: z.coerce.number().min(0).optional(),
   nightsAvailable: z.coerce.number().min(0).optional(),
   extraOffers: z.string().trim().optional(),
   tenurePeriod: z.string().trim().optional(),
   travelCardBenefit: z.boolean().optional(),
   purchaseDate: z.string().optional(),
   productPrice: z.coerce.number().min(0).optional(),
+  totalAmountPaid: z.coerce.number().min(0).optional(),
+  outstandingBalance: z.coerce.number().min(0).optional(),
   hasEMI: z.boolean().optional(),
   emiAmount: z.coerce.number().min(0).optional(),
   emiTenureMonths: z.coerce.number().min(0).optional(),
-  nextEMIDueDate: z.string().optional(),
+  emiPaidMonths: z.coerce.number().min(0).optional(),
+  nextEMIDueDate: z.string().optional().nullable(),
+  dueAmount: z.coerce.number().min(0).optional(),
+  paymentStatus: z
+    .enum(['Up to Date', 'Due Soon', 'Overdue', 'Fully Paid'])
+    .optional(),
   membershipStatus: z
     .enum(['Open', 'Close', 'Deactive', 'Cancel', 'Active', 'Expired', 'Suspended', 'Pending'])
     .optional(),
@@ -127,7 +147,7 @@ export const updateMemberSchema = z.object({
   reason: z.string().trim().optional(),
 });
 
-export const recordPaymentSchema = z.object({
+const recordPaymentBase = z.object({
   amount: z.coerce.number().positive('Payment amount must be greater than zero'),
   membershipStatus: z
     .enum(['Open', 'Close', 'Deactive', 'Cancel', 'Active', 'Expired', 'Suspended', 'Pending'])
@@ -147,9 +167,19 @@ export const recordPaymentSchema = z.object({
     ])
     .default('Bank Transfer'),
   referenceNumber: z.string().trim().optional().default(''),
+  transactionReference: z.string().trim().optional(),
   notes: z.string().trim().optional().default(''),
   customDueDate: z.string().optional(),
 });
+
+export const recordPaymentSchema = z.preprocess((raw) => {
+  if (!raw || typeof raw !== 'object') return {};
+  const data = { ...raw };
+  if (!data.referenceNumber && data.transactionReference) {
+    data.referenceNumber = data.transactionReference;
+  }
+  return data;
+}, recordPaymentBase);
 
 export const validateCreateMember = (data) => createMemberSchema.safeParse(data);
 export const validateUpdateMember = (data) => updateMemberSchema.safeParse(data);

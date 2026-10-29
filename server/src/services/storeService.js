@@ -176,7 +176,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       emiTenureMonths: 24,
       emiPaidMonths: 16,
       nextEMIDueDate: new Date('2026-11-15').toISOString(),
-      dueAmount: 1000,
+      dueAmount: 0,
       paymentStatus: 'Up to Date',
       membershipStatus: 'Active',
       termsAccepted: true,
@@ -463,15 +463,52 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
             }
           }
 
-          // Ensure Europe and Africa image swap is persisted in live Mongo
-          await Destination.updateOne(
-            { slug: 'europe' },
-            { $set: { imageUrl: '/images/destinations/africa.jpg', coverImage: '/images/destinations/africa.jpg' } }
-          );
-          await Destination.updateOne(
-            { slug: 'africa' },
-            { $set: { imageUrl: '/images/destinations/europe.jpg', coverImage: '/images/destinations/europe.jpg' } }
-          );
+          // Verify Europe and Africa image swap only if direct MongoDB image is not configured
+          const euroDoc = await Destination.findOne({ slug: 'europe' });
+          if (euroDoc && !euroDoc.hasDirectImage && !euroDoc.imageUrl?.startsWith('/api/')) {
+            await Destination.updateOne(
+              { slug: 'europe' },
+              { $set: { imageUrl: '/images/destinations/africa.jpg', coverImage: '/images/destinations/africa.jpg' } }
+            );
+          }
+          const afrDoc = await Destination.findOne({ slug: 'africa' });
+          if (afrDoc && !afrDoc.hasDirectImage && !afrDoc.imageUrl?.startsWith('/api/')) {
+            await Destination.updateOne(
+              { slug: 'africa' },
+              { $set: { imageUrl: '/images/destinations/europe.jpg', coverImage: '/images/destinations/europe.jpg' } }
+            );
+          }
+
+          // Ensure all employee users have a corresponding EmployeePermission document in Mongo
+          const employeesInDb = await User.find({ role: 'employee' });
+          for (const emp of employeesInDb) {
+            const orPerms = [];
+            if (emp._id) {
+              orPerms.push({ userId: emp._id });
+              orPerms.push({ userId: emp._id.toString() });
+            }
+            if (emp.id) orPerms.push({ userId: emp.id });
+            if (emp.email) orPerms.push({ email: emp.email.toLowerCase().trim() });
+
+            const hasPermDoc = await EmployeePermission.findOne({ $or: orPerms });
+            if (!hasPermDoc) {
+              await EmployeePermission.create({
+                _id: `perm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                userId: emp._id || emp.id,
+                email: (emp.email || '').toLowerCase().trim(),
+                permissions: [
+                  'view_members',
+                  'create_member',
+                  'create_member_change_request',
+                  'edit_member_details',
+                  'manage_bookings',
+                  'manage_travel_availability',
+                  'view_reports',
+                ],
+                assignedBy: 'system',
+              });
+            }
+          }
         }
       } catch (err) {
         console.warn('[StoreService] Mongo seeding warning:', err.message);
@@ -508,13 +545,31 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
   async getUserById(id) {
     await this.initializeSeedAccounts();
+    if (!id) return null;
+    const cleanId = typeof id === 'string' ? id.trim() : id;
     if (this.isMongoLive()) {
       try {
-        const user = await User.findById(id);
-        if (user) return user.toObject();
-      } catch (e) {}
+        const conditions = [{ _id: cleanId }, { id: cleanId }];
+        if (typeof cleanId === 'string' && cleanId.includes('@')) {
+          conditions.push({ email: cleanId.toLowerCase() });
+        }
+        if (mongoose.Types.ObjectId.isValid(cleanId)) {
+          conditions.push({ _id: new mongoose.Types.ObjectId(cleanId) });
+        }
+        const user = await User.findOne({ $or: conditions });
+        if (user) return user.toObject ? user.toObject() : user;
+      } catch (e) {
+        console.warn('[StoreService] Mongo getUserById error:', e.message);
+      }
     }
-    return this.users.find((u) => (u._id && u._id.toString() === id.toString()) || u.id === id) || null;
+    return (
+      this.users.find(
+        (u) =>
+          (u._id && u._id.toString() === cleanId.toString()) ||
+          u.id === cleanId ||
+          (u.email && typeof cleanId === 'string' && cleanId.includes('@') && u.email.toLowerCase() === cleanId.toLowerCase())
+      ) || null
+    );
   }
 
   async createUser(userData) {
@@ -678,13 +733,18 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
           .lean();
 
         // Normalize fields for frontend consumer
-        const members = docs.map((m) => ({
-          ...m,
-          status: m.membershipStatus || 'Open',
-          membershipStatus: m.membershipStatus || 'Open',
-          nightsAvailable: m.availableNights !== undefined ? m.availableNights : (m.nightsAvailable || 0),
-          availableNights: m.availableNights !== undefined ? m.availableNights : (m.nightsAvailable || 0),
-        }));
+        const members = docs.map((m) => {
+          const financials = this.calculateMemberFinancials(m);
+          return {
+            ...financials,
+            status: financials.membershipStatus || 'Open',
+            membershipStatus: financials.membershipStatus || 'Open',
+            nightsAvailable: financials.availableNights !== undefined ? financials.availableNights : (financials.nightsAvailable || 0),
+            availableNights: financials.availableNights !== undefined ? financials.availableNights : (financials.nightsAvailable || 0),
+            allottedNights: financials.allottedNights !== undefined ? financials.allottedNights : (financials.availableNights || 7),
+            usedNights: financials.usedNights || 0,
+          };
+        });
 
         return {
           members,
@@ -725,13 +785,18 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     }
 
     const total = results.length;
-    const paginated = results.slice((page - 1) * limit, page * limit).map((m) => ({
-      ...m,
-      status: m.membershipStatus || 'Open',
-      membershipStatus: m.membershipStatus || 'Open',
-      nightsAvailable: m.availableNights !== undefined ? m.availableNights : (m.nightsAvailable || 0),
-      availableNights: m.availableNights !== undefined ? m.availableNights : (m.nightsAvailable || 0),
-    }));
+    const paginated = results.slice((page - 1) * limit, page * limit).map((m) => {
+      const financials = this.calculateMemberFinancials(m);
+      return {
+        ...financials,
+        status: financials.membershipStatus || 'Open',
+        membershipStatus: financials.membershipStatus || 'Open',
+        nightsAvailable: financials.availableNights !== undefined ? financials.availableNights : (financials.nightsAvailable || 0),
+        availableNights: financials.availableNights !== undefined ? financials.availableNights : (financials.nightsAvailable || 0),
+        allottedNights: financials.allottedNights !== undefined ? financials.allottedNights : (financials.availableNights || 7),
+        usedNights: financials.usedNights || 0,
+      };
+    });
 
     return {
       members: paginated,
@@ -744,16 +809,216 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     };
   }
 
+  // ==================== FINANCIAL & NIGHT ENTITLEMENT CALCULATIONS ====================
+
+  calculateMemberFinancials(member, payments = []) {
+    if (!member) return member;
+
+    const productPrice = Math.max(0, Number(member.productPrice || 0));
+
+    // 1. Calculate valid paid amount from actual payment transactions
+    let calculatedPaid = 0;
+    let hasTransactions = false;
+
+    if (Array.isArray(payments) && payments.length > 0) {
+      hasTransactions = true;
+      for (const p of payments) {
+        const pStatus = (p.status || '').toLowerCase();
+        if (['failed', 'cancelled', 'pending'].includes(pStatus)) continue;
+
+        const amt = Number(p.amount || 0);
+        if (p.paymentType === 'refund') {
+          calculatedPaid -= amt;
+        } else {
+          calculatedPaid += amt;
+        }
+      }
+    }
+
+    const totalAmountPaid = hasTransactions
+      ? Math.max(0, calculatedPaid, Number(member.totalAmountPaid || 0))
+      : Math.max(0, Number(member.totalAmountPaid || 0));
+
+    // 2. Outstanding Balance: remaining membership liability
+    const outstandingBalance = Math.max(0, productPrice - totalAmountPaid);
+
+    // 3. EMI details
+    const hasEMI = Boolean(member.hasEMI && Number(member.emiAmount || 0) > 0);
+    const emiAmount = hasEMI ? Number(member.emiAmount || 0) : 0;
+    const emiTenureMonths = hasEMI ? Number(member.emiTenureMonths || 0) : 0;
+
+    // 4. Calculate emiPaidMonths
+    let emiPaidMonths = Number(member.emiPaidMonths || 0);
+    if (hasEMI && emiAmount > 0) {
+      const tenureLimit = emiTenureMonths > 0 ? emiTenureMonths : 999;
+      const emiTxnCount = Array.isArray(payments)
+        ? payments.filter((p) => p.paymentType === 'emi_installment' && !['failed', 'cancelled', 'pending'].includes((p.status || '').toLowerCase())).length
+        : 0;
+      emiPaidMonths = Math.min(tenureLimit, Math.max(emiPaidMonths, emiTxnCount, Math.floor(totalAmountPaid / emiAmount)));
+    }
+
+    // 5. Authoritative Current Payable / Due Calculation
+    let dueAmount = 0;
+    let paymentStatus = member.paymentStatus || 'Up to Date';
+
+    if (outstandingBalance === 0) {
+      dueAmount = 0;
+      paymentStatus = 'Fully Paid';
+    } else if (!hasEMI) {
+      if (['Overdue', 'Due Soon'].includes(paymentStatus)) {
+        dueAmount = Math.min(Number(member.dueAmount || outstandingBalance), outstandingBalance);
+      } else {
+        dueAmount = 0;
+      }
+    } else {
+      // EMI membership
+      if (paymentStatus === 'Fully Paid' || paymentStatus === 'Up to Date') {
+        dueAmount = 0;
+      } else if (paymentStatus === 'Overdue' || paymentStatus === 'Due Soon') {
+        const baseDue = Math.min(emiAmount, outstandingBalance);
+        if (member.dueAmount > 0 && member.dueAmount < baseDue) {
+          dueAmount = member.dueAmount;
+        } else {
+          dueAmount = baseDue;
+        }
+      } else {
+        const now = new Date();
+        const dueDate = member.nextEMIDueDate ? new Date(member.nextEMIDueDate) : null;
+        if (dueDate && dueDate > now) {
+          dueAmount = 0;
+          paymentStatus = 'Up to Date';
+        } else {
+          dueAmount = Math.min(emiAmount, outstandingBalance);
+        }
+      }
+    }
+
+    return {
+      ...member,
+      productPrice,
+      totalAmountPaid,
+      outstandingBalance,
+      hasEMI,
+      emiAmount,
+      emiTenureMonths,
+      emiPaidMonths,
+      dueAmount,
+      paymentStatus,
+      emiDetails: {
+        hasEmi: hasEMI,
+        emiAmount,
+        frequency: 'Monthly',
+        paidMonths: emiPaidMonths,
+        totalMonths: emiTenureMonths,
+        nextDueDate: member.nextEMIDueDate || null,
+        dueAmount,
+      },
+    };
+  }
+
+  async getMemberBookings(memberId, email = '', registeredName = '') {
+    const cleanId = (memberId || '').toUpperCase().trim();
+    const cleanEmail = (email || '').toLowerCase().trim();
+    const cleanName = (registeredName || '').toLowerCase().trim();
+
+    if (this.isMongoLive()) {
+      try {
+        const queryOr = [];
+        if (cleanId) queryOr.push({ memberId: cleanId });
+        if (cleanEmail) queryOr.push({ email: cleanEmail });
+        if (cleanName) queryOr.push({ memberName: { $regex: new RegExp(`^${cleanName}$`, 'i') } });
+        if (cleanName) queryOr.push({ customerName: { $regex: new RegExp(`^${cleanName}$`, 'i') } });
+
+        if (queryOr.length > 0) {
+          return await Booking.find({ $or: queryOr }).sort({ createdAt: -1 }).lean();
+        }
+      } catch (e) {}
+    }
+
+    return this.bookings.filter((b) => {
+      const bId = (b.memberId || '').toUpperCase().trim();
+      const bEmail = (b.email || '').toLowerCase().trim();
+      const bName = (b.memberName || b.customerName || '').toLowerCase().trim();
+      return (cleanId && bId === cleanId) || (cleanEmail && bEmail === cleanEmail) || (cleanName && bName === cleanName);
+    });
+  }
+
+  calculateMemberNights(member, bookings = []) {
+    if (!member) return member;
+
+    // Filter valid bookings: exclude Cancelled and Closed - Lost
+    const activeBookings = (bookings || []).filter((b) => {
+      const s = (b.status || '').toLowerCase();
+      return s !== 'cancelled' && s !== 'closed - lost';
+    });
+
+    // Sum used nights (prevent duplicates by tracking unique reference/ID)
+    const seenBookingIds = new Set();
+    let usedNights = 0;
+
+    for (const b of activeBookings) {
+      const ref = b.enquiryNumber || b._id?.toString() || b.id;
+      if (ref && seenBookingIds.has(ref)) continue;
+      if (ref) seenBookingIds.add(ref);
+
+      let stayNights = Number(b.numberOfNights || 0);
+      if (!stayNights && (b.checkInDate || b.travelDate) && (b.checkOutDate || b.returnDate)) {
+        try {
+          const inDate = new Date(b.checkInDate || b.travelDate);
+          const outDate = new Date(b.checkOutDate || b.returnDate);
+          const diffDays = Math.ceil((outDate - inDate) / (1000 * 60 * 60 * 24));
+          if (diffDays > 0 && diffDays < 365) {
+            stayNights = diffDays;
+          }
+        } catch (e) {}
+      }
+      usedNights += stayNights;
+    }
+
+    // Determine Allotted Nights
+    let allottedNights = 0;
+    if (member.allottedNights !== undefined && member.allottedNights !== null && Number(member.allottedNights) > 0) {
+      allottedNights = Number(member.allottedNights);
+    } else if (member.totalNights !== undefined && member.totalNights !== null && Number(member.totalNights) > 0) {
+      allottedNights = Number(member.totalNights);
+    } else {
+      const baseAvailable = Number(member.availableNights !== undefined ? member.availableNights : (member.nightsAvailable || 7));
+      allottedNights = Math.max(baseAvailable, baseAvailable + usedNights);
+    }
+
+    // Available Nights = Allotted Nights - Used Nights
+    const availableNights = Math.max(0, allottedNights - usedNights);
+
+    return {
+      ...member,
+      allottedNights,
+      usedNights,
+      availableNights,
+      nightsAvailable: availableNights,
+    };
+  }
+
   async getMemberById(memberId) {
     await this.initializeSeedAccounts();
     const cleanId = memberId.toUpperCase().trim();
+    let member = null;
     if (this.isMongoLive()) {
       try {
-        const member = await MemberProfile.findOne({ memberId: cleanId }).lean();
-        if (member) return member;
+        member = await MemberProfile.findOne({ memberId: cleanId }).lean();
       } catch (e) {}
     }
-    return this.members.find((m) => m.memberId.toUpperCase() === cleanId) || null;
+    if (!member) {
+      member = this.members.find((m) => m.memberId.toUpperCase() === cleanId) || null;
+    }
+    if (!member) return null;
+
+    const payments = await this.getMemberPayments(cleanId);
+    const bookings = await this.getMemberBookings(cleanId, member.email, member.registeredName);
+
+    const financials = this.calculateMemberFinancials(member, payments);
+    const withNights = this.calculateMemberNights(financials, bookings);
+
+    return withNights;
   }
 
   async createMember(data, author = 'Master Head') {
@@ -783,8 +1048,11 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       registeredName: data.registeredName.trim(),
       email: data.email.toLowerCase().trim(),
       phone: data.phone || '',
+      address: data.address || '',
       packageType: data.packageType || 'Silver',
       availableNights: Number(data.availableNights || 7),
+      allottedNights: data.allottedNights !== undefined ? Number(data.allottedNights) : Number(data.availableNights || 7),
+      usedNights: 0,
       extraOffers: data.extraOffers || 'VIP Airport Meet & Assist',
       tenurePeriod: data.tenurePeriod || '5 Years',
       travelCardBenefit: !!data.travelCardBenefit,
@@ -797,8 +1065,8 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       emiTenureMonths: Number(data.emiTenureMonths || 0),
       emiPaidMonths: 0,
       nextEMIDueDate: data.nextEMIDueDate || null,
-      dueAmount: Number(data.emiAmount || 0),
-      paymentStatus: productPrice === 0 ? 'Fully Paid' : 'Up to Date',
+      dueAmount: initialPaid > 0 || productPrice === 0 ? 0 : Number(data.dueAmount !== undefined ? data.dueAmount : (data.emiAmount || 0)),
+      paymentStatus: productPrice === 0 ? 'Fully Paid' : (data.paymentStatus || 'Up to Date'),
       membershipStatus: data.membershipStatus || 'Open',
       termsAccepted: false,
       termsVersion: 'v1.0-2026',
@@ -838,11 +1106,39 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     const member = await this.getMemberById(memberId);
     if (!member) throw new Error(`Member '${memberId}' not found.`);
 
-    const oldValues = { ...member };
+    if (updateData.name && !updateData.registeredName) updateData.registeredName = updateData.name;
+    if (updateData.registeredName && !updateData.name) updateData.name = updateData.registeredName;
 
     if (updateData.productPrice !== undefined) {
       member.productPrice = Number(updateData.productPrice);
-      member.outstandingBalance = Math.max(0, member.productPrice - member.totalAmountPaid);
+      member.outstandingBalance = Math.max(0, member.productPrice - Number(member.totalAmountPaid || 0));
+      updateData.outstandingBalance = member.outstandingBalance;
+    }
+    if (updateData.totalAmountPaid !== undefined) {
+      member.totalAmountPaid = Number(updateData.totalAmountPaid);
+      member.outstandingBalance = Math.max(0, Number(member.productPrice || 0) - member.totalAmountPaid);
+      updateData.outstandingBalance = member.outstandingBalance;
+    }
+    if (updateData.allottedNights !== undefined) {
+      member.allottedNights = Number(updateData.allottedNights);
+      if (updateData.availableNights === undefined && updateData.nightsAvailable === undefined) {
+        updateData.availableNights = Math.max(0, member.allottedNights - Number(member.usedNights || 0));
+        updateData.nightsAvailable = updateData.availableNights;
+      }
+    } else if (updateData.availableNights !== undefined || updateData.nightsAvailable !== undefined) {
+      const newAvail = Number(updateData.availableNights !== undefined ? updateData.availableNights : updateData.nightsAvailable);
+      updateData.availableNights = newAvail;
+      updateData.nightsAvailable = newAvail;
+      updateData.allottedNights = newAvail + Number(member.usedNights || 0);
+      member.allottedNights = updateData.allottedNights;
+    }
+
+    if (member.outstandingBalance === 0) {
+      updateData.outstandingBalance = 0;
+      updateData.paymentStatus = 'Fully Paid';
+      updateData.dueAmount = 0;
+    } else if (updateData.paymentStatus === 'Up to Date' && updateData.dueAmount === undefined) {
+      updateData.dueAmount = 0;
     }
 
     Object.assign(member, updateData, { updatedAt: new Date().toISOString() });
@@ -850,6 +1146,14 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     if (this.isMongoLive()) {
       try {
         await MemberProfile.findOneAndUpdate({ memberId: memberId.toUpperCase() }, { $set: updateData }, { new: true });
+        // Also keep linked User account in sync for name, email, phone
+        const userUpdates = {};
+        if (updateData.registeredName) userUpdates.name = updateData.registeredName;
+        if (updateData.email) userUpdates.email = updateData.email;
+        if (updateData.phone !== undefined) userUpdates.phone = updateData.phone;
+        if (Object.keys(userUpdates).length > 0) {
+          await User.findOneAndUpdate({ memberId: memberId.toUpperCase() }, { $set: userUpdates });
+        }
       } catch (e) {
         console.error('[StoreService] Mongo MemberProfile.findOneAndUpdate error:', e.message);
       }
@@ -857,12 +1161,19 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     const idx = this.members.findIndex((m) => m.memberId.toUpperCase() === memberId.toUpperCase());
     if (idx !== -1) this.members[idx] = member;
 
+    const uIdx = this.users.findIndex((u) => u.memberId && u.memberId.toUpperCase() === memberId.toUpperCase());
+    if (uIdx !== -1) {
+      if (updateData.registeredName) this.users[uIdx].name = updateData.registeredName;
+      if (updateData.email) this.users[uIdx].email = updateData.email;
+      if (updateData.phone !== undefined) this.users[uIdx].phone = updateData.phone;
+    }
+
     await this.logAudit('MEMBER_UPDATED', author, 'member', memberId, {
       changedFields: Object.keys(updateData),
       reason: updateData.reason || 'Staff update',
     });
 
-    return member;
+    return await this.getMemberById(memberId);
   }
 
   async recordPayment(memberId, paymentData, author = 'Master Head') {
@@ -870,6 +1181,9 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     if (!member) throw new Error(`Member '${memberId}' not found.`);
 
     const amount = Number(paymentData.amount);
+    if (isNaN(amount) || amount <= 0) {
+      throw new Error('Payment amount must be a positive number.');
+    }
     const transactionId = this.generateCode('TXN');
 
     const paymentRecord = {
@@ -879,10 +1193,11 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       amount,
       paymentType: paymentData.paymentType || 'emi_installment',
       paymentMethod: paymentData.paymentMethod || 'Bank Transfer',
-      referenceNumber: paymentData.referenceNumber || '',
+      referenceNumber: paymentData.referenceNumber || paymentData.transactionReference || '',
       notes: paymentData.notes || '',
       recordedBy: author,
       date: new Date().toISOString(),
+      status: 'Completed',
     };
 
     if (this.isMongoLive()) {
@@ -895,17 +1210,47 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     this.payments.unshift(paymentRecord);
 
     // Update member financial totals
-    const newPaid = Number(member.totalAmountPaid) + amount;
-    const newBalance = Math.max(0, Number(member.productPrice) - newPaid);
-    let newStatus = member.paymentStatus;
-    if (newBalance === 0) newStatus = 'Fully Paid';
-    else newStatus = 'Up to Date';
+    const newPaid = Number(member.totalAmountPaid || 0) + amount;
+    const newBalance = Math.max(0, Number(member.productPrice || 0) - newPaid);
+
+    let newStatus = 'Up to Date';
+    let newDue = 0;
+    let nextDueDate = member.nextEMIDueDate;
+
+    if (newBalance === 0) {
+      newStatus = 'Fully Paid';
+      newDue = 0;
+    } else {
+      const installmentAmount = Number(member.emiAmount || 0);
+      const currentDue = Number(member.dueAmount > 0 ? member.dueAmount : installmentAmount);
+      if (currentDue > 0 && amount < currentDue) {
+        // Partial payment of installment / current due
+        newDue = Math.max(0, currentDue - amount);
+        newStatus = member.paymentStatus && member.paymentStatus !== 'Fully Paid' ? member.paymentStatus : 'Due Soon';
+      } else {
+        // Installment fully paid: current due becomes 0
+        newDue = 0;
+        newStatus = 'Up to Date';
+        if (nextDueDate) {
+          const d = new Date(nextDueDate);
+          d.setMonth(d.getMonth() + 1);
+          nextDueDate = d.toISOString();
+        }
+      }
+    }
+
+    const emiTenure = Number(member.emiTenureMonths || 0);
+    const emiPaidMonths = member.emiAmount > 0
+      ? Math.min(emiTenure || 999, Math.floor(newPaid / member.emiAmount))
+      : member.emiPaidMonths;
 
     const updatePayload = {
       totalAmountPaid: newPaid,
       outstandingBalance: newBalance,
+      dueAmount: newDue,
       paymentStatus: newStatus,
-      emiPaidMonths: member.emiAmount > 0 ? Math.floor(newPaid / member.emiAmount) : member.emiPaidMonths,
+      emiPaidMonths,
+      nextEMIDueDate: nextDueDate,
     };
     if (paymentData.membershipStatus) {
       updatePayload.membershipStatus = paymentData.membershipStatus;
@@ -917,6 +1262,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       transactionId,
       amount,
       newBalance,
+      newDue,
     });
 
     return paymentRecord;
@@ -985,40 +1331,129 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
   async getEmployeePermissions(userId) {
     await this.initializeSeedAccounts();
+    if (!userId) return [];
+
+    let user = null;
+    try {
+      user = (await this.getUserById(userId)) || (await this.getUserByEmail(userId));
+    } catch (e) {}
+
+    const searchIds = [userId, userId?.toString()];
+    const searchEmails = [];
+
+    if (typeof userId === 'string' && userId.includes('@')) {
+      searchEmails.push(userId.toLowerCase().trim());
+    }
+    if (user) {
+      if (user._id) searchIds.push(user._id, user._id.toString());
+      if (user.id) searchIds.push(user.id, user.id.toString());
+      if (user.email) searchEmails.push(user.email.toLowerCase().trim());
+    }
+
     if (this.isMongoLive()) {
       try {
-        const record = await EmployeePermission.findOne({ userId });
-        if (record) return record.permissions;
-      } catch (e) {}
+        const orConditions = searchIds.filter(Boolean).map((id) => ({ userId: id }));
+        searchEmails.forEach((email) => orConditions.push({ email }));
+
+        const record = await EmployeePermission.findOne({ $or: orConditions });
+        if (record && Array.isArray(record.permissions) && record.permissions.length > 0) {
+          return record.permissions;
+        }
+      } catch (e) {
+        console.warn('[StoreService] Mongo getEmployeePermissions lookup warning:', e.message);
+      }
     }
-    const found = this.permissions.find(
-      (p) => (p.userId && p.userId.toString() === userId.toString()) || p.email === userId
-    );
-    return found ? found.permissions : [];
+
+    const found = this.permissions.find((p) => {
+      const pId = p.userId ? p.userId.toString() : '';
+      const pEmail = p.email ? p.email.toLowerCase().trim() : '';
+      const idMatch = searchIds.some((sId) => sId && sId.toString() === pId);
+      const emailMatch = searchEmails.some((sEmail) => sEmail && sEmail === pEmail);
+      return idMatch || emailMatch;
+    });
+
+    if (found && Array.isArray(found.permissions)) {
+      return found.permissions;
+    }
+
+    // Default permissions for active employee if no custom record exists yet
+    return [
+      'view_members',
+      'create_member',
+      'create_member_change_request',
+      'edit_member_details',
+      'manage_bookings',
+      'manage_travel_availability',
+      'view_reports',
+    ];
   }
 
   async updateEmployeePermissions(userId, permissions, author = 'Master Head') {
     const validPermissions = permissions.filter((p) => ALL_PERMISSIONS.includes(p));
+    let user = null;
+    try {
+      user = (await this.getUserById(userId)) || (await this.getUserByEmail(userId));
+    } catch (e) {}
+
+    const targetUserId = user ? (user._id || user.id) : userId;
+    const targetEmail = user
+      ? user.email.toLowerCase().trim()
+      : typeof userId === 'string' && userId.includes('@')
+      ? userId.toLowerCase().trim()
+      : '';
+
     if (this.isMongoLive()) {
       try {
-        await EmployeePermission.findOneAndUpdate(
-          { userId },
-          { permissions: validPermissions, assignedBy: author },
-          { upsert: true }
-        );
-      } catch (e) {}
+        const orConditions = [];
+        if (targetUserId) {
+          orConditions.push({ userId: targetUserId });
+          orConditions.push({ userId: targetUserId.toString() });
+        }
+        if (targetEmail) {
+          orConditions.push({ email: targetEmail });
+        }
+
+        const existingDoc = await EmployeePermission.findOne({ $or: orConditions });
+        if (existingDoc) {
+          existingDoc.permissions = validPermissions;
+          if (targetEmail) existingDoc.email = targetEmail;
+          if (targetUserId) existingDoc.userId = targetUserId;
+          existingDoc.assignedBy = author;
+          await existingDoc.save();
+        } else {
+          await EmployeePermission.create({
+            _id: `perm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            userId: targetUserId || `emp-${Date.now()}`,
+            email: targetEmail || `employee-${Date.now()}@nexworldtravel.com`,
+            permissions: validPermissions,
+            assignedBy: author,
+          });
+        }
+      } catch (e) {
+        console.error('[StoreService] Mongo updateEmployeePermissions error:', e.message);
+      }
     }
 
     const idx = this.permissions.findIndex(
-      (p) => (p.userId && p.userId.toString() === userId.toString()) || p.email === userId
+      (p) =>
+        (p.userId && p.userId.toString() === targetUserId?.toString()) ||
+        (targetEmail && p.email && p.email.toLowerCase() === targetEmail)
     );
     if (idx !== -1) {
       this.permissions[idx].permissions = validPermissions;
+      if (targetEmail) this.permissions[idx].email = targetEmail;
+      if (targetUserId) this.permissions[idx].userId = targetUserId;
     } else {
-      this.permissions.push({ userId, permissions: validPermissions, assignedBy: author });
+      this.permissions.push({
+        _id: `perm-${Date.now()}`,
+        userId: targetUserId,
+        email: targetEmail,
+        permissions: validPermissions,
+        assignedBy: author,
+      });
     }
 
-    await this.logAudit('PERMISSIONS_UPDATED', author, 'employee', userId, { permissions: validPermissions });
+    await this.logAudit('PERMISSIONS_UPDATED', author, 'employee', targetEmail || userId, { permissions: validPermissions });
     return validPermissions;
   }
 

@@ -27,7 +27,7 @@ router.get(
   '/',
   authenticate,
   requireRole(['master_head', 'employee']),
-  requirePermission('view_members'),
+  requirePermission(['view_members', 'create_member']),
   getMembers
 );
 
@@ -50,7 +50,12 @@ router.patch(
   '/:id',
   authenticate,
   requireRole(['master_head', 'employee']),
-  requirePermission('edit_member_details'),
+  requirePermission([
+    'edit_member_details',
+    'edit_membership_plans',
+    'update_financial_info',
+    'update_membership_status',
+  ]),
   updateMember
 );
 

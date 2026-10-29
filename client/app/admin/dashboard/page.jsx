@@ -85,21 +85,7 @@ import {
   deleteAvailability,
 } from '../../../lib/api';
 import { getAuthUser, clearAuth } from '../../../lib/auth';
-
-const PERMISSION_OPTIONS = [
-  { id: 'view_members', label: 'View members' },
-  { id: 'create_member', label: 'Create new member accounts' },
-  { id: 'create_member_change_request', label: 'Create member change requests' },
-  { id: 'edit_member_details', label: 'Edit member details' },
-  { id: 'edit_membership_plans', label: 'Edit membership plans' },
-  { id: 'update_financial_info', label: 'Update membership financial info' },
-  { id: 'manage_bookings', label: 'Manage booking enquiries' },
-  { id: 'add_destinations', label: 'Add destinations' },
-  { id: 'edit_destinations', label: 'Edit destinations' },
-  { id: 'delete_destinations', label: 'Delete destinations' },
-  { id: 'view_reports', label: 'View reports' },
-  { id: 'export_records', label: 'Export records' },
-];
+import { PERMISSION_OPTIONS } from '../../../lib/permissions';
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -145,6 +131,33 @@ export default function AdminDashboardPage() {
     emiFrequency: 'Monthly',
     nextEmiDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     dueAmount: 1250,
+  });
+
+  // Detailed Edit Member Form
+  const [editMemberForm, setEditMemberForm] = useState({
+    memberId: '',
+    registeredName: '',
+    email: '',
+    phone: '',
+    address: '',
+    packageType: 'Gold',
+    membershipStatus: 'Open',
+    tenurePeriod: '3 Years',
+    purchaseDate: '',
+    allottedNights: 14,
+    availableNights: 14,
+    usedNights: 0,
+    travelCardBenefit: true,
+    extraOffers: '',
+    productPrice: 12500,
+    totalAmountPaid: 0,
+    outstandingBalance: 12500,
+    hasEMI: false,
+    emiAmount: 0,
+    emiTenureMonths: 12,
+    nextEMIDueDate: '',
+    dueAmount: 0,
+    paymentStatus: 'Up to Date',
   });
 
   // Payment Form
@@ -350,6 +363,8 @@ export default function AdminDashboardPage() {
         password: addMemberForm.password,
         packageType: addMemberForm.packageType,
         nightsAvailable: Number(addMemberForm.nightsAvailable),
+        availableNights: Number(addMemberForm.nightsAvailable),
+        allottedNights: Number(addMemberForm.nightsAvailable),
         membershipStatus: addMemberForm.membershipStatus || 'Open',
         extraOffers: addMemberForm.extraOffers,
         tenurePeriod: addMemberForm.tenurePeriod,
@@ -384,6 +399,91 @@ export default function AdminDashboardPage() {
       fetchDashboardMetrics().then(setMetrics).catch(() => {});
     } catch (err) {
       triggerToast(err.message || 'Failed to create member', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Open Edit Member Modal
+  const handleOpenEditMember = (member) => {
+    if (!member) return;
+    const allotted = member.allottedNights !== undefined && member.allottedNights !== null
+      ? Number(member.allottedNights)
+      : (Number(member.availableNights || 0) + Number(member.usedNights || 0) || 7);
+    const used = Number(member.usedNights || 0);
+    const available = member.availableNights !== undefined && member.availableNights !== null
+      ? Number(member.availableNights)
+      : Math.max(0, allotted - used);
+
+    setEditMemberForm({
+      memberId: member.memberId,
+      registeredName: member.registeredName || member.name || '',
+      email: member.email || '',
+      phone: member.phone || '',
+      address: member.address || '',
+      packageType: member.packageType || 'Gold',
+      membershipStatus: member.membershipStatus || member.status || 'Open',
+      tenurePeriod: member.tenurePeriod || '3 Years',
+      purchaseDate: member.purchaseDate ? new Date(member.purchaseDate).toISOString().split('T')[0] : '',
+      allottedNights: allotted,
+      availableNights: available,
+      usedNights: used,
+      travelCardBenefit: Boolean(member.travelCardBenefit),
+      extraOffers: member.extraOffers || '',
+      productPrice: Number(member.productPrice || 0),
+      totalAmountPaid: Number(member.totalAmountPaid || 0),
+      outstandingBalance: Number(member.outstandingBalance || 0),
+      hasEMI: Boolean(member.hasEMI || member.emiDetails?.hasEmi),
+      emiAmount: Number(member.emiAmount || member.emiDetails?.emiAmount || 0),
+      emiTenureMonths: Number(member.emiTenureMonths || member.emiDetails?.totalMonths || 12),
+      nextEMIDueDate: member.nextEMIDueDate ? new Date(member.nextEMIDueDate).toISOString().split('T')[0] : '',
+      dueAmount: Number(member.dueAmount || 0),
+      paymentStatus: member.paymentStatus || 'Up to Date',
+    });
+    setShowEditMemberModal(true);
+  };
+
+  // Submit Edit Member
+  const handleEditMemberSubmit = async (e) => {
+    e.preventDefault();
+    setActionLoading(true);
+    try {
+      const payload = {
+        registeredName: editMemberForm.registeredName.trim(),
+        name: editMemberForm.registeredName.trim(),
+        email: editMemberForm.email.trim(),
+        phone: editMemberForm.phone.trim(),
+        address: editMemberForm.address.trim(),
+        packageType: editMemberForm.packageType,
+        membershipStatus: editMemberForm.membershipStatus,
+        tenurePeriod: editMemberForm.tenurePeriod.trim(),
+        purchaseDate: editMemberForm.purchaseDate,
+        allottedNights: Number(editMemberForm.allottedNights),
+        availableNights: Number(editMemberForm.availableNights),
+        travelCardBenefit: Boolean(editMemberForm.travelCardBenefit),
+        extraOffers: editMemberForm.extraOffers.trim(),
+        productPrice: Number(editMemberForm.productPrice),
+        totalAmountPaid: Number(editMemberForm.totalAmountPaid),
+        outstandingBalance: Number(editMemberForm.outstandingBalance),
+        hasEMI: Boolean(editMemberForm.hasEMI),
+        emiAmount: Number(editMemberForm.emiAmount),
+        emiTenureMonths: Number(editMemberForm.emiTenureMonths),
+        nextEMIDueDate: editMemberForm.nextEMIDueDate || null,
+        dueAmount: Number(editMemberForm.dueAmount),
+        paymentStatus: editMemberForm.paymentStatus,
+      };
+
+      const res = await updateAdminMember(editMemberForm.memberId, payload);
+      const updated = res.member || res.profile;
+      triggerToast(`Member ${editMemberForm.memberId} updated successfully!`);
+      setShowEditMemberModal(false);
+
+      if (updated) {
+        setSelectedMember(updated);
+        setMembers((prev) => prev.map((m) => (m.memberId === updated.memberId ? updated : m)));
+      }
+    } catch (err) {
+      triggerToast(err.message || 'Failed to update member.', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -1339,8 +1439,8 @@ export default function AdminDashboardPage() {
                   className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary focus:outline-none focus:border-accent-primary font-medium"
                 >
                   <option value="">All Statuses</option>
-                  <option value="Open">Open</option>
-                  <option value="Close">Close</option>
+                  <option value="Open">Activated</option>
+                  <option value="Close">Inactive</option>
                   <option value="Deactive">Deactive</option>
                   <option value="Cancel">Cancel</option>
                 </select>
@@ -1366,9 +1466,9 @@ export default function AdminDashboardPage() {
                       <th className="py-3.5 px-4">Package</th>
                       <th className="py-3.5 px-4">Nights Left</th>
                       <th className="py-3.5 px-4">Travel Card</th>
-                      <th className="py-3.5 px-4">Total Price</th>
-                      <th className="py-3.5 px-4">Paid</th>
-                      <th className="py-3.5 px-4">Balance</th>
+                      <th className="py-3.5 px-4">Total Price (AED)</th>
+                      <th className="py-3.5 px-4">Paid (AED)</th>
+                      <th className="py-3.5 px-4">Balance (AED)</th>
                       <th className="py-3.5 px-4 text-center">Actions</th>
                     </tr>
                   </thead>
@@ -1433,13 +1533,13 @@ export default function AdminDashboardPage() {
                           )}
                         </td>
                         <td className="py-3.5 px-4 font-semibold text-text-primary">
-                          ${m.productPrice?.toLocaleString()}
+                          AED {m.productPrice?.toLocaleString()}
                         </td>
                         <td className="py-3.5 px-4 font-semibold text-emerald-600">
-                          ${m.totalAmountPaid?.toLocaleString()}
+                          AED {m.totalAmountPaid?.toLocaleString()}
                         </td>
                         <td className="py-3.5 px-4 font-bold text-red-600">
-                          ${m.outstandingBalance?.toLocaleString()}
+                          AED {m.outstandingBalance?.toLocaleString()}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1.5">
@@ -1449,6 +1549,13 @@ export default function AdminDashboardPage() {
                               title="View Member Dossier"
                             >
                               <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenEditMember(m)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit Member Details"
+                            >
+                              <Edit className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => {
@@ -1523,6 +1630,11 @@ export default function AdminDashboardPage() {
                     <p className="text-xs text-text-tertiary">
                       {selectedMember.email || selectedMember.userId?.email} • {selectedMember.phone}
                     </p>
+                    {selectedMember.address && (
+                      <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-accent-primary shrink-0" /> {selectedMember.address}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <button
@@ -1540,10 +1652,15 @@ export default function AdminDashboardPage() {
                   <p className="text-sm font-bold text-text-primary mt-0.5">{selectedMember.packageType}</p>
                 </div>
                 <div className="bg-surface-50 p-3.5 rounded-xl border border-border">
-                  <span className="text-text-tertiary">Available Nights</span>
-                  <p className="text-sm font-bold text-accent-primary mt-0.5">
-                    {selectedMember.nightsAvailable} Nights
-                  </p>
+                  <span className="text-text-tertiary">Night Entitlements</span>
+                  <div className="mt-1 flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-sm font-bold text-accent-primary">
+                      {selectedMember.nightsAvailable ?? selectedMember.availableNights ?? 0} Avail
+                    </span>
+                    <span className="text-[10px] text-text-tertiary">
+                      ({selectedMember.allottedNights ?? ((selectedMember.availableNights || 0) + (selectedMember.usedNights || 0))} Allotted / {selectedMember.usedNights || 0} Used)
+                    </span>
+                  </div>
                 </div>
                 <div className="bg-surface-50 p-3.5 rounded-xl border border-border">
                   <span className="text-text-tertiary">Travel Card Benefit</span>
@@ -1597,34 +1714,55 @@ export default function AdminDashboardPage() {
 
               {/* Financial Box */}
               <div className="bg-[#172033] text-white p-5 rounded-2xl space-y-3">
-                <h4 className="text-xs uppercase font-bold tracking-wider text-white/60">Financial Breakdown</h4>
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs uppercase font-bold tracking-wider text-white/60">Financial Breakdown</h4>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    selectedMember.paymentStatus === 'Fully Paid'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : selectedMember.paymentStatus === 'Overdue'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      : selectedMember.paymentStatus === 'Due Soon'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  }`}>
+                    {selectedMember.paymentStatus || 'Up to Date'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                   <div>
                     <span className="text-[11px] text-white/60">Product Price</span>
-                    <p className="text-base font-bold">${selectedMember.productPrice?.toLocaleString()}</p>
+                    <p className="text-sm sm:text-base font-bold">AED {selectedMember.productPrice?.toLocaleString()}</p>
                   </div>
                   <div>
                     <span className="text-[11px] text-white/60">Total Paid</span>
-                    <p className="text-base font-bold text-emerald-400">
-                      ${selectedMember.totalAmountPaid?.toLocaleString()}
+                    <p className="text-sm sm:text-base font-bold text-emerald-400">
+                      AED {selectedMember.totalAmountPaid?.toLocaleString()}
                     </p>
                   </div>
                   <div>
                     <span className="text-[11px] text-white/60">Outstanding Balance</span>
-                    <p className="text-base font-bold text-red-400">
-                      ${selectedMember.outstandingBalance?.toLocaleString()}
+                    <p className="text-sm sm:text-base font-bold text-red-400">
+                      AED {selectedMember.outstandingBalance?.toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-white/60">Current Payable / Due</span>
+                    <p className={`text-sm sm:text-base font-bold ${
+                      (Number(selectedMember.dueAmount) > 0) ? 'text-amber-400' : 'text-emerald-400'
+                    }`}>
+                      AED {Number(selectedMember.dueAmount || 0)?.toLocaleString()}
                     </p>
                   </div>
                 </div>
-                {selectedMember.emiDetails?.hasEmi && (
-                  <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-xs text-white/80">
+                {(selectedMember.hasEMI || selectedMember.emiDetails?.hasEmi) && (
+                  <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-xs text-white/80 flex-wrap gap-2">
                     <span>
-                      EMI: ${selectedMember.emiDetails.emiAmount} ({selectedMember.emiDetails.frequency})
+                      EMI: AED {selectedMember.emiAmount || selectedMember.emiDetails?.emiAmount || 0} / month ({selectedMember.emiPaidMonths || 0} of {selectedMember.emiTenureMonths || 0} installments paid)
                     </span>
                     <span>
                       Next Due:{' '}
-                      {selectedMember.emiDetails.nextDueDate
-                        ? new Date(selectedMember.emiDetails.nextDueDate).toLocaleDateString()
+                      {selectedMember.nextEMIDueDate || selectedMember.emiDetails?.nextDueDate
+                        ? new Date(selectedMember.nextEMIDueDate || selectedMember.emiDetails?.nextDueDate).toLocaleDateString()
                         : 'N/A'}
                     </span>
                   </div>
@@ -1641,6 +1779,13 @@ export default function AdminDashboardPage() {
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  onClick={() => handleOpenEditMember(selectedMember)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span>Edit Member Details</span>
+                </button>
                 <button
                   onClick={() => setShowPaymentModal(true)}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs"
@@ -1674,7 +1819,7 @@ export default function AdminDashboardPage() {
 
               <form onSubmit={handleRecordPaymentSubmit} className="space-y-3 text-xs">
                 <div>
-                  <label className="block font-semibold text-text-secondary mb-1">Payment Amount ($ USD) *</label>
+                  <label className="block font-semibold text-text-secondary mb-1">Payment Amount (AED) *</label>
                   <input
                     type="number"
                     min="1"
@@ -1685,7 +1830,7 @@ export default function AdminDashboardPage() {
                     className="w-full px-3.5 py-2.5 rounded-xl border border-border focus:outline-none focus:border-accent-primary text-sm font-bold"
                   />
                   <p className="text-[11px] text-text-tertiary mt-1">
-                    Current Balance: ${selectedMember.outstandingBalance?.toLocaleString()}
+                    Current Balance: AED {selectedMember.outstandingBalance?.toLocaleString()} | Current Due: AED {(selectedMember.dueAmount || 0)?.toLocaleString()}
                   </p>
                 </div>
 
@@ -1916,7 +2061,7 @@ export default function AdminDashboardPage() {
                 {/* Financial Details */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
                   <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Total Product Price ($) *</label>
+                    <label className="block font-semibold text-text-secondary mb-1">Total Product Price (AED) *</label>
                     <input
                       type="number"
                       required
@@ -1927,7 +2072,7 @@ export default function AdminDashboardPage() {
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Initial Down Payment ($) *</label>
+                    <label className="block font-semibold text-text-secondary mb-1">Initial Down Payment (AED) *</label>
                     <input
                       type="number"
                       required
@@ -1940,7 +2085,7 @@ export default function AdminDashboardPage() {
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Estimated Balance</label>
                     <div className="px-2.5 py-1.5 rounded-xl bg-white border border-border font-bold text-red-600">
-                      ${Math.max(0, Number(addMemberForm.productPrice) - Number(addMemberForm.initialPaidAmount))}
+                      AED {Math.max(0, Number(addMemberForm.productPrice) - Number(addMemberForm.initialPaidAmount)).toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -1977,6 +2122,333 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {/* Detailed Edit Member Modal */}
+        {showEditMemberModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div>
+                  <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                    <Edit className="w-5 h-5 text-accent-primary" />
+                    <span>Edit Member Profile: {editMemberForm.memberId}</span>
+                  </h3>
+                  <p className="text-xs text-text-secondary">
+                    Update member personal details, membership entitlements, and financial plan.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowEditMemberModal(false)}
+                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleEditMemberSubmit} className="space-y-5 text-xs">
+                {/* 1. Personal & Contact Information */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-accent-primary flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5" /> Personal & Contact Details
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editMemberForm.registeredName}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, registeredName: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Email Address *</label>
+                      <input
+                        type="email"
+                        required
+                        value={editMemberForm.email}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, email: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Phone Number *</label>
+                      <input
+                        type="tel"
+                        required
+                        value={editMemberForm.phone}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, phone: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Physical / Postal Address</label>
+                      <input
+                        type="text"
+                        value={editMemberForm.address}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, address: e.target.value })}
+                        placeholder="Street, City, Country"
+                        className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Membership Plan & Entitlements */}
+                <div className="space-y-3 pt-3 border-t border-border">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-accent-primary flex items-center gap-1.5">
+                    <Award className="w-3.5 h-3.5" /> Membership Plan & Nights Pool
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Package Tier *</label>
+                      <select
+                        value={editMemberForm.packageType}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, packageType: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold text-accent-primary"
+                      >
+                        <option value="Titanium">Titanium</option>
+                        <option value="Platinum+">Platinum+</option>
+                        <option value="Platinum">Platinum</option>
+                        <option value="Gold Plus">Gold Plus</option>
+                        <option value="Gold">Gold</option>
+                        <option value="Silver Plus">Silver Plus</option>
+                        <option value="Silver">Silver</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Membership Status *</label>
+                      <select
+                        value={editMemberForm.membershipStatus}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, membershipStatus: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                      >
+                        <option value="Open">Open</option>
+                        <option value="Close">Close</option>
+                        <option value="Deactive">Deactive</option>
+                        <option value="Cancel">Cancel</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Allotted Nights *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={editMemberForm.allottedNights}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, allottedNights: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Available Nights *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={editMemberForm.availableNights}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, availableNights: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold text-accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Travel Card Benefit *</label>
+                      <select
+                        value={editMemberForm.travelCardBenefit ? 'yes' : 'no'}
+                        onChange={(e) =>
+                          setEditMemberForm({ ...editMemberForm, travelCardBenefit: e.target.value === 'yes' })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                      >
+                        <option value="yes">Yes (Included)</option>
+                        <option value="no">No</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Tenure Period</label>
+                      <input
+                        type="text"
+                        value={editMemberForm.tenurePeriod}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, tenurePeriod: e.target.value })}
+                        placeholder="e.g. 3 Years"
+                        className="w-full px-3 py-2 rounded-xl border border-border"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Purchase Date</label>
+                      <input
+                        type="date"
+                        value={editMemberForm.purchaseDate}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, purchaseDate: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Used Nights (Audit)</label>
+                      <div className="px-3 py-2 rounded-xl bg-surface-50 border border-border font-bold text-text-secondary">
+                        {editMemberForm.usedNights || 0} Nights
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Extra Offers & Perks</label>
+                    <input
+                      type="text"
+                      value={editMemberForm.extraOffers}
+                      onChange={(e) => setEditMemberForm({ ...editMemberForm, extraOffers: e.target.value })}
+                      placeholder="e.g. Airport Transfer, VIP Lounge, Travel Concierge"
+                      className="w-full px-3 py-2 rounded-xl border border-border"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Financial Breakdown & EMI */}
+                <div className="space-y-3 pt-3 border-t border-border">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-accent-primary flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5" /> Financial Balances & Schedule
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface-50 p-3.5 rounded-2xl border border-border">
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Product Price (AED) *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={editMemberForm.productPrice}
+                        onChange={(e) => {
+                          const price = Number(e.target.value);
+                          const paid = Number(editMemberForm.totalAmountPaid);
+                          setEditMemberForm({
+                            ...editMemberForm,
+                            productPrice: price,
+                            outstandingBalance: Math.max(0, price - paid),
+                          });
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Total Paid (AED)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editMemberForm.totalAmountPaid}
+                        onChange={(e) => {
+                          const paid = Number(e.target.value);
+                          const price = Number(editMemberForm.productPrice);
+                          setEditMemberForm({
+                            ...editMemberForm,
+                            totalAmountPaid: paid,
+                            outstandingBalance: Math.max(0, price - paid),
+                          });
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold text-emerald-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Outstanding Balance (AED)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editMemberForm.outstandingBalance}
+                        onChange={(e) =>
+                          setEditMemberForm({ ...editMemberForm, outstandingBalance: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold text-rose-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Payment Status *</label>
+                      <select
+                        value={editMemberForm.paymentStatus}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, paymentStatus: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                      >
+                        <option value="Up to Date">Up to Date</option>
+                        <option value="Due Soon">Due Soon</option>
+                        <option value="Overdue">Overdue</option>
+                        <option value="Fully Paid">Fully Paid</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Has Active EMI? *</label>
+                      <select
+                        value={editMemberForm.hasEMI ? 'yes' : 'no'}
+                        onChange={(e) =>
+                          setEditMemberForm({ ...editMemberForm, hasEMI: e.target.value === 'yes' })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                      >
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Monthly EMI (AED)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editMemberForm.emiAmount}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, emiAmount: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl border border-border"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">EMI Tenure (Months)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editMemberForm.emiTenureMonths}
+                        onChange={(e) =>
+                          setEditMemberForm({ ...editMemberForm, emiTenureMonths: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Current Due Amount (AED)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editMemberForm.dueAmount}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, dueAmount: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold text-amber-600"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block font-semibold text-text-secondary mb-1">Next EMI Due Date</label>
+                      <input
+                        type="date"
+                        value={editMemberForm.nextEMIDueDate}
+                        onChange={(e) => setEditMemberForm({ ...editMemberForm, nextEMIDueDate: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditMemberModal(false)}
+                    className="px-4 py-2 text-text-secondary hover:bg-surface-50 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{actionLoading ? 'Saving...' : 'Save Member Changes'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* ============================== TAB 3: EMPLOYEES ============================== */}
         {activeTab === 'employees' && (
           <div className="space-y-6 animate-in fade-in duration-200">
@@ -1984,7 +2456,7 @@ export default function AdminDashboardPage() {
               <div>
                 <h1 className="text-2xl font-bold text-text-primary">Staff Operations & Role Governance</h1>
                 <p className="text-sm text-text-secondary">
-                  Grant or revoke 11 granular permissions individually. Employees without edit rights route changes
+                  Grant or revoke granular permissions individually. Employees without direct edit rights route changes
                   through approval.
                 </p>
               </div>
@@ -2020,7 +2492,7 @@ export default function AdminDashboardPage() {
                       <div className="mt-4 pt-3 border-t border-border">
                         <div className="flex items-center justify-between text-xs mb-2">
                           <span className="text-text-secondary font-semibold">Active Permissions:</span>
-                          <span className="font-mono font-bold text-accent-primary">{perms.length} of 11</span>
+                          <span className="font-mono font-bold text-accent-primary">{perms.length} of {PERMISSION_OPTIONS.length}</span>
                         </div>
                         <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
                           {perms.map((p) => (

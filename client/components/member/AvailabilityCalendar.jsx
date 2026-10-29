@@ -135,7 +135,7 @@ export default function AvailabilityCalendar({ onSelectPeriod, memberName, membe
           <div className="flex items-center gap-2 mb-1">
             <CalendarCheck2 className="w-5 h-5 text-emerald-600" />
             <h3 className="text-xl font-bold text-text-primary">
-              Available Trip &amp; Plan Calendar
+              Plan Your Journey With Us — Available Trip &amp; Plan Calendar
             </h3>
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
               Live Database

@@ -46,7 +46,14 @@ export async function fetchCurrentUser() {
     return null;
   }
   const data = await res.json();
-  return data.user;
+  const perms = data.permissions || data.user?.permissions || [];
+  const user = data.user ? { ...data.user, permissions: perms } : null;
+  if (user && typeof window !== 'undefined') {
+    const existing = getAuthUser() || {};
+    const token = localStorage.getItem('token') || '';
+    saveAuth(token, { ...existing, ...user, permissions: perms });
+  }
+  return user;
 }
 
 export async function forgotPassword(email) {

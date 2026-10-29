@@ -89,7 +89,8 @@ export const requireRole = (roles) => {
   };
 };
 
-export const requirePermission = (permissionName) => {
+export const requirePermission = (permission) => {
+  const requiredList = Array.isArray(permission) ? permission : [permission];
   return async (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Authentication required.' });
@@ -102,20 +103,30 @@ export const requirePermission = (permissionName) => {
 
     // If employee, inspect their permission assignment
     if (req.user.role === 'employee') {
-      const permissions = await store.getEmployeePermissions(req.user.id);
-      const permLower = permissionName.toLowerCase();
-      const hasPerm = permissions && permissions.some(
-        (p) => p.toLowerCase() === permLower || p.toUpperCase() === permissionName.toUpperCase()
-      );
+      const permissions = (await store.getEmployeePermissions(req.user.id || req.user.email)) || [];
+      const hasPerm = requiredList.some((reqPerm) => {
+        const permLower = reqPerm.toLowerCase();
+        return permissions.some((p) => {
+          const l = p.toLowerCase();
+          if (l === permLower || p.toUpperCase() === reqPerm.toUpperCase()) return true;
+          if (permLower === 'update_financial_info' && l === 'update_membership_financial') return true;
+          if (permLower === 'update_membership_financial' && l === 'update_financial_info') return true;
+          if (permLower === 'create_member' && (l === 'register_member' || l === 'create_member')) return true;
+          if (permLower === 'register_member' && (l === 'create_member' || l === 'register_member')) return true;
+          return false;
+        });
+      });
+
       if (hasPerm) {
         return next();
       }
 
+      const needed = requiredList.join(' or ');
       return res.status(403).json({
         success: false,
         requiresApproval: true,
-        permissionNeeded: permissionName,
-        message: `You do not have direct permission '${permissionName}'. Please submit an Employee Change Request for Master Head approval.`,
+        permissionNeeded: needed,
+        message: `You do not have direct permission '${needed}'. Please submit an Employee Change Request for Master Head approval.`,
       });
     }
 

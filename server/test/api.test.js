@@ -1298,6 +1298,429 @@ async function runTests() {
       }
     });
 
+    // 27. Financial Calculation: Member 'Up to Date' has dueAmount = 0 while outstandingBalance > 0
+    await check('Financial Calculation: Up to Date member with settled installment has dueAmount = 0', async () => {
+      const testId = `NEX-FIN-${Date.now().toString().slice(-4)}`;
+      const createRes = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: testId,
+          registeredName: 'Financial Test Member',
+          email: `${testId.toLowerCase()}@nexworldtravel.com`,
+          phone: '+971 50 111 2233',
+          initialPassword: 'TestPassword2026!',
+          packageType: 'Gold',
+          availableNights: 14,
+          productPrice: 6500,
+          initialPaidAmount: 4999,
+          hasEMI: true,
+          emiAmount: 1250,
+          emiTenureMonths: 12,
+        }),
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok || !createData.success) {
+        throw new Error('Failed to create financial test member: ' + JSON.stringify(createData));
+      }
+
+      // Check member profile: Paid = 4999, Balance = 1501, Payment Status = 'Up to Date', Due = 0
+      const getRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${testId}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const getData = await getRes.json();
+      const m = getData.member;
+
+      if (m.totalAmountPaid !== 4999) throw new Error(`Expected totalAmountPaid 4999, got ${m.totalAmountPaid}`);
+      if (m.outstandingBalance !== 1501) throw new Error(`Expected outstandingBalance 1501, got ${m.outstandingBalance}`);
+      if (m.paymentStatus !== 'Up to Date') throw new Error(`Expected paymentStatus 'Up to Date', got ${m.paymentStatus}`);
+      if (m.dueAmount !== 0) throw new Error(`CRITICAL: Current Payable / Due must be 0 when installment is settled, got ${m.dueAmount}`);
+    });
+
+    // 28. Financial Calculation: Fully paid member has dueAmount = 0 and status 'Fully Paid'
+    await check('Financial Calculation: Fully paid member has dueAmount = 0 and status Fully Paid', async () => {
+      const testId = `NEX-FULL-${Date.now().toString().slice(-4)}`;
+      const createRes = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: testId,
+          registeredName: 'Fully Paid Member',
+          email: `${testId.toLowerCase()}@nexworldtravel.com`,
+          phone: '+971 50 444 5566',
+          initialPassword: 'TestPassword2026!',
+          packageType: 'Platinum',
+          availableNights: 21,
+          productPrice: 10000,
+          initialPaidAmount: 10000,
+        }),
+      });
+      const createData = await createRes.json();
+      const m = createData.member;
+      if (m.outstandingBalance !== 0) throw new Error(`Expected balance 0, got ${m.outstandingBalance}`);
+      if (m.dueAmount !== 0) throw new Error(`Expected dueAmount 0, got ${m.dueAmount}`);
+      if (m.paymentStatus !== 'Fully Paid') throw new Error(`Expected status Fully Paid, got ${m.paymentStatus}`);
+    });
+
+    // 29. Financial Calculation: Partial payment of installment calculates remaining due
+    await check('Financial Calculation: Partial payment of installment reduces current due accurately', async () => {
+      const testId = `NEX-PART-${Date.now().toString().slice(-4)}`;
+      // Create member with overdue installment of 1250
+      await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: testId,
+          registeredName: 'Partial Due Member',
+          email: `${testId.toLowerCase()}@nexworldtravel.com`,
+          phone: '+971 50 999 0011',
+          initialPassword: 'TestPassword2026!',
+          packageType: 'Gold',
+          availableNights: 14,
+          productPrice: 12500,
+          initialPaidAmount: 0,
+          hasEMI: true,
+          emiAmount: 1250,
+          emiTenureMonths: 10,
+          dueAmount: 1250,
+          paymentStatus: 'Overdue',
+        }),
+      });
+
+      // Pay partial amount: 500 towards the 1250 installment
+      const payRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${testId}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          amount: 500,
+          paymentType: 'emi_installment',
+          paymentMethod: 'Credit Card',
+          referenceNumber: 'TXN-PARTIAL-500',
+        }),
+      });
+      const payData = await payRes.json();
+      const updated = payData.member;
+      if (updated.totalAmountPaid !== 500) throw new Error(`Expected paid 500, got ${updated.totalAmountPaid}`);
+      if (updated.dueAmount !== 750) throw new Error(`Expected remaining due 750, got ${updated.dueAmount}`);
+    });
+
+    // 30. Night Entitlements Calculation: Allotted, Used, and Available Nights formula
+    await check('Night Entitlement: Allotted Nights, Used Nights, and Available Nights formula', async () => {
+      const testId = `NEX-NGT-${Date.now().toString().slice(-4)}`;
+      const createRes = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: testId,
+          registeredName: 'Night Entitlement Member',
+          email: `${testId.toLowerCase()}@nexworldtravel.com`,
+          phone: '+971 50 222 3344',
+          initialPassword: 'TestPassword2026!',
+          packageType: 'Platinum+',
+          availableNights: 28,
+          allottedNights: 28,
+          usedNights: 0,
+        }),
+      });
+      const createData = await createRes.json();
+      const m = createData.member;
+      if (m.allottedNights !== 28) throw new Error(`Expected allottedNights 28, got ${m.allottedNights}`);
+      if (m.usedNights !== 0) throw new Error(`Expected usedNights 0, got ${m.usedNights}`);
+      if (m.availableNights !== 28) throw new Error(`Expected availableNights 28, got ${m.availableNights}`);
+
+      // Now add a booking for 5 nights
+      await fetch('http://127.0.0.1:5098/api/v1/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberName: 'Night Entitlement Member',
+          email: `${testId.toLowerCase()}@nexworldtravel.com`,
+          phone: '+971 50 222 3344',
+          memberId: testId,
+          checkInDate: '2026-12-01',
+          checkOutDate: '2026-12-06', // 5 nights
+          numberOfNights: 5,
+          destinationOrPackage: 'Maldives',
+          guestsCount: 2,
+        }),
+      });
+
+      // Verify member record calculates usedNights = 5 and availableNights = 23
+      const getRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${testId}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const getData = await getRes.json();
+      const updated = getData.member;
+      if (updated.allottedNights !== 28) throw new Error(`Expected allottedNights 28, got ${updated.allottedNights}`);
+      if (updated.usedNights !== 5) throw new Error(`Expected usedNights 5, got ${updated.usedNights}`);
+      if (updated.availableNights !== 23) throw new Error(`Expected availableNights 23 (28 - 5), got ${updated.availableNights}`);
+    });
+
+    // 31. Master Head Detailed Member Profile Editing
+    await check('Master Head Detailed Member Profile Edit (all fields & user sync)', async () => {
+      const testId = `NEX-EDIT-${Date.now().toString().slice(-4)}`;
+      // Create initial member
+      const createRes = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          memberId: testId,
+          registeredName: 'Original Member Name',
+          email: `${testId.toLowerCase()}@original.com`,
+          phone: '+971 50 111 2222',
+          address: 'Villa 1, Jumeirah, Dubai',
+          packageType: 'Silver',
+          availableNights: 7,
+          membershipStatus: 'Open',
+          productPrice: 7000,
+          initialPaidAmount: 3000,
+          hasEMI: false,
+        }),
+      });
+      if (!createRes.ok) throw new Error('Failed to create test member for editing');
+
+      // Update all profile, package, financial, and address fields
+      const editRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${testId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          registeredName: 'Updated VIP Member Name',
+          name: 'Updated VIP Member Name',
+          email: `${testId.toLowerCase()}@updatedvip.com`,
+          phone: '+971 50 999 8888',
+          address: 'Villa 42, Palm Jumeirah, Dubai',
+          packageType: 'Platinum+',
+          allottedNights: 35,
+          availableNights: 35,
+          travelCardBenefit: true,
+          tenurePeriod: '5 Years',
+          extraOffers: 'VIP Chauffeur, Private Jet Transfer',
+          productPrice: 25000,
+          totalAmountPaid: 10000,
+          outstandingBalance: 15000,
+          paymentStatus: 'Up to Date',
+          hasEMI: true,
+          emiAmount: 2500,
+          emiTenureMonths: 6,
+          nextEMIDueDate: '2026-11-15',
+          dueAmount: 2500,
+          membershipStatus: 'Open',
+        }),
+      });
+      const editData = await editRes.json();
+      if (!editRes.ok) throw new Error(`Failed to edit member: ${editData.message}`);
+
+      // Verify retrieval has all updated values
+      const getRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${testId}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const member = (await getRes.json()).member;
+      if (member.registeredName !== 'Updated VIP Member Name') throw new Error('Name not updated');
+      if (member.email !== `${testId.toLowerCase()}@updatedvip.com`) throw new Error('Email not updated');
+      if (member.phone !== '+971 50 999 8888') throw new Error('Phone not updated');
+      if (member.address !== 'Villa 42, Palm Jumeirah, Dubai') throw new Error(`Address not updated, got: ${member.address}`);
+      if (member.packageType !== 'Platinum+') throw new Error('PackageType not updated');
+      if (member.allottedNights !== 35) throw new Error('AllottedNights not updated');
+      if (member.travelCardBenefit !== true) throw new Error('TravelCardBenefit not updated');
+      if (member.productPrice !== 25000) throw new Error('ProductPrice not updated');
+      if (member.outstandingBalance !== 15000) throw new Error('OutstandingBalance not updated');
+      if (member.emiAmount !== 2500) throw new Error('EmiAmount not updated');
+    });
+
+    // 32. Employee Permission Synchronization via /auth/me
+    await check('Employee Permission Synchronization via /auth/me without re-login', async () => {
+      // Grant permissions to staff employee
+      const setPermsRes = await fetch('http://127.0.0.1:5098/api/v1/employees/user-staff-1/permissions', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          permissions: ['view_members', 'create_member', 'edit_member_details', 'update_membership_status'],
+        }),
+      });
+      if (!setPermsRes.ok) throw new Error('Failed to update employee permissions');
+
+      // Fetch /auth/me using existing employeeToken
+      const meRes = await fetch('http://127.0.0.1:5098/api/v1/auth/me', {
+        headers: { Authorization: `Bearer ${employeeToken}` },
+      });
+      const meData = await meRes.json();
+      if (!meRes.ok || !meData.user) throw new Error('Failed to fetch /auth/me');
+
+      // Verify permissions are directly inside user object
+      const perms = meData.user.permissions || [];
+      if (!perms.includes('create_member')) throw new Error('Missing create_member in user.permissions');
+      if (!perms.includes('edit_member_details')) throw new Error('Missing edit_member_details in user.permissions');
+      if (!perms.includes('view_members')) throw new Error('Missing view_members in user.permissions');
+    });
+
+    // 33. Employee with create_member registers a new member
+    await check('Employee with create_member permission registers a new member', async () => {
+      const newId = `NEX-EMP-${Date.now().toString().slice(-4)}`;
+      const regRes = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${employeeToken}`,
+        },
+        body: JSON.stringify({
+          memberId: newId,
+          registeredName: 'Staff Registered Member',
+          email: `${newId.toLowerCase()}@example.com`,
+          phone: '+971 50 333 4444',
+          address: 'Downtown Dubai, UAE',
+          packageType: 'Gold',
+          availableNights: 14,
+          productPrice: 12500,
+          initialPaidAmount: 5000,
+        }),
+      });
+      const regData = await regRes.json();
+      if (!regRes.ok) throw new Error(`Staff create member failed: ${regData.message}`);
+      if (regData.member.memberId !== newId) throw new Error('Member ID mismatch');
+      if (regData.member.address !== 'Downtown Dubai, UAE') throw new Error(`Address mismatch: ${regData.member.address}`);
+    });
+
+    // 34. Granular Permission Enforcement on Direct Member Edit
+    await check('Granular permission enforcement on direct member editing', async () => {
+      const targetId = `NEX-GRAN-${Date.now().toString().slice(-4)}`;
+      // Master head creates target member
+      await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          memberId: targetId,
+          registeredName: 'Granular Target',
+          email: `${targetId.toLowerCase()}@test.com`,
+          phone: '+971 50 555 1111',
+          packageType: 'Gold',
+          availableNights: 14,
+          productPrice: 15000,
+          initialPaidAmount: 5000,
+        }),
+      });
+
+      // Employee (currently has edit_member_details but NOT edit_membership_plans)
+      // 1. Updating contact info should SUCCEED
+      const contactRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${targetId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${employeeToken}`,
+        },
+        body: JSON.stringify({
+          phone: '+971 50 777 8888',
+          address: 'Business Bay, Dubai',
+        }),
+      });
+      if (!contactRes.ok) throw new Error('Staff update contact info should succeed');
+
+      // 2. Updating packageType without edit_membership_plans should FAIL (403)
+      const planRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${targetId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${employeeToken}`,
+        },
+        body: JSON.stringify({
+          packageType: 'Titanium',
+        }),
+      });
+      if (planRes.status !== 403) {
+        throw new Error(`Expected 403 when employee lacks edit_membership_plans, got: ${planRes.status}`);
+      }
+
+      // 3. Master head grants edit_membership_plans & update_financial_info
+      await fetch('http://127.0.0.1:5098/api/v1/employees/user-staff-1/permissions', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          permissions: [
+            'view_members',
+            'create_member',
+            'edit_member_details',
+            'update_membership_status',
+            'edit_membership_plans',
+            'update_financial_info',
+          ],
+        }),
+      });
+
+      // 4. Updating packageType & financial balances should now SUCCEED
+      const planRes2 = await fetch(`http://127.0.0.1:5098/api/v1/members/${targetId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${employeeToken}`,
+        },
+        body: JSON.stringify({
+          packageType: 'Titanium',
+          allottedNights: 42,
+          availableNights: 42,
+          productPrice: 35000,
+        }),
+      });
+      if (!planRes2.ok) {
+        const err = await planRes2.json();
+        throw new Error(`Expected success after permission granted, got: ${planRes2.status} ${err.message}`);
+      }
+    });
+
+    // 35. Revocation of create_member immediately blocks new member registration
+    await check('Permission revocation blocks action immediately (403 Forbidden)', async () => {
+      // Master head revokes create_member, leaves only view_members
+      await fetch('http://127.0.0.1:5098/api/v1/employees/user-staff-1/permissions', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          permissions: ['view_members'],
+        }),
+      });
+
+      // Employee tries to create member -> 403 Forbidden
+      const regRes = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${employeeToken}`,
+        },
+        body: JSON.stringify({
+          memberId: `NEX-REVOKED-${Date.now().toString().slice(-4)}`,
+          registeredName: 'Should Be Blocked',
+          email: 'blocked@test.com',
+          phone: '+971 50 000 0000',
+          packageType: 'Gold',
+          availableNights: 14,
+        }),
+      });
+      if (regRes.status !== 403) {
+        throw new Error(`Expected 403 Forbidden after permission revoked, got: ${regRes.status}`);
+      }
+
+      // View members still works
+      const viewRes = await fetch('http://127.0.0.1:5098/api/v1/members?limit=1', {
+        headers: { Authorization: `Bearer ${employeeToken}` },
+      });
+      if (!viewRes.ok) throw new Error('Remaining view_members permission should still work');
+    });
+
     console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
   } finally {
     server.close();

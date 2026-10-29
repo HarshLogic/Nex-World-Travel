@@ -305,6 +305,14 @@ export default function MemberDashboard() {
   }
 
   const { member, payments = [], terms } = data;
+  const allottedNights = (member.allottedNights !== undefined && member.allottedNights !== null)
+    ? Number(member.allottedNights)
+    : (Number(member.availableNights || 0) + Number(member.usedNights || 0) || 7);
+  const usedNights = Number(member.usedNights || 0);
+  const availableNights = (member.availableNights !== undefined && member.availableNights !== null)
+    ? Number(member.availableNights)
+    : Math.max(0, allottedNights - usedNights);
+
   const currentTierStyle = TIER_CONFIG[member.packageType] || {
     icon: '⭐',
     badge: 'bg-slate-100 text-slate-800 border border-slate-300',
@@ -387,20 +395,46 @@ export default function MemberDashboard() {
             </p>
           </div>
 
-          {/* Available Nights Card */}
-          <div className="bg-white rounded-3xl p-6 border border-border shadow-card">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
-              Available Nights
-            </span>
-            <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-3xl sm:text-4xl font-extrabold text-accent-primary">
-                {member.availableNights}
-              </span>
-              <span className="text-xs text-text-secondary font-medium">Nights Remaining</span>
+          {/* Night Entitlements Card: Allotted, Used, and Available Nights */}
+          <div className="bg-white rounded-3xl p-6 border border-border shadow-card flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
+                  Night Entitlements
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  availableNights > 0
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                }`}>
+                  {availableNights > 0 ? `${availableNights} Available` : 'Fully Utilized'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 mt-3 pt-1 border-t border-border/60 text-center">
+                <div className="p-2 rounded-xl bg-surface-50">
+                  <span className="block text-[10px] font-semibold text-text-secondary uppercase tracking-tight">Allotted</span>
+                  <span className="text-lg sm:text-2xl font-black text-text-primary">{allottedNights}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-surface-50">
+                  <span className="block text-[10px] font-semibold text-text-secondary uppercase tracking-tight">Used</span>
+                  <span className="text-lg sm:text-2xl font-black text-text-muted">{usedNights}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200/80">
+                  <span className="block text-[10px] font-bold text-emerald-800 uppercase tracking-tight">Available</span>
+                  <span className="text-lg sm:text-2xl font-black text-emerald-700">{availableNights}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-semibold mt-3">
-              <Moon className="w-3.5 h-3.5 text-accent-secondary" />
-              <span>Ready for holiday booking redemption</span>
+
+            <div className="mt-3 pt-2.5 border-t border-border/60">
+              <div className="flex items-center justify-between text-[11px] text-text-secondary">
+                <span className="font-mono text-[10px] text-text-muted">Available = Allotted - Used</span>
+                <span className="font-semibold text-emerald-700 flex items-center gap-1">
+                  <Moon className="w-3 h-3 text-accent-secondary" />
+                  {availableNights} {availableNights === 1 ? 'night' : 'nights'} balance
+                </span>
+              </div>
             </div>
           </div>
 
@@ -462,12 +496,27 @@ export default function MemberDashboard() {
           </div>
         )}
 
-        {/* SECTION B: Available Trip & Plan Calendar */}
-        <AvailabilityCalendar
-          memberName={member.registeredName}
-          memberId={member.memberId}
-          onSelectPeriod={handleCalendarSelectPeriod}
-        />
+        {/* SECTION B: Plan Your Journey With Us & Available Trip & Plan Calendar */}
+        <section id="plan-your-journey" className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-accent-primary">
+                Section B • Member Trip Reservations
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black text-text-primary mt-0.5">
+                Plan Your Journey With Us
+              </h2>
+            </div>
+            <p className="text-xs text-text-secondary max-w-md">
+              Select available travel windows and reserve your holiday nights directly with the reservations desk.
+            </p>
+          </div>
+          <AvailabilityCalendar
+            memberName={member.registeredName}
+            memberId={member.memberId}
+            onSelectPeriod={handleCalendarSelectPeriod}
+          />
+        </section>
 
         {/* SECTION C: Amount and Payment Section */}
         <div className="bg-white rounded-4xl p-6 sm:p-8 border border-border shadow-card">
@@ -495,31 +544,51 @@ export default function MemberDashboard() {
             <div className="p-4 rounded-2xl bg-surface-50 border border-border">
               <span className="text-xs text-text-secondary font-medium">Total Product Price</span>
               <div className="text-xl sm:text-2xl font-bold text-text-primary mt-1">
-                AED {Number(member.productPrice).toLocaleString()}
+                AED {Number(member.productPrice || 0).toLocaleString()}
               </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-surface-50 border border-border">
               <span className="text-xs text-text-secondary font-medium">Total Amount Paid</span>
               <div className="text-xl sm:text-2xl font-bold text-emerald-600 mt-1">
-                AED {Number(member.totalAmountPaid).toLocaleString()}
+                AED {Number(member.totalAmountPaid || 0).toLocaleString()}
               </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-surface-50 border border-border">
               <span className="text-xs text-text-secondary font-medium">Outstanding Balance</span>
               <div className="text-xl sm:text-2xl font-bold text-text-primary mt-1">
-                AED {Number(member.outstandingBalance).toLocaleString()}
+                AED {Number(member.outstandingBalance || 0).toLocaleString()}
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-surface-50 border border-border">
-              <span className="text-xs text-text-secondary font-medium">Current Payable / Due</span>
+            <div className={`p-4 rounded-2xl border ${
+              (Number(member.dueAmount) > 0)
+                ? 'bg-amber-50/70 border-amber-200'
+                : 'bg-emerald-50/40 border-emerald-200/80'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-text-secondary font-medium">Current Payable / Due</span>
+                {Number(member.dueAmount) > 0 ? (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                    Payment Due
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    Up to Date
+                  </span>
+                )}
+              </div>
               <div className={`text-xl sm:text-2xl font-bold mt-1 ${
-                member.dueAmount > 0 ? 'text-amber-600' : 'text-text-primary'
+                Number(member.dueAmount) > 0 ? 'text-amber-600' : 'text-emerald-700'
               }`}>
                 AED {Number(member.dueAmount || 0).toLocaleString()}
               </div>
+              <p className="text-[11px] text-text-secondary mt-1">
+                {Number(member.dueAmount) > 0
+                  ? `Installment due by ${member.nextEMIDueDate ? new Date(member.nextEMIDueDate).toLocaleDateString() : 'scheduled date'}`
+                  : (Number(member.outstandingBalance) === 0 ? 'All dues settled in full' : 'Current installment paid')}
+              </p>
             </div>
           </div>
 
@@ -606,23 +675,25 @@ export default function MemberDashboard() {
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-            <label className="flex items-start gap-2.5 cursor-pointer">
+            <label className={`flex items-start gap-2.5 ${member.termsAccepted ? 'cursor-default' : 'cursor-pointer'}`}>
               <input
                 type="checkbox"
-                checked={termsAgreed}
+                checked={termsAgreed || Boolean(member.termsAccepted)}
                 onChange={handleTermsSubmit}
-                disabled={termsSubmitting}
-                className="w-4 h-4 mt-0.5 rounded text-accent-primary border-border focus:ring-accent-primary"
+                disabled={termsSubmitting || Boolean(member.termsAccepted)}
+                className="w-4 h-4 mt-0.5 rounded text-accent-primary border-border focus:ring-accent-primary disabled:opacity-80"
               />
               <span className="text-xs text-text-primary font-medium">
-                I have read, understood, and agreed to the official terms & conditions of Nex World Travel & Tourism.
+                {member.termsAccepted
+                  ? 'Official terms & conditions acknowledged and accepted on record.'
+                  : 'I have read, understood, and agreed to the official terms & conditions of Nex World Travel & Tourism.'}
               </span>
             </label>
 
             {member.termsAccepted && (
-              <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 self-start sm:self-auto">
+              <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 self-start sm:self-auto bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                Acknowledged on {new Date(member.termsAcceptedAt || member.purchaseDate).toLocaleDateString()}
+                Acknowledged on {new Date(member.termsAcceptedAt || member.purchaseDate).toLocaleDateString()} (Version: {terms?.version || member.termsVersion || 'v1.0-2026'})
               </span>
             )}
           </div>

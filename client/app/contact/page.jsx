@@ -152,7 +152,7 @@ export default function ContactPage() {
                     <MapPin className="w-5 h-5" />
                   </div>
                   <div>
-                    <strong className="block text-text-primary font-semibold">Branch Office (India)</strong>
+                    <strong className="block text-text-primary font-semibold">Headoffice (India)</strong>
                     <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
                       Akshay Complex, 151/152/153, Dholepatil Road, near Ruby Hall, Sangamvadi, Pune, Maharashtra 411001, India
                     </p>

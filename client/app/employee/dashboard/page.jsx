@@ -51,6 +51,7 @@ import {
   fetchAvailabilities,
 } from '../../../lib/api';
 import { getAuthUser, clearAuth } from '../../../lib/auth';
+import { PERMISSION_OPTIONS, hasPermission } from '../../../lib/permissions';
 
 export default function EmployeeDashboardPage() {
   const router = useRouter();
@@ -84,6 +85,7 @@ export default function EmployeeDashboardPage() {
     name: '',
     email: '',
     phone: '',
+    address: '',
     password: 'Member123!',
     packageType: 'Gold',
     nightsAvailable: 14,
@@ -101,7 +103,7 @@ export default function EmployeeDashboardPage() {
     dueAmount: 1250,
   });
 
-  // Direct Edit Modal (if employee has edit_member_details permission - permitted contact info only)
+  // Direct Edit Modal (if employee has edit_member_details permission)
   const [showDirectEditModal, setShowDirectEditModal] = useState(false);
   const [directEditForm, setDirectEditForm] = useState({});
 
@@ -131,8 +133,7 @@ export default function EmployeeDashboardPage() {
   };
 
   const hasPerm = (perm) => {
-    if (!permissions || permissions.length === 0) return false;
-    return permissions.includes(perm);
+    return hasPermission(permissions, perm);
   };
 
   useEffect(() => {
@@ -142,6 +143,9 @@ export default function EmployeeDashboardPage() {
       return;
     }
     setCurrentUser(user);
+    if (user.permissions && Array.isArray(user.permissions) && user.permissions.length > 0) {
+      setPermissions(user.permissions);
+    }
     loadEmployeeSession();
   }, [router]);
 
@@ -157,14 +161,15 @@ export default function EmployeeDashboardPage() {
         // Load accessible tabs
         const promises = [fetchMyChangeRequests().catch(() => [])];
 
-        if (perms.includes('view_members')) {
+        const canSeeMembers = hasPermission(perms, 'view_members') || hasPermission(perms, 'create_member');
+        if (canSeeMembers) {
           promises.push(fetchAdminMembers({ page: 1, limit: 15 }).catch(() => ({ members: [], pagination: {} })));
         }
-        if (perms.includes('manage_bookings')) {
+        if (hasPermission(perms, 'manage_bookings')) {
           promises.push(fetchAdminBookings().catch(() => []));
         }
         promises.push(fetchAdminMemberRequests().catch(() => []));
-        if (perms.includes('add_destinations') || perms.includes('edit_destinations')) {
+        if (hasPermission(perms, 'add_destinations') || hasPermission(perms, 'edit_destinations')) {
           promises.push(fetchDestinations().catch(() => []));
         }
         promises.push(fetchAvailabilities().catch(() => []));
@@ -173,12 +178,12 @@ export default function EmployeeDashboardPage() {
         setMyChangeRequests(results[0] || []);
 
         let idx = 1;
-        if (perms.includes('view_members')) {
+        if (canSeeMembers) {
           const memRes = results[idx++];
           setMembers(memRes?.members || []);
           if (memRes?.pagination) setMembersPagination(memRes.pagination);
         }
-        if (perms.includes('manage_bookings')) {
+        if (hasPermission(perms, 'manage_bookings')) {
           setBookings(results[idx++] || []);
         }
         setMemberRequests(results[idx++] || []);
@@ -327,17 +332,92 @@ export default function EmployeeDashboardPage() {
     }
   };
 
-  // Direct Edit Submit (only for authorized employees with edit_member_details)
+  // Open Direct Member Edit Modal
+  const handleOpenDirectEdit = (member) => {
+    setSelectedMember(member);
+    setDirectEditForm({
+      memberId: member.memberId,
+      registeredName: member.registeredName || member.name || member.userId?.name || '',
+      email: member.email || member.userId?.email || '',
+      phone: member.phone || '',
+      address: member.address || '',
+      packageType: member.packageType || 'Gold',
+      membershipStatus: member.membershipStatus || 'Open',
+      tenurePeriod: member.tenurePeriod || '3 Years',
+      purchaseDate: member.purchaseDate ? member.purchaseDate.split('T')[0] : '',
+      allottedNights: member.allottedNights ?? ((member.availableNights || 0) + (member.usedNights || 0)),
+      availableNights: member.availableNights ?? member.nightsAvailable ?? 14,
+      usedNights: member.usedNights || 0,
+      travelCardBenefit: Boolean(member.travelCardBenefit),
+      extraOffers: member.extraOffers || '',
+      productPrice: Number(member.productPrice || 0),
+      totalAmountPaid: Number(member.totalAmountPaid || 0),
+      outstandingBalance: Number(member.outstandingBalance || 0),
+      hasEMI: Boolean(member.hasEMI),
+      emiAmount: Number(member.emiAmount || 0),
+      emiTenureMonths: Number(member.emiTenureMonths || 12),
+      nextEMIDueDate: member.nextEMIDueDate ? member.nextEMIDueDate.split('T')[0] : '',
+      dueAmount: Number(member.dueAmount || 0),
+      paymentStatus: member.paymentStatus || 'Up to Date',
+    });
+    setShowDirectEditModal(true);
+  };
+
+  // Direct Edit Submit (enforcing employee permissions)
   const handleDirectEditSubmit = async (e) => {
     e.preventDefault();
     if (!selectedMember) return;
     setActionLoading(true);
     try {
-      const res = await updateAdminMember(selectedMember.memberId, directEditForm);
+      const payload = {};
+      // Base contact & profile details (permitted by edit_member_details)
+      if (hasPerm('edit_member_details')) {
+        if (directEditForm.registeredName) {
+          payload.registeredName = directEditForm.registeredName.trim();
+          payload.name = directEditForm.registeredName.trim();
+        }
+        if (directEditForm.email) payload.email = directEditForm.email.trim();
+        if (directEditForm.phone) payload.phone = directEditForm.phone.trim();
+        if (directEditForm.address !== undefined) payload.address = directEditForm.address.trim();
+      }
+
+      // Status
+      if (hasPerm('update_membership_status') || hasPerm('edit_member_details')) {
+        if (directEditForm.membershipStatus) payload.membershipStatus = directEditForm.membershipStatus;
+      }
+
+      // Plans
+      if (hasPerm('edit_membership_plans')) {
+        payload.packageType = directEditForm.packageType;
+        payload.allottedNights = Number(directEditForm.allottedNights);
+        payload.availableNights = Number(directEditForm.availableNights);
+        payload.tenurePeriod = directEditForm.tenurePeriod;
+        payload.extraOffers = directEditForm.extraOffers;
+        payload.travelCardBenefit = Boolean(directEditForm.travelCardBenefit);
+        if (directEditForm.purchaseDate) payload.purchaseDate = directEditForm.purchaseDate;
+      }
+
+      // Financial
+      if (hasPerm('update_financial_info')) {
+        payload.productPrice = Number(directEditForm.productPrice);
+        payload.totalAmountPaid = Number(directEditForm.totalAmountPaid);
+        payload.outstandingBalance = Number(directEditForm.outstandingBalance);
+        payload.paymentStatus = directEditForm.paymentStatus;
+        payload.hasEMI = Boolean(directEditForm.hasEMI);
+        payload.emiAmount = Number(directEditForm.emiAmount);
+        payload.emiTenureMonths = Number(directEditForm.emiTenureMonths);
+        payload.dueAmount = Number(directEditForm.dueAmount);
+        if (directEditForm.nextEMIDueDate) payload.nextEMIDueDate = directEditForm.nextEMIDueDate;
+      }
+
+      const res = await updateAdminMember(selectedMember.memberId, payload);
+      const updated = res.member || res.profile;
       triggerToast(`Member ${selectedMember.memberId} updated successfully.`);
       setShowDirectEditModal(false);
-      setSelectedMember(res.profile);
-      handleMembersSearch(membersPagination.page);
+      if (updated) {
+        setSelectedMember(updated);
+        setMembers((prev) => prev.map((m) => (m.memberId === updated.memberId ? updated : m)));
+      }
     } catch (err) {
       triggerToast(err.message || 'Direct edit failed', 'error');
     } finally {
@@ -437,6 +517,16 @@ export default function EmployeeDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {hasPerm('create_member') && (
+              <button
+                onClick={() => setShowAddMemberModal(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover rounded-xl shadow-xs transition-colors"
+                title="Register New Member"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Register New Member</span>
+              </button>
+            )}
             <div className="text-right hidden sm:block">
               <p className="text-xs font-bold text-text-primary">{currentUser?.name || 'Staff Member'}</p>
               <p className="text-[11px] text-text-tertiary">{currentUser?.email}</p>
@@ -454,7 +544,7 @@ export default function EmployeeDashboardPage() {
         {/* Employee Navigation Tabs */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 overflow-x-auto scrollbar-none flex gap-1 border-t border-border/50 py-1.5 bg-white">
           {[
-            { id: 'members', label: 'Members Directory', icon: Users, perm: 'view_members' },
+            { id: 'members', label: 'Members Directory', icon: Users, perm: ['view_members', 'create_member'] },
             {
               id: 'my-change-requests',
               label: `My Change Requests (${myChangeRequests.length})`,
@@ -486,7 +576,10 @@ export default function EmployeeDashboardPage() {
               perm: null,
             },
           ].map((tab) => {
-            if (tab.perm && !hasPerm(tab.perm)) return null;
+            if (tab.perm) {
+              const permsToCheck = Array.isArray(tab.perm) ? tab.perm : [tab.perm];
+              if (!permsToCheck.some((p) => hasPerm(p))) return null;
+            }
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
@@ -678,20 +771,14 @@ export default function EmployeeDashboardPage() {
                               <Eye className="w-4 h-4" />
                             </button>
 
-                            {/* Permitted Contact Info Edit */}
+                            {/* Permitted Member Edit */}
                             {hasPerm('edit_member_details') && (
                               <button
-                                onClick={() => {
-                                  setSelectedMember(m);
-                                  setDirectEditForm({
-                                    phone: m.phone || '',
-                                  });
-                                  setShowDirectEditModal(true);
-                                }}
-                                className="px-2 py-1 bg-surface-100 hover:bg-surface-200 text-text-primary rounded-lg text-[11px] font-semibold border border-border"
-                                title="Update Contact Phone"
+                                onClick={() => handleOpenDirectEdit(m)}
+                                className="p-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
+                                title="Edit Member Details"
                               >
-                                Contact Info
+                                <Edit className="w-4 h-4" />
                               </button>
                             )}
 
@@ -763,6 +850,14 @@ export default function EmployeeDashboardPage() {
                     {selectedMember.memberId}
                   </span>
                 </div>
+                <p className="text-xs text-text-tertiary">
+                  {selectedMember.email || selectedMember.userId?.email} • {selectedMember.phone}
+                </p>
+                {selectedMember.address && (
+                  <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-accent-primary shrink-0" /> {selectedMember.address}
+                  </p>
+                )}
                 <button
                   onClick={() => setSelectedMember(null)}
                   className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
@@ -802,6 +897,15 @@ export default function EmployeeDashboardPage() {
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                {hasPerm('edit_member_details') && (
+                  <button
+                    onClick={() => handleOpenDirectEdit(selectedMember)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span>Edit Member Details</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setCrTargetMember(selectedMember);
@@ -1174,14 +1278,19 @@ export default function EmployeeDashboardPage() {
           </div>
         )}
 
-        {/* Direct Edit Modal (Permitted Contact Info Only) */}
+        {/* Direct Edit Modal */}
         {showDirectEditModal && selectedMember && (
           <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
+            <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
               <div className="flex items-center justify-between pb-3 border-b border-border">
                 <div>
-                  <h3 className="text-base font-bold text-text-primary">Update Contact Information</h3>
-                  <p className="text-xs text-text-secondary">Member: {selectedMember.memberId}</p>
+                  <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                    <Edit className="w-5 h-5 text-accent-primary" />
+                    <span>Edit Member Profile: {directEditForm.memberId}</span>
+                  </h3>
+                  <p className="text-xs text-text-secondary">
+                    Review and update member details permitted under your employee role.
+                  </p>
                 </div>
                 <button
                   onClick={() => setShowDirectEditModal(false)}
@@ -1191,38 +1300,353 @@ export default function EmployeeDashboardPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleDirectEditSubmit} className="space-y-3 text-xs">
-                <div>
-                  <label className="block font-semibold text-text-secondary mb-1">Contact Phone Number</label>
-                  <input
-                    type="text"
-                    value={directEditForm.phone || ''}
-                    onChange={(e) => setDirectEditForm({ ...directEditForm, phone: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-border"
-                  />
-                </div>
-
-                {hasPerm('update_membership_status') && (
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Membership Status</label>
-                    <select
-                      value={directEditForm.membershipStatus || selectedMember.membershipStatus || 'Open'}
-                      onChange={(e) => setDirectEditForm({ ...directEditForm, membershipStatus: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-border font-bold text-accent-primary"
-                    >
-                      <option value="Open">Open</option>
-                      <option value="Close">Close</option>
-                      <option value="Deactive">Deactive</option>
-                      <option value="Cancel">Cancel</option>
-                    </select>
+              <form onSubmit={handleDirectEditSubmit} className="space-y-5 text-xs">
+                {/* 1. Personal & Contact Information */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-accent-primary flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5" /> Personal & Contact Details
+                    </h4>
+                    <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                      Permitted
+                    </span>
                   </div>
-                )}
-
-                <div className="bg-surface-50 p-3 rounded-xl border border-border text-[11px] text-text-secondary leading-relaxed">
-                  <strong>Notice:</strong> Membership tiers (Gold/Silver), available nights pool, tenure periods, and financial balances cannot be changed directly. Use the <strong>Request Package Change</strong> button to submit updates for Master Head review.
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={directEditForm.registeredName || ''}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, registeredName: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Email Address *</label>
+                      <input
+                        type="email"
+                        required
+                        value={directEditForm.email || ''}
+                        onChange={(e) => setDirectEditForm({ ...directEditForm, email: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Phone Number *</label>
+                      <input
+                        type="tel"
+                        required
+                        value={directEditForm.phone || ''}
+                        onChange={(e) => setDirectEditForm({ ...directEditForm, phone: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Physical / Postal Address</label>
+                      <input
+                        type="text"
+                        value={directEditForm.address || ''}
+                        onChange={(e) => setDirectEditForm({ ...directEditForm, address: e.target.value })}
+                        placeholder="Street, City, Country"
+                        className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-3">
+                {/* 2. Membership Plan & Entitlements */}
+                <div className="space-y-3 pt-3 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-accent-primary flex items-center gap-1.5">
+                      <Award className="w-3.5 h-3.5" /> Membership Plan & Nights Pool
+                    </h4>
+                    {hasPerm('edit_membership_plans') ? (
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                        Permitted
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full font-semibold border border-amber-200 flex items-center gap-1">
+                        <Lock className="w-3 h-3" /> Requires &apos;edit_membership_plans&apos; (use Change Request)
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Package Tier</label>
+                      <select
+                        disabled={!hasPerm('edit_membership_plans')}
+                        value={directEditForm.packageType || 'Gold'}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, packageType: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold text-accent-primary disabled:opacity-60 disabled:bg-surface-100"
+                      >
+                        <option value="Titanium">Titanium</option>
+                        <option value="Platinum+">Platinum+</option>
+                        <option value="Platinum">Platinum</option>
+                        <option value="Gold Plus">Gold Plus</option>
+                        <option value="Gold">Gold</option>
+                        <option value="Silver Plus">Silver Plus</option>
+                        <option value="Silver">Silver</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Membership Status</label>
+                      <select
+                        disabled={!hasPerm('update_membership_status') && !hasPerm('edit_member_details')}
+                        value={directEditForm.membershipStatus || 'Open'}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, membershipStatus: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold disabled:opacity-60 disabled:bg-surface-100"
+                      >
+                        <option value="Open">Open</option>
+                        <option value="Close">Close</option>
+                        <option value="Deactive">Deactive</option>
+                        <option value="Cancel">Cancel</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Allotted Nights</label>
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={!hasPerm('edit_membership_plans')}
+                        value={directEditForm.allottedNights ?? 0}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, allottedNights: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Available Nights</label>
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={!hasPerm('edit_membership_plans')}
+                        value={directEditForm.availableNights ?? 0}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, availableNights: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold text-accent-primary disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Travel Card Benefit</label>
+                      <select
+                        disabled={!hasPerm('edit_membership_plans')}
+                        value={directEditForm.travelCardBenefit ? 'yes' : 'no'}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, travelCardBenefit: e.target.value === 'yes' })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold disabled:opacity-60 disabled:bg-surface-100"
+                      >
+                        <option value="yes">Yes (Included)</option>
+                        <option value="no">No</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Tenure Period</label>
+                      <input
+                        type="text"
+                        disabled={!hasPerm('edit_membership_plans')}
+                        value={directEditForm.tenurePeriod || ''}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, tenurePeriod: e.target.value })
+                        }
+                        placeholder="e.g. 3 Years"
+                        className="w-full px-3 py-2 rounded-xl border border-border disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Purchase Date</label>
+                      <input
+                        type="date"
+                        disabled={!hasPerm('edit_membership_plans')}
+                        value={directEditForm.purchaseDate || ''}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, purchaseDate: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Used Nights (Audit)</label>
+                      <div className="px-3 py-2 rounded-xl bg-surface-50 border border-border font-bold text-text-secondary">
+                        {directEditForm.usedNights || 0} Nights
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Extra Offers & Perks</label>
+                    <input
+                      type="text"
+                      disabled={!hasPerm('edit_membership_plans')}
+                      value={directEditForm.extraOffers || ''}
+                      onChange={(e) => setDirectEditForm({ ...directEditForm, extraOffers: e.target.value })}
+                      placeholder="e.g. Airport Transfer, VIP Lounge"
+                      className="w-full px-3 py-2 rounded-xl border border-border disabled:opacity-60 disabled:bg-surface-100"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Financial Breakdown */}
+                <div className="space-y-3 pt-3 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-accent-primary flex items-center gap-1.5">
+                      <DollarSign className="w-3.5 h-3.5" /> Financial Balances & Schedule
+                    </h4>
+                    {hasPerm('update_financial_info') ? (
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                        Permitted
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full font-semibold border border-amber-200 flex items-center gap-1">
+                        <Lock className="w-3 h-3" /> Requires &apos;update_financial_info&apos;
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface-50 p-3.5 rounded-2xl border border-border">
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Product Price (AED)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={!hasPerm('update_financial_info')}
+                        value={directEditForm.productPrice ?? 0}
+                        onChange={(e) => {
+                          const price = Number(e.target.value);
+                          const paid = Number(directEditForm.totalAmountPaid || 0);
+                          setDirectEditForm({
+                            ...directEditForm,
+                            productPrice: price,
+                            outstandingBalance: Math.max(0, price - paid),
+                          });
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Total Paid (AED)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={!hasPerm('update_financial_info')}
+                        value={directEditForm.totalAmountPaid ?? 0}
+                        onChange={(e) => {
+                          const paid = Number(e.target.value);
+                          const price = Number(directEditForm.productPrice || 0);
+                          setDirectEditForm({
+                            ...directEditForm,
+                            totalAmountPaid: paid,
+                            outstandingBalance: Math.max(0, price - paid),
+                          });
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold text-emerald-600 disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Outstanding Balance (AED)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={!hasPerm('update_financial_info')}
+                        value={directEditForm.outstandingBalance ?? 0}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, outstandingBalance: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold text-rose-600 disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Payment Status</label>
+                      <select
+                        disabled={!hasPerm('update_financial_info')}
+                        value={directEditForm.paymentStatus || 'Up to Date'}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, paymentStatus: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold disabled:opacity-60 disabled:bg-surface-100"
+                      >
+                        <option value="Up to Date">Up to Date</option>
+                        <option value="Due Soon">Due Soon</option>
+                        <option value="Overdue">Overdue</option>
+                        <option value="Fully Paid">Fully Paid</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Has Active EMI?</label>
+                      <select
+                        disabled={!hasPerm('update_financial_info')}
+                        value={directEditForm.hasEMI ? 'yes' : 'no'}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, hasEMI: e.target.value === 'yes' })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold disabled:opacity-60 disabled:bg-surface-100"
+                      >
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Monthly EMI (AED)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={!hasPerm('update_financial_info')}
+                        value={directEditForm.emiAmount ?? 0}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, emiAmount: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">EMI Tenure (Months)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={!hasPerm('update_financial_info')}
+                        value={directEditForm.emiTenureMonths ?? 12}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, emiTenureMonths: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Current Due Amount (AED)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={!hasPerm('update_financial_info')}
+                        value={directEditForm.dueAmount ?? 0}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, dueAmount: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border font-bold text-amber-600 disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block font-semibold text-text-secondary mb-1">Next EMI Due Date</label>
+                      <input
+                        type="date"
+                        disabled={!hasPerm('update_financial_info')}
+                        value={directEditForm.nextEMIDueDate || ''}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, nextEMIDueDate: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-border">
                   <button
                     type="button"
                     onClick={() => setShowDirectEditModal(false)}
@@ -1233,9 +1657,10 @@ export default function EmployeeDashboardPage() {
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="px-5 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white font-bold rounded-xl"
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs disabled:opacity-50 flex items-center gap-1.5"
                   >
-                    Save Contact Info
+                    <Edit className="w-4 h-4" />
+                    <span>{actionLoading ? 'Saving Changes...' : 'Save Member Details'}</span>
                   </button>
                 </div>
               </form>
@@ -1534,39 +1959,69 @@ export default function EmployeeDashboardPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-text-primary">Your Permission Matrix:</h4>
+              {hasPerm('create_member') && (
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-bold text-emerald-950">Member Registration Authorized</h4>
+                      <p className="text-[11px] text-emerald-700">
+                        You have direct authorization to register new membership accounts into the Nexworld Travel system.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowAddMemberModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shrink-0 shadow-xs transition-colors self-start sm:self-auto"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Register Member</span>
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-text-primary">Your Permission Matrix:</h4>
+                    <p className="text-[11px] text-text-secondary">
+                      Active operational permissions assigned by Master Head ({permissions.length} of {PERMISSION_OPTIONS.length})
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await loadEmployeeSession();
+                      triggerToast('Permissions refreshed from server');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs font-semibold text-text-secondary hover:text-accent-primary hover:bg-surface-50 transition-colors shadow-xs"
+                    title="Sync with latest permissions assigned by Master Head"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Sync Permissions</span>
+                  </button>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {[
-                    { id: 'view_members', label: 'View members' },
-                    { id: 'create_member_change_request', label: 'Create member change requests' },
-                    { id: 'edit_member_details', label: 'Direct edit member details' },
-                    { id: 'edit_membership_plans', label: 'Edit membership plans' },
-                    { id: 'update_financial_info', label: 'Update membership financial info' },
-                    { id: 'manage_bookings', label: 'Manage booking enquiries' },
-                    { id: 'add_destinations', label: 'Add destinations' },
-                    { id: 'edit_destinations', label: 'Edit destinations' },
-                    { id: 'delete_destinations', label: 'Delete destinations' },
-                    { id: 'view_reports', label: 'View reports' },
-                    { id: 'export_records', label: 'Export records' },
-                  ].map((p) => {
+                  {PERMISSION_OPTIONS.map((p) => {
                     const active = hasPerm(p.id);
                     return (
                       <div
                         key={p.id}
-                        className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+                        className={`p-3 rounded-xl border text-xs flex items-center justify-between transition-colors ${
                           active
                             ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900 font-semibold'
                             : 'bg-surface-50 border-border text-text-tertiary'
                         }`}
                       >
-                        <span>{p.label}</span>
+                        <div>
+                          <span className="block font-medium">{p.label}</span>
+                          <span className="text-[10px] text-text-tertiary">{p.description}</span>
+                        </div>
                         {active ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold shrink-0">
                             Granted
                           </span>
                         ) : (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-200 text-text-tertiary font-medium">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-200 text-text-tertiary font-medium shrink-0">
                             Not Granted
                           </span>
                         )}
