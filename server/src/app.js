@@ -31,8 +31,12 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Security and utility middleware
-app.use(helmet());
+// Security and utility middleware (allowing cross-origin media embedding)
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 // Clean and normalize incoming URLs (handles double-slashes '//' and accidental duplicated prefixes)
 app.use((req, res, next) => {
@@ -95,6 +99,11 @@ const primaryUploadsDir = process.env.UPLOADS_DIR
 const serverUploadsDir = path.resolve(__dirname, '../public/uploads');
 const clientUploadsDir = path.resolve(__dirname, '../../client/public/uploads');
 
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
 app.use('/uploads', express.static(primaryUploadsDir));
 if (primaryUploadsDir !== serverUploadsDir) {
   app.use('/uploads', express.static(serverUploadsDir));
@@ -109,6 +118,9 @@ app.get('/uploads/:filename', async (req, res, next) => {
     if (fallbackImage && fallbackImage.buffer) {
       const hash = crypto.createHash('md5').update(fallbackImage.buffer).digest('hex');
       const etag = `"${hash}"`;
+
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Access-Control-Allow-Origin', '*');
 
       if (req.headers['if-none-match'] === etag) {
         return res.status(304).end();

@@ -9,6 +9,14 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'www.nexworldtravel.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.railway.app',
+      },
+      {
+        protocol: 'https',
         hostname: 'images.unsplash.com',
       },
     ],

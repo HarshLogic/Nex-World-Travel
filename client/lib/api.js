@@ -462,23 +462,32 @@ export async function updateTerms(content) {
 export function getDestinationImageUrl(dest) {
   if (!dest) return '/images/hero.jpg';
 
+  // 1. Direct MongoDB binary image endpoint (served via same-origin Next.js rewrite or direct backend route)
   if (dest.hasDirectImage) {
     const identifier = dest.slug || dest.id || dest._id;
-    return `${BASE_URL}/api/v1/destinations/${identifier}/image`;
+    return `/api/v1/destinations/${identifier}/image`;
   }
 
-  const directCandidate = dest.imageUrl || dest.coverImage;
+  // 2. Candidate image fields (imageUrl, coverImage, heroImage, thumbnail)
+  const directCandidate = dest.imageUrl || dest.coverImage || dest.heroImage || dest.thumbnail;
   if (directCandidate && typeof directCandidate === 'string') {
-    if (directCandidate.startsWith('/api/')) {
-      return `${BASE_URL}${directCandidate}`;
-    }
+    // Keep absolute external URLs intact (e.g., Unsplash, Cloudinary, S3)
     if (directCandidate.startsWith('http://') || directCandidate.startsWith('https://')) {
       return directCandidate;
     }
-    if (directCandidate.startsWith('/uploads/')) {
-      return `${BASE_URL}${directCandidate}`;
+    // Return root-relative paths for same-origin proxying via Next.js rewrites
+    if (directCandidate.startsWith('/api/') || directCandidate.startsWith('/uploads/') || directCandidate.startsWith('/images/')) {
+      return directCandidate;
     }
-    return directCandidate;
+    if (directCandidate.startsWith('/')) {
+      return directCandidate;
+    }
+    return `/${directCandidate}`;
+  }
+
+  // 3. Fallback to repository static image if slug matches standard destinations
+  if (dest.slug && ['asia', 'europe', 'africa', 'australia', 'uae'].includes(String(dest.slug).toLowerCase())) {
+    return `/images/destinations/${String(dest.slug).toLowerCase()}.jpg`;
   }
 
   return '/images/hero.jpg';

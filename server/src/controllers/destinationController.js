@@ -129,6 +129,9 @@ export const getDestinationImage = async (req, res, next) => {
     const hash = crypto.createHash('md5').update(imageRecord.buffer).digest('hex');
     const etag = `"${hash}"`;
 
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
     if (req.headers['if-none-match'] === etag) {
       return res.status(304).end();
     }
