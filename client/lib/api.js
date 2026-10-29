@@ -457,18 +457,39 @@ export async function updateTerms(content) {
 export async function fetchDestinations(region, category) {
   try {
     const params = new URLSearchParams();
-    if (region) params.append('region', region);
-    if (category) params.append('category', category);
-    const url = `${BASE_URL}/api/v1/destinations?${params.toString()}`;
-    const res = await fetch(url, { next: { revalidate: 30 } });
+    if (region && region !== 'All') params.append('region', region);
+    if (category && category !== 'All') params.append('category', category);
+    const queryString = params.toString();
+    const url = `${BASE_URL}/api/v1/destinations${queryString ? `?${queryString}` : ''}`;
+    const res = await fetch(url, {
+      headers: getAuthHeaders(),
+      cache: 'no-store',
+    });
     if (res.ok) {
       const data = await res.json();
-      if (data.success && data.data?.length > 0) return data.data;
+      if (data.success && Array.isArray(data.data)) {
+        if (data.data.length > 0) {
+          // Ensure all base seed destinations are included without duplicating
+          const apiSlugs = new Set(data.data.map((d) => (d.slug || '').toLowerCase()));
+          const missingSeeds = destinationsData.filter(
+            (seed) => !apiSlugs.has((seed.slug || '').toLowerCase())
+          );
+          let combined = [...data.data, ...missingSeeds];
+          if (region && region !== 'All') {
+            combined = combined.filter((d) => d.region?.toLowerCase() === region.toLowerCase());
+          }
+          if (category && category !== 'All') {
+            combined = combined.filter((d) => d.category?.toLowerCase() === category.toLowerCase());
+          }
+          return combined;
+        }
+      }
     }
   } catch (e) {}
 
   let results = [...destinationsData];
-  if (region) results = results.filter((d) => d.region.toLowerCase() === region.toLowerCase());
+  if (region && region !== 'All') results = results.filter((d) => d.region.toLowerCase() === region.toLowerCase());
+  if (category && category !== 'All') results = results.filter((d) => d.category?.toLowerCase() === category.toLowerCase());
   return results;
 }
 

@@ -94,6 +94,32 @@ export const seedDestinations = [
     imageUrl: '/images/destinations/uae.jpg',
     curatedActivities: ['VIP Evening Desert Safari & Stargazing', 'Museum of the Future & Dubai Skyline Tour', 'Ferrari World & Warner Bros Abu Dhabi'],
   },
+  {
+    _id: 'dest-1793262432646',
+    title: 'Azerbaijan',
+    slug: 'azerbaijan',
+    countryOrRegion: '',
+    region: 'Asia',
+    category: 'Dream Destinations',
+    tagline: '',
+    shortDescription: '',
+    description:
+      'Azerbaijan is a transcontinental country that is located in Eurasia, straddling the boundary between Eastern Europe and Western Asia (the South Caucasus region).',
+    coverImage: '/uploads/IMG-20250217-WA0144-1793262352561-9604fc.jpg',
+    imageUrl: '/uploads/IMG-20250217-WA0144-1793262352561-9604fc.jpg',
+    additionalImages: [],
+    highlights: [],
+    popularCities: [],
+    bestTimeToVisit: 'Year Round',
+    displayOrder: 6,
+    featured: true,
+    publicationStatus: 'published',
+    isDeleted: false,
+    createdBy: 'Aditya R (adityar@nexworldtravel.com)',
+    updatedBy: 'Aditya R (adityar@nexworldtravel.com)',
+    createdAt: new Date('2026-10-29T08:27:12.646Z'),
+    updatedAt: new Date('2026-10-29T08:27:12.646Z'),
+  },
 ];
 
 export const seedActivities = [

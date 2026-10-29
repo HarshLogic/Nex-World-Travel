@@ -885,6 +885,140 @@ async function runTests() {
       }
     });
 
+    // 28. Destination Creation & Non-Destructive Preservation Regression Test
+    await check('Adding a new destination preserves all existing destinations without deleting, overwriting or hiding them', async () => {
+      // 1. Record existing destinations
+      const initialRes = await fetch('http://127.0.0.1:5098/api/v1/destinations', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const initialData = await initialRes.json();
+      if (!initialRes.ok || !Array.isArray(initialData.data)) {
+        throw new Error('Failed to fetch initial destinations');
+      }
+      const initialCount = initialData.data.length;
+      const initialSlugs = initialData.data.map((d) => d.slug);
+      const initialMap = new Map(initialData.data.map((d) => [d.slug, { title: d.title, image: d.imageUrl || d.coverImage }]));
+
+      if (initialCount < 5) {
+        throw new Error(`Expected at least 5 baseline destinations, got ${initialCount}`);
+      }
+
+      // 2. Add a new destination
+      const testTitle = `Bora Bora Sanctuary ${Date.now()}`;
+      const createRes = await fetch('http://127.0.0.1:5098/api/v1/destinations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          title: testTitle,
+          region: 'Asia',
+          category: 'Dream Destinations',
+          description: 'Overwater bungalows, crystal-clear turquoise lagoons, and private island dining.',
+          shortDescription: 'Ultimate luxury island retreat in turquoise Polynesian waters.',
+          imageUrl: '/images/destinations/tokyo.jpg',
+          displayOrder: 99,
+          publicationStatus: 'published',
+        }),
+      });
+      const createdData = await createRes.json();
+      if (!createRes.ok || !createdData.destination) {
+        throw new Error(`Failed to create destination: ${createdData.message}`);
+      }
+      const createdDest = createdData.destination;
+      const createdId = createdDest._id;
+
+      // 3. Fetch destinations again (admin view)
+      const afterRes = await fetch('http://127.0.0.1:5098/api/v1/destinations', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const afterData = await afterRes.json();
+      if (!afterRes.ok || !Array.isArray(afterData.data)) {
+        throw new Error('Failed to fetch destinations after creation');
+      }
+
+      // Acceptance criterion: Count must increase by exactly 1
+      if (afterData.data.length !== initialCount + 1) {
+        throw new Error(`Expected count to be ${initialCount + 1}, but found ${afterData.data.length}`);
+      }
+
+      // Verify EVERY previous destination still exists with unchanged title and image
+      for (const [slug, info] of initialMap.entries()) {
+        const found = afterData.data.find((d) => d.slug === slug);
+        if (!found) {
+          throw new Error(`CRITICAL: Existing destination '${slug}' disappeared after adding new destination!`);
+        }
+        if (found.title !== info.title) {
+          throw new Error(`CRITICAL: Destination '${slug}' title was modified!`);
+        }
+        const currentImage = found.imageUrl || found.coverImage;
+        if (currentImage !== info.image) {
+          throw new Error(`CRITICAL: Destination '${slug}' image was modified! Expected ${info.image}, got ${currentImage}`);
+        }
+      }
+
+      // Verify the new destination is present
+      const foundNew = afterData.data.find((d) => d._id === createdId || d.slug === createdDest.slug);
+      if (!foundNew) {
+        throw new Error('New destination not found in destination list');
+      }
+
+      // 4. Public website fetch (unauthenticated) also shows existing + new published destination
+      const pubRes = await fetch('http://127.0.0.1:5098/api/v1/destinations');
+      const pubData = await pubRes.json();
+      if (!pubRes.ok || !Array.isArray(pubData.data)) {
+        throw new Error('Failed to fetch public destinations');
+      }
+      if (!pubData.data.some((d) => d.slug === createdDest.slug)) {
+        throw new Error('New published destination not visible on public endpoint');
+      }
+      for (const slug of initialSlugs) {
+        if (!pubData.data.some((d) => d.slug === slug)) {
+          throw new Error(`CRITICAL: Baseline destination '${slug}' missing from public endpoint!`);
+        }
+      }
+
+      // 5. Edit only the new destination
+      const updateRes = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${createdId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          tagline: 'Exclusive VIP Overwater Sanctuary Updated',
+          shortDescription: 'Updated short description for test.',
+        }),
+      });
+      const updateData = await updateRes.json();
+      if (!updateRes.ok || !updateData.destination) {
+        throw new Error(`Failed to update destination: ${updateData.message}`);
+      }
+      if (updateData.destination.tagline !== 'Exclusive VIP Overwater Sanctuary Updated') {
+        throw new Error('Destination tagline was not updated');
+      }
+
+      // 6. Delete the test destination
+      const deleteRes = await fetch(`http://127.0.0.1:5098/api/v1/destinations/${createdId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const deleteData = await deleteRes.json();
+      if (!deleteRes.ok || !deleteData.success) {
+        throw new Error(`Failed to delete test destination: ${deleteData.message}`);
+      }
+
+      // 7. Verify all initial destinations still exist after deleting test destination
+      const finalRes = await fetch('http://127.0.0.1:5098/api/v1/destinations');
+      const finalData = await finalRes.json();
+      for (const slug of initialSlugs) {
+        if (!finalData.data.some((d) => d.slug === slug)) {
+          throw new Error(`CRITICAL: Baseline destination '${slug}' missing after test cleanup!`);
+        }
+      }
+    });
+
     console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
   } finally {
     server.close();

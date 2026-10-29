@@ -28,11 +28,11 @@ class ResilientStore {
     this.availabilities = [];
     this.destinations = [...seedDestinations.map((d, i) => ({
       ...d,
-      _id: `dest-${i + 1}`,
-      category: i < 2 ? 'Dream Destinations' : 'Top Destinations',
-      publicationStatus: 'published',
-      isDeleted: false,
-      displayOrder: i + 1,
+      _id: d._id || `dest-${i + 1}`,
+      category: d.category || (i < 2 ? 'Dream Destinations' : 'Top Destinations'),
+      publicationStatus: d.publicationStatus || 'published',
+      isDeleted: d.isDeleted || false,
+      displayOrder: d.displayOrder || (i + 1),
     }))];
     this.activities = [...seedActivities.map((a, i) => ({
       ...a,
@@ -444,6 +444,22 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
           if (actCount === 0) {
             await Activity.insertMany(this.activities);
           }
+
+          // Ensure destinations exist in MongoDB and standard seed destinations are never missing
+          const destCount = await Destination.countDocuments({ isDeleted: { $ne: true } });
+          if (destCount === 0) {
+            await Destination.insertMany(this.destinations);
+            console.log('[StoreService] Successfully seeded MongoDB with initial destinations.');
+          } else {
+            // Ensure every base destination is present in Mongo without overwriting any existing modifications
+            for (const seed of this.destinations) {
+              const exists = await Destination.findOne({ slug: seed.slug });
+              if (!exists) {
+                await Destination.create(seed);
+              }
+            }
+          }
+
           // Ensure Europe and Africa image swap is persisted in live Mongo
           await Destination.updateOne(
             { slug: 'europe' },
@@ -1181,13 +1197,28 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     await this.initializeSeedAccounts();
     if (this.isMongoLive()) {
       try {
-        const q = { isDeleted: false };
+        const destCount = await Destination.countDocuments({ isDeleted: { $ne: true } });
+        if (destCount === 0) {
+          await Destination.insertMany(this.destinations);
+        } else {
+          for (const seed of this.destinations) {
+            const exists = await Destination.findOne({ slug: seed.slug });
+            if (!exists) await Destination.create(seed);
+          }
+        }
+
+        const q = { isDeleted: { $ne: true } };
         if (filter.category) q.category = filter.category;
         if (filter.region) q.region = filter.region;
         if (filter.featured !== undefined) q.featured = filter.featured;
         if (filter.publicationStatus) q.publicationStatus = filter.publicationStatus;
-        return await Destination.find(q).sort({ displayOrder: 1, createdAt: -1 }).lean();
-      } catch (e) {}
+        const mongoResults = await Destination.find(q).sort({ displayOrder: 1, createdAt: -1 }).lean();
+        if (mongoResults && mongoResults.length > 0) {
+          return mongoResults;
+        }
+      } catch (e) {
+        console.warn('[StoreService] Mongo getDestinations error:', e.message);
+      }
     }
 
     let results = this.destinations.filter((d) => !d.isDeleted);
@@ -1203,7 +1234,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     const cleanSlug = slug.toLowerCase().trim();
     if (this.isMongoLive()) {
       try {
-        const found = await Destination.findOne({ slug: cleanSlug, isDeleted: false }).lean();
+        const found = await Destination.findOne({ slug: cleanSlug, isDeleted: { $ne: true } }).lean();
         if (found) return found;
       } catch (e) {}
     }
@@ -1211,11 +1242,31 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
   }
 
   async createDestination(data, author = 'Master Head') {
-    const slug = data.slug || data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    await this.initializeSeedAccounts();
+    const baseSlug = (data.slug || data.title || `dest-${Date.now()}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    // Ensure unique slug so it never collides with an existing destination
+    let uniqueSlug = baseSlug;
+    let counter = 1;
+    if (this.isMongoLive()) {
+      while (await Destination.findOne({ slug: uniqueSlug })) {
+        uniqueSlug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+    } else {
+      while (this.destinations.some((d) => d.slug === uniqueSlug)) {
+        uniqueSlug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+    }
+
     const record = {
       ...data,
       _id: `dest-${Date.now()}`,
-      slug,
+      slug: uniqueSlug,
       coverImage: data.coverImage || data.imageUrl || '/images/hero.jpg',
       imageUrl: data.imageUrl || data.coverImage || '/images/hero.jpg',
       category: data.category || 'Top Destinations',
@@ -1229,50 +1280,91 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
     if (this.isMongoLive()) {
       try {
+        // Ensure standard seed destinations exist in Mongo before adding new one
+        const destCount = await Destination.countDocuments({ isDeleted: { $ne: true } });
+        if (destCount === 0) {
+          await Destination.insertMany(this.destinations);
+        } else {
+          for (const seed of this.destinations) {
+            const exists = await Destination.findOne({ slug: seed.slug });
+            if (!exists) await Destination.create(seed);
+          }
+        }
+
         const doc = await Destination.create(record);
-        return doc.toObject();
-      } catch (e) {}
+        const obj = doc.toObject();
+        this.destinations.unshift(obj);
+        await this.logAudit('DESTINATION_CREATED', author, 'destination', uniqueSlug, { title: data.title });
+        return obj;
+      } catch (e) {
+        console.error('[StoreService] Error creating destination in Mongo:', e.message);
+      }
     }
+
     this.destinations.unshift(record);
-    await this.logAudit('DESTINATION_CREATED', author, 'destination', slug, { title: data.title });
+    await this.logAudit('DESTINATION_CREATED', author, 'destination', uniqueSlug, { title: data.title });
     return record;
   }
 
   async updateDestination(idOrSlug, updateData, author = 'Master Head') {
+    await this.initializeSeedAccounts();
+    if (this.isMongoLive()) {
+      try {
+        const destDoc = await Destination.findOne({ $or: [{ _id: idOrSlug }, { slug: idOrSlug }] });
+        if (destDoc) {
+          Object.assign(destDoc, updateData, { updatedBy: author, updatedAt: new Date().toISOString() });
+          await destDoc.save();
+          const obj = destDoc.toObject();
+          const idx = this.destinations.findIndex((d) => d._id === idOrSlug || d.slug === idOrSlug);
+          if (idx !== -1) this.destinations[idx] = obj;
+          else this.destinations.unshift(obj);
+          await this.logAudit('DESTINATION_UPDATED', author, 'destination', obj.slug, { updatedFields: Object.keys(updateData) });
+          return obj;
+        }
+      } catch (e) {
+        console.warn('[StoreService] Mongo updateDestination error:', e.message);
+      }
+    }
+
     const dest = this.destinations.find(
       (d) => d._id === idOrSlug || d.slug === idOrSlug || d.title.toLowerCase() === idOrSlug.toLowerCase()
     );
     if (!dest) throw new Error(`Destination '${idOrSlug}' not found.`);
 
     Object.assign(dest, updateData, { updatedBy: author, updatedAt: new Date().toISOString() });
-
-    if (this.isMongoLive()) {
-      try {
-        await Destination.findOneAndUpdate({ $or: [{ _id: idOrSlug }, { slug: idOrSlug }] }, dest);
-      } catch (e) {}
-    }
-
     await this.logAudit('DESTINATION_UPDATED', author, 'destination', dest.slug, { updatedFields: Object.keys(updateData) });
     return dest;
   }
 
   async deleteDestination(idOrSlug, author = 'Master Head') {
+    await this.initializeSeedAccounts();
+    if (this.isMongoLive()) {
+      try {
+        const destDoc = await Destination.findOne({ $or: [{ _id: idOrSlug }, { slug: idOrSlug }] });
+        if (destDoc) {
+          destDoc.isDeleted = true;
+          destDoc.publicationStatus = 'archived';
+          destDoc.updatedBy = author;
+          await destDoc.save();
+          const idx = this.destinations.findIndex((d) => d._id === idOrSlug || d.slug === idOrSlug);
+          if (idx !== -1) {
+            this.destinations[idx].isDeleted = true;
+            this.destinations[idx].publicationStatus = 'archived';
+          }
+          await this.logAudit('DESTINATION_DELETED', author, 'destination', destDoc.slug);
+          return { success: true, message: `Destination '${destDoc.title}' soft-deleted successfully.` };
+        }
+      } catch (e) {
+        console.warn('[StoreService] Mongo deleteDestination error:', e.message);
+      }
+    }
+
     const dest = this.destinations.find((d) => d._id === idOrSlug || d.slug === idOrSlug);
     if (!dest) throw new Error(`Destination '${idOrSlug}' not found.`);
 
     dest.isDeleted = true;
     dest.publicationStatus = 'archived';
     dest.updatedBy = author;
-
-    if (this.isMongoLive()) {
-      try {
-        await Destination.findOneAndUpdate(
-          { $or: [{ _id: idOrSlug }, { slug: idOrSlug }] },
-          { isDeleted: true, publicationStatus: 'archived', updatedBy: author }
-        );
-      } catch (e) {}
-    }
-
     await this.logAudit('DESTINATION_DELETED', author, 'destination', dest.slug);
     return { success: true, message: `Destination '${dest.title}' soft-deleted successfully.` };
   }

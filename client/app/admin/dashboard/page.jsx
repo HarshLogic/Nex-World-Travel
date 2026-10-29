@@ -608,15 +608,36 @@ export default function AdminDashboardPage() {
       };
 
       if (selectedDestination) {
-        await updateDestination(selectedDestination.id || selectedDestination._id, payload);
+        const res = await updateDestination(selectedDestination.id || selectedDestination._id, payload);
         triggerToast('Destination updated successfully!');
+        if (res?.destination) {
+          const updatedDoc = res.destination;
+          setDestinations((prev) =>
+            prev.map((d) =>
+              (d.id || d._id || d.slug) === (selectedDestination.id || selectedDestination._id || selectedDestination.slug)
+                ? { ...d, ...updatedDoc }
+                : d
+            )
+          );
+        }
       } else {
-        await createDestination(payload);
+        const res = await createDestination(payload);
         triggerToast('Destination created successfully!');
+        if (res?.destination) {
+          const newDoc = res.destination;
+          setDestinations((prev) => [
+            newDoc,
+            ...prev.filter(
+              (d) => (d.id || d._id || d.slug) !== (newDoc.id || newDoc._id || newDoc.slug)
+            ),
+          ]);
+        }
       }
       setShowAddDestModal(false);
       setSelectedDestination(null);
-      fetchDestinations().then(setDestinations).catch(() => {});
+      fetchDestinations().then((dests) => {
+        if (dests && dests.length > 0) setDestinations(dests);
+      }).catch(() => {});
     } catch (err) {
       triggerToast(err.message || 'Failed to save destination', 'error');
     } finally {
@@ -629,7 +650,16 @@ export default function AdminDashboardPage() {
     try {
       await updateDestination(dest.id || dest._id, { publicationStatus: nextStatus });
       triggerToast(`Destination marked as ${nextStatus}.`);
-      fetchDestinations().then(setDestinations).catch(() => {});
+      setDestinations((prev) =>
+        prev.map((d) =>
+          (d.id || d._id || d.slug) === (dest.id || dest._id || dest.slug)
+            ? { ...d, publicationStatus: nextStatus }
+            : d
+        )
+      );
+      fetchDestinations().then((dests) => {
+        if (dests && dests.length > 0) setDestinations(dests);
+      }).catch(() => {});
     } catch (err) {
       triggerToast(err.message || 'Failed to update publication status', 'error');
     }
@@ -684,11 +714,17 @@ export default function AdminDashboardPage() {
       if (type === 'activity') {
         await deleteActivity(id);
         triggerToast('Activity deleted/archived successfully.');
-        fetchActivities().then(setActivities).catch(() => {});
+        setActivities((prev) => prev.filter((a) => (a.id || a._id) !== id));
+        fetchActivities().then((acts) => {
+          if (acts && acts.length > 0) setActivities(acts);
+        }).catch(() => {});
       } else {
         await deleteDestination(id);
         triggerToast('Destination archived successfully.');
-        fetchDestinations().then(setDestinations).catch(() => {});
+        setDestinations((prev) => prev.filter((d) => (d.id || d._id) !== id));
+        fetchDestinations().then((dests) => {
+          if (dests && dests.length > 0) setDestinations(dests);
+        }).catch(() => {});
       }
       setDeleteConfirmItem(null);
     } catch (err) {

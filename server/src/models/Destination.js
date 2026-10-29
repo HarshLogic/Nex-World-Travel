@@ -9,7 +9,7 @@ const destinationSchema = new mongoose.Schema(
     region: {
       type: String,
       required: true,
-      enum: ['Asia', 'Europe', 'Africa', 'Australia', 'Middle East / UAE'],
+      trim: true,
       index: true,
     },
     category: {
