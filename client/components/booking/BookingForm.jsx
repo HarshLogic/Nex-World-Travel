@@ -194,6 +194,7 @@ export default function BookingForm() {
         guestsCount: Number(formData.guestsCount || formData.adults || 1),
         adults: Number(formData.guestsCount || formData.adults || 1),
         children: Number(formData.children || 0),
+        specialRequests: formData.specialRequests || formData.notes || formData.activitiesRequired || '',
       };
 
       const response = await submitBookingEnquiry(payload);

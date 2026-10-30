@@ -1,5 +1,16 @@
 import { z } from 'zod';
 
+export const normalizeMembershipStatus = (status) => {
+  if (!status) return 'Active';
+  const s = String(status).trim().toLowerCase();
+  if (s === 'active' || s === 'open') return 'Active';
+  if (s === 'inactive' || s === 'close' || s === 'closed' || s === 'deactive' || s === 'deactivated') return 'InActive';
+  if (s === 'refunded' || s === 'refund') return 'Refunded';
+  if (s === 'hold' || s === 'on hold' || s === 'suspended' || s === 'pending') return 'Hold';
+  if (s === 'cancel' || s === 'cancelled' || s === 'expired') return 'Cancel';
+  return 'Active';
+};
+
 const createMemberBase = z.object({
   memberId: z
     .string({ required_error: 'Member ID is required (e.g. NEX-M-2001)' })
@@ -33,6 +44,27 @@ const createMemberBase = z.object({
   purchaseDate: z.string().optional(),
   productPrice: z.coerce.number().min(0, 'Product price must be non-negative').default(12500),
   initialPaidAmount: z.coerce.number().min(0, 'Initial paid amount cannot be negative').default(0),
+  paymentMethod: z
+    .enum([
+      'Cash',
+      'Credit Card',
+      'Debit Card',
+      'Card Machine / POS (Card Swipe)',
+      'POS Swipe',
+      'Bank Transfer',
+      'Online Payment',
+      'Payment Link',
+      'Cheque',
+      'Other',
+      'Tabby',
+      'Tamara',
+      'Account Adjustment',
+    ])
+    .optional()
+    .default('Bank Transfer'),
+  paymentReference: z.string().trim().optional().default(''),
+  transactionReference: z.string().trim().optional(),
+  paymentNotes: z.string().trim().optional(),
   totalAmountPaid: z.coerce.number().min(0).optional(),
   outstandingBalance: z.coerce.number().min(0).optional(),
   hasEMI: z.boolean().default(false),
@@ -45,8 +77,8 @@ const createMemberBase = z.object({
     .enum(['Up to Date', 'Due Soon', 'Overdue', 'Fully Paid'])
     .optional(),
   membershipStatus: z
-    .enum(['Open', 'Close', 'Deactive', 'Cancel', 'Active', 'Expired', 'Suspended', 'Pending'])
-    .default('Open'),
+    .enum(['Active', 'InActive', 'Refunded', 'Hold', 'Cancel', 'Open', 'Close', 'Deactive', 'Expired', 'Suspended', 'Pending'])
+    .default('Active'),
 });
 
 export const createMemberSchema = z.preprocess((raw) => {
@@ -58,15 +90,11 @@ export const createMemberSchema = z.preprocess((raw) => {
     data.registeredName = data.name;
   }
 
-  // Normalize membership status
-  if (data.membershipStatus) {
-    const s = String(data.membershipStatus).trim().toLowerCase();
-    if (s === 'open' || s === 'active') data.membershipStatus = 'Open';
-    else if (s === 'close' || s === 'closed') data.membershipStatus = 'Close';
-    else if (s === 'deactive' || s === 'deactivated' || s === 'suspended') data.membershipStatus = 'Deactive';
-    else if (s === 'cancel' || s === 'cancelled' || s === 'expired') data.membershipStatus = 'Cancel';
-  } else {
-    data.membershipStatus = 'Open';
+  // Normalize membership status to standardized 5 statuses
+  data.membershipStatus = normalizeMembershipStatus(data.membershipStatus);
+
+  if (!data.paymentReference && data.transactionReference) {
+    data.paymentReference = data.transactionReference;
   }
 
   // Map 'password' -> 'initialPassword'
@@ -109,7 +137,7 @@ export const createMemberSchema = z.preprocess((raw) => {
   return data;
 }, createMemberBase);
 
-export const updateMemberSchema = z.object({
+const updateMemberBase = z.object({
   registeredName: z.string().trim().min(2).optional(),
   name: z.string().trim().min(2).optional(),
   email: z.string().trim().email().toLowerCase().optional(),
@@ -139,30 +167,47 @@ export const updateMemberSchema = z.object({
     .enum(['Up to Date', 'Due Soon', 'Overdue', 'Fully Paid'])
     .optional(),
   membershipStatus: z
-    .enum(['Open', 'Close', 'Deactive', 'Cancel', 'Active', 'Expired', 'Suspended', 'Pending'])
+    .enum(['Active', 'InActive', 'Refunded', 'Hold', 'Cancel', 'Open', 'Close', 'Deactive', 'Expired', 'Suspended', 'Pending'])
     .optional(),
   status: z
-    .enum(['Open', 'Close', 'Deactive', 'Cancel', 'Active', 'Expired', 'Suspended', 'Pending'])
+    .enum(['Active', 'InActive', 'Refunded', 'Hold', 'Cancel', 'Open', 'Close', 'Deactive', 'Expired', 'Suspended', 'Pending'])
     .optional(),
   reason: z.string().trim().optional(),
 });
 
+export const updateMemberSchema = z.preprocess((raw) => {
+  if (!raw || typeof raw !== 'object') return {};
+  const data = { ...raw };
+  if (data.status && !data.membershipStatus) {
+    data.membershipStatus = data.status;
+  }
+  if (data.membershipStatus) {
+    data.membershipStatus = normalizeMembershipStatus(data.membershipStatus);
+    data.status = data.membershipStatus;
+  }
+  return data;
+}, updateMemberBase);
+
 const recordPaymentBase = z.object({
   amount: z.coerce.number().positive('Payment amount must be greater than zero'),
   membershipStatus: z
-    .enum(['Open', 'Close', 'Deactive', 'Cancel', 'Active', 'Expired', 'Suspended', 'Pending'])
+    .enum(['Active', 'InActive', 'Refunded', 'Hold', 'Cancel', 'Open', 'Close', 'Deactive', 'Expired', 'Suspended', 'Pending'])
     .optional(),
   paymentType: z.enum(['down_payment', 'emi_installment', 'lump_sum', 'adjustment', 'refund']).default('emi_installment'),
   paymentMethod: z
     .enum([
-      'Bank Transfer',
+      'Cash',
       'Credit Card',
       'Debit Card',
+      'Card Machine / POS (Card Swipe)',
+      'POS Swipe',
+      'Bank Transfer',
+      'Online Payment',
+      'Payment Link',
       'Cheque',
-      'Cash',
+      'Other',
       'Tabby',
       'Tamara',
-      'POS Swipe',
       'Account Adjustment',
     ])
     .default('Bank Transfer'),
@@ -178,9 +223,13 @@ export const recordPaymentSchema = z.preprocess((raw) => {
   if (!data.referenceNumber && data.transactionReference) {
     data.referenceNumber = data.transactionReference;
   }
+  if (data.membershipStatus) {
+    data.membershipStatus = normalizeMembershipStatus(data.membershipStatus);
+  }
   return data;
 }, recordPaymentBase);
 
 export const validateCreateMember = (data) => createMemberSchema.safeParse(data);
 export const validateUpdateMember = (data) => updateMemberSchema.safeParse(data);
 export const validateRecordPayment = (data) => recordPaymentSchema.safeParse(data);
+

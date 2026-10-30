@@ -19,6 +19,7 @@ import { TermsCondition } from '../models/TermsCondition.js';
 import { AuditLog } from '../models/AuditLog.js';
 import { PlanAvailability } from '../models/PlanAvailability.js';
 import { seedDestinations, seedActivities, seedPackages } from '../data/seedData.js';
+import { normalizeMembershipStatus } from '../validators/memberValidator.js';
 
 class ResilientStore {
   constructor() {
@@ -701,11 +702,13 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
         if (status) {
           const s = status.toLowerCase();
           if (s === 'open' || s === 'active') {
-            filter.membershipStatus = { $in: ['Open', 'Active', 'open', 'active'] };
-          } else if (s === 'close' || s === 'closed') {
-            filter.membershipStatus = { $in: ['Close', 'closed', 'close'] };
-          } else if (s === 'deactive' || s === 'deactivated' || s === 'suspended') {
-            filter.membershipStatus = { $in: ['Deactive', 'deactive', 'Suspended', 'suspended'] };
+            filter.membershipStatus = { $in: ['Active', 'active', 'Open', 'open'] };
+          } else if (s === 'close' || s === 'closed' || s === 'inactive' || s === 'deactive' || s === 'deactivated') {
+            filter.membershipStatus = { $in: ['InActive', 'inactive', 'Close', 'closed', 'Deactive', 'deactive', 'Suspended', 'suspended'] };
+          } else if (s === 'refund' || s === 'refunded') {
+            filter.membershipStatus = { $in: ['Refunded', 'refunded', 'Refund', 'refund'] };
+          } else if (s === 'hold' || s === 'on hold') {
+            filter.membershipStatus = { $in: ['Hold', 'hold', 'On Hold', 'on hold'] };
           } else if (s === 'cancel' || s === 'cancelled' || s === 'expired') {
             filter.membershipStatus = { $in: ['Cancel', 'cancel', 'Cancelled', 'cancelled', 'Expired', 'expired'] };
           } else {
@@ -735,10 +738,11 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
         // Normalize fields for frontend consumer
         const members = docs.map((m) => {
           const financials = this.calculateMemberFinancials(m);
+          const normalizedStatus = normalizeMembershipStatus(financials.membershipStatus || financials.status || 'Active');
           return {
             ...financials,
-            status: financials.membershipStatus || 'Open',
-            membershipStatus: financials.membershipStatus || 'Open',
+            status: normalizedStatus,
+            membershipStatus: normalizedStatus,
             nightsAvailable: financials.availableNights !== undefined ? financials.availableNights : (financials.nightsAvailable || 0),
             availableNights: financials.availableNights !== undefined ? financials.availableNights : (financials.nightsAvailable || 0),
             allottedNights: financials.allottedNights !== undefined ? financials.allottedNights : (financials.availableNights || 7),
@@ -764,10 +768,13 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     if (status) {
       const s = status.toLowerCase();
       results = results.filter((m) => {
-        const ms = (m.membershipStatus || m.status || 'Open').toLowerCase();
+        const ms = (m.membershipStatus || m.status || 'Active').toLowerCase();
         if (s === 'open' || s === 'active') return ms === 'open' || ms === 'active';
-        if (s === 'close' || s === 'closed') return ms === 'close' || ms === 'closed';
-        if (s === 'deactive' || s === 'deactivated' || s === 'suspended') return ms === 'deactive' || ms === 'deactivated' || ms === 'suspended';
+        if (s === 'close' || s === 'closed' || s === 'inactive' || s === 'deactive' || s === 'deactivated') {
+          return ms === 'close' || ms === 'closed' || ms === 'inactive' || ms === 'deactive' || ms === 'deactivated';
+        }
+        if (s === 'refund' || s === 'refunded') return ms === 'refund' || ms === 'refunded';
+        if (s === 'hold' || s === 'on hold') return ms === 'hold' || ms === 'on hold';
         if (s === 'cancel' || s === 'cancelled' || s === 'expired') return ms === 'cancel' || ms === 'cancelled' || ms === 'expired';
         return ms === s;
       });
@@ -946,15 +953,15 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
   calculateMemberNights(member, bookings = []) {
     if (!member) return member;
 
-    // Filter valid bookings: exclude Cancelled and Closed - Lost
+    // Filter valid bookings: exclude Cancelled, Refunded, and Closed - Lost
     const activeBookings = (bookings || []).filter((b) => {
-      const s = (b.status || '').toLowerCase();
-      return s !== 'cancelled' && s !== 'closed - lost';
+      const s = (b.status || '').toLowerCase().trim();
+      return s !== 'cancelled' && s !== 'refunded' && s !== 'closed - lost' && s !== 'rejected';
     });
 
-    // Sum used nights (prevent duplicates by tracking unique reference/ID)
+    // Sum used nights from confirmed bookings (prevent duplicates by tracking unique reference/ID)
     const seenBookingIds = new Set();
-    let usedNights = 0;
+    let bookingUsedNights = 0;
 
     for (const b of activeBookings) {
       const ref = b.enquiryNumber || b._id?.toString() || b.id;
@@ -972,8 +979,11 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
           }
         } catch (e) {}
       }
-      usedNights += stayNights;
+      bookingUsedNights += stayNights;
     }
+
+    const baseUsed = Number(member.initialUsedNights !== undefined ? member.initialUsedNights : (member.usedNights || 0));
+    const totalUsedNights = baseUsed + bookingUsedNights;
 
     // Determine Allotted Nights
     let allottedNights = 0;
@@ -983,16 +993,17 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       allottedNights = Number(member.totalNights);
     } else {
       const baseAvailable = Number(member.availableNights !== undefined ? member.availableNights : (member.nightsAvailable || 7));
-      allottedNights = Math.max(baseAvailable, baseAvailable + usedNights);
+      allottedNights = Math.max(baseAvailable, baseAvailable + totalUsedNights);
     }
 
-    // Available Nights = Allotted Nights - Used Nights
-    const availableNights = Math.max(0, allottedNights - usedNights);
+    // Available Nights = Allotted Nights - Total Used Nights
+    const availableNights = Math.max(0, allottedNights - totalUsedNights);
 
     return {
       ...member,
+      initialUsedNights: baseUsed,
       allottedNights,
-      usedNights,
+      usedNights: totalUsedNights,
       availableNights,
       nightsAvailable: availableNights,
     };
@@ -1017,6 +1028,9 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
     const financials = this.calculateMemberFinancials(member, payments);
     const withNights = this.calculateMemberNights(financials, bookings);
+    const normalizedStatus = normalizeMembershipStatus(withNights.membershipStatus || withNights.status || 'Active');
+    withNights.status = normalizedStatus;
+    withNights.membershipStatus = normalizedStatus;
 
     return withNights;
   }
@@ -1040,6 +1054,13 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     const productPrice = Number(data.productPrice || 0);
     const initialPaid = Number(data.initialPaidAmount || 0);
     const balance = Math.max(0, productPrice - initialPaid);
+    const allottedNights = data.allottedNights !== undefined
+      ? Number(data.allottedNights)
+      : Number(data.availableNights ?? data.nightsAvailable ?? 14);
+    const usedNights = Number(data.usedNights || 0);
+    const availableNights = Math.max(0, allottedNights - usedNights);
+    const membershipStatus = normalizeMembershipStatus(data.membershipStatus || 'Active');
+    const nowIso = new Date().toISOString();
 
     const profile = {
       _id: `prof-${Date.now()}`,
@@ -1050,13 +1071,16 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       phone: data.phone || '',
       address: data.address || '',
       packageType: data.packageType || 'Silver',
-      availableNights: Number(data.availableNights || 7),
-      allottedNights: data.allottedNights !== undefined ? Number(data.allottedNights) : Number(data.availableNights || 7),
-      usedNights: 0,
+      availableNights,
+      nightsAvailable: availableNights,
+      allottedNights,
+      usedNights,
+      initialUsedNights: usedNights,
       extraOffers: data.extraOffers || 'VIP Airport Meet & Assist',
       tenurePeriod: data.tenurePeriod || '5 Years',
       travelCardBenefit: !!data.travelCardBenefit,
-      purchaseDate: data.purchaseDate ? new Date(data.purchaseDate).toISOString() : new Date().toISOString(),
+      purchaseDate: data.purchaseDate ? new Date(data.purchaseDate).toISOString() : nowIso,
+      registrationDate: nowIso,
       productPrice,
       totalAmountPaid: 0,
       outstandingBalance: productPrice,
@@ -1067,11 +1091,11 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       nextEMIDueDate: data.nextEMIDueDate || null,
       dueAmount: initialPaid > 0 || productPrice === 0 ? 0 : Number(data.dueAmount !== undefined ? data.dueAmount : (data.emiAmount || 0)),
       paymentStatus: productPrice === 0 ? 'Fully Paid' : (data.paymentStatus || 'Up to Date'),
-      membershipStatus: data.membershipStatus || 'Open',
+      membershipStatus,
       termsAccepted: false,
       termsVersion: 'v1.0-2026',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
     let finalProfile = profile;
@@ -1086,13 +1110,14 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
     this.members.unshift(finalProfile);
 
-    // Record initial down payment if > 0
+    // Record initial down payment if > 0 with selected paymentMethod & paymentReference
     if (initialPaid > 0) {
       await this.recordPayment(finalProfile.memberId, {
         amount: initialPaid,
         paymentType: 'down_payment',
-        paymentMethod: 'Bank Transfer',
-        notes: 'Initial enrollment payment',
+        paymentMethod: data.paymentMethod || 'Bank Transfer',
+        referenceNumber: data.paymentReference || data.referenceNumber || '',
+        notes: data.paymentNotes || 'Initial enrollment payment',
       }, author);
       const updated = await this.getMemberById(finalProfile.memberId);
       if (updated) finalProfile = updated;
@@ -1106,8 +1131,20 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     const member = await this.getMemberById(memberId);
     if (!member) throw new Error(`Member '${memberId}' not found.`);
 
+    // Protect immutable identity and creation timestamps from modification
+    delete updateData.createdAt;
+    delete updateData.registrationDate;
+    delete updateData._id;
+    delete updateData.memberId;
+    delete updateData.userId;
+
     if (updateData.name && !updateData.registeredName) updateData.registeredName = updateData.name;
     if (updateData.registeredName && !updateData.name) updateData.name = updateData.registeredName;
+
+    if (updateData.membershipStatus || updateData.status) {
+      updateData.membershipStatus = normalizeMembershipStatus(updateData.membershipStatus || updateData.status);
+      updateData.status = updateData.membershipStatus;
+    }
 
     if (updateData.productPrice !== undefined) {
       member.productPrice = Number(updateData.productPrice);
@@ -1118,6 +1155,13 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       member.totalAmountPaid = Number(updateData.totalAmountPaid);
       member.outstandingBalance = Math.max(0, Number(member.productPrice || 0) - member.totalAmountPaid);
       updateData.outstandingBalance = member.outstandingBalance;
+    }
+    if (updateData.usedNights !== undefined) {
+      const uNights = Number(updateData.usedNights);
+      updateData.initialUsedNights = uNights;
+      updateData.usedNights = uNights;
+      member.initialUsedNights = uNights;
+      member.usedNights = uNights;
     }
     if (updateData.allottedNights !== undefined) {
       member.allottedNights = Number(updateData.allottedNights);
@@ -2686,7 +2730,8 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       referenceNumber: enquiryNumber,
       memberName,
       customerName,
-      status: 'New',
+      specialRequests: bookingData.specialRequests || bookingData.notes || '',
+      status: 'Pending',
       emailNotificationSent: false,
       internalNotes: [],
       createdAt: new Date().toISOString(),
@@ -2696,12 +2741,32 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     if (this.isMongoLive()) {
       try {
         const doc = await Booking.create(record);
-        return doc.toObject();
-      } catch (e) {}
+        const obj = doc.toObject ? doc.toObject() : doc;
+        this.bookings.unshift(obj);
+        await this.logAudit('BOOKING_CREATED', memberName, 'booking', enquiryNumber, {
+          destination: bookingData.destinationOrPackage,
+          status: 'Pending',
+        });
+        return {
+          ...obj,
+          id: obj._id || enquiryNumber,
+          bookingReference: enquiryNumber,
+        };
+      } catch (e) {
+        console.error('[StoreService] Mongo createBooking error:', e.message);
+      }
     }
 
     this.bookings.unshift(record);
-    return record;
+    await this.logAudit('BOOKING_CREATED', memberName, 'booking', enquiryNumber, {
+      destination: bookingData.destinationOrPackage,
+      status: 'Pending',
+    });
+    return {
+      ...record,
+      id: record._id || enquiryNumber,
+      bookingReference: enquiryNumber,
+    };
   }
 
   async getBookings({ status = '', search = '' } = {}) {
@@ -2709,57 +2774,136 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     if (this.isMongoLive()) {
       try {
         const filter = {};
-        if (status) filter.status = status;
+        if (status) {
+          if (status.toLowerCase() === 'pending' || status.toLowerCase() === 'new') {
+            filter.status = { $in: ['Pending', 'pending', 'New', 'new'] };
+          } else {
+            filter.status = new RegExp('^' + status + '$', 'i');
+          }
+        }
         if (search) {
           const regex = new RegExp(search, 'i');
           filter.$or = [
             { enquiryNumber: regex },
+            { referenceNumber: regex },
             { customerName: regex },
+            { memberName: regex },
+            { firstName: regex },
+            { lastName: regex },
             { email: regex },
+            { phone: regex },
             { destinationOrPackage: regex },
           ];
         }
-        return await Booking.find(filter).sort({ createdAt: -1 }).lean();
-      } catch (e) {}
+        const docs = await Booking.find(filter).sort({ createdAt: -1 }).lean();
+        return docs.map((d) => ({
+          ...d,
+          id: d._id || d.enquiryNumber,
+          bookingReference: d.referenceNumber || d.enquiryNumber,
+        }));
+      } catch (e) {
+        console.error('[StoreService] Mongo getBookings error:', e.message);
+      }
     }
 
     let results = [...this.bookings];
-    if (status) results = results.filter((b) => b.status.toLowerCase() === status.toLowerCase());
+    if (status) {
+      const s = status.toLowerCase();
+      results = results.filter((b) => {
+        const bs = (b.status || '').toLowerCase();
+        if (s === 'pending' || s === 'new') return bs === 'pending' || bs === 'new';
+        return bs === s;
+      });
+    }
     if (search) {
       const q = search.toLowerCase();
       results = results.filter(
         (b) =>
-          b.enquiryNumber.toLowerCase().includes(q) ||
-          b.customerName.toLowerCase().includes(q) ||
-          b.email.toLowerCase().includes(q) ||
-          b.destinationOrPackage.toLowerCase().includes(q)
+          (b.enquiryNumber && b.enquiryNumber.toLowerCase().includes(q)) ||
+          (b.referenceNumber && b.referenceNumber.toLowerCase().includes(q)) ||
+          (b.customerName && b.customerName.toLowerCase().includes(q)) ||
+          (b.memberName && b.memberName.toLowerCase().includes(q)) ||
+          (b.firstName && b.firstName.toLowerCase().includes(q)) ||
+          (b.lastName && b.lastName.toLowerCase().includes(q)) ||
+          (b.email && b.email.toLowerCase().includes(q)) ||
+          (b.destinationOrPackage && b.destinationOrPackage.toLowerCase().includes(q))
       );
     }
-    return results;
+    return results.map((d) => ({
+      ...d,
+      id: d._id || d.enquiryNumber,
+      bookingReference: d.referenceNumber || d.enquiryNumber,
+    }));
   }
 
   async updateBooking(enquiryNumber, updateData, author = 'Staff') {
-    const booking = this.bookings.find((b) => b.enquiryNumber === enquiryNumber || b._id === enquiryNumber);
+    let booking = null;
+
+    if (this.isMongoLive()) {
+      try {
+        booking = await Booking.findOne({
+          $or: [{ enquiryNumber }, { _id: enquiryNumber }, { referenceNumber: enquiryNumber }],
+        });
+      } catch (e) {}
+    }
+
+    if (!booking) {
+      booking = this.bookings.find(
+        (b) => b.enquiryNumber === enquiryNumber || b._id === enquiryNumber || b.referenceNumber === enquiryNumber
+      );
+    }
+
     if (!booking) throw new Error(`Booking enquiry '${enquiryNumber}' not found.`);
 
     if (updateData.status) booking.status = updateData.status;
     if (updateData.emailNotificationSent !== undefined) booking.emailNotificationSent = updateData.emailNotificationSent;
+    if (updateData.emailError !== undefined) booking.emailError = updateData.emailError;
     if (updateData.note) {
       booking.internalNotes = booking.internalNotes || [];
-      booking.internalNotes.push({ note: updateData.note, author, createdAt: new Date().toISOString() });
+      booking.internalNotes.push({
+        note: updateData.note,
+        author,
+        authorName: author,
+        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
     }
+    booking.updatedAt = new Date().toISOString();
 
-    if (this.isMongoLive()) {
+    if (this.isMongoLive() && typeof booking.save === 'function') {
+      try {
+        await booking.save();
+      } catch (e) {
+        console.error('[StoreService] Mongo updateBooking save error:', e.message);
+      }
+    } else if (this.isMongoLive()) {
       try {
         await Booking.findOneAndUpdate(
-          { $or: [{ enquiryNumber }, { _id: enquiryNumber }] },
+          { $or: [{ enquiryNumber }, { _id: enquiryNumber }, { referenceNumber: enquiryNumber }] },
           { $set: booking }
         );
       } catch (e) {}
     }
 
+    // Keep in-memory cache synchronized as well
+    const memIndex = this.bookings.findIndex(
+      (b) => b.enquiryNumber === enquiryNumber || b._id === enquiryNumber || b.referenceNumber === enquiryNumber
+    );
+    const plainObj = typeof booking.toObject === 'function' ? booking.toObject() : booking;
+    const normalized = {
+      ...plainObj,
+      id: plainObj._id || enquiryNumber,
+      bookingReference: plainObj.referenceNumber || enquiryNumber,
+    };
+
+    if (memIndex !== -1) {
+      this.bookings[memIndex] = normalized;
+    } else {
+      this.bookings.unshift(normalized);
+    }
+
     await this.logAudit('BOOKING_UPDATED', author, 'booking', enquiryNumber, { status: booking.status });
-    return booking;
+    return normalized;
   }
 
   // ==================== TERMS & CONDITIONS ====================
@@ -2797,13 +2941,63 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
   // ==================== METRICS & AUDIT ====================
   async getDashboardMetrics() {
     await this.initializeSeedAccounts();
-    const members = await this.getMembers({ limit: 5000 });
-    const allMembers = members.members;
+
+    let allMembers = [];
+    if (this.isMongoLive()) {
+      try {
+        const docs = await MemberProfile.find({ isDeleted: { $ne: true } }).lean();
+        allMembers = docs.map((m) => {
+          const financials = this.calculateMemberFinancials(m);
+          const normalizedStatus = normalizeMembershipStatus(financials.membershipStatus || financials.status || 'Active');
+          return {
+            ...financials,
+            status: normalizedStatus,
+            membershipStatus: normalizedStatus,
+          };
+        });
+      } catch (e) {
+        console.error('[StoreService] Mongo getDashboardMetrics member fetch error:', e.message);
+      }
+    }
+
+    if (allMembers.length === 0 && this.members.length > 0) {
+      allMembers = this.members.filter((m) => !m.isDeleted).map((m) => {
+        const financials = this.calculateMemberFinancials(m);
+        const normalizedStatus = normalizeMembershipStatus(financials.membershipStatus || financials.status || 'Active');
+        return {
+          ...financials,
+          status: normalizedStatus,
+          membershipStatus: normalizedStatus,
+        };
+      });
+    }
 
     const totalMembers = allMembers.length;
-    const activeMembers = allMembers.filter((m) => m.membershipStatus === 'Active').length;
-    const goldMembers = allMembers.filter((m) => m.packageType === 'Gold').length;
-    const silverMembers = allMembers.filter((m) => m.packageType === 'Silver').length;
+
+    // Status counts according to standardized 5 statuses
+    const statusCounts = {
+      Active: 0,
+      InActive: 0,
+      Refunded: 0,
+      Hold: 0,
+      Cancel: 0,
+    };
+
+    // Dynamic membership categories breakdown (Titanium, Platinum+, Platinum, Gold Plus, Gold, Silver Plus, Silver, etc.)
+    const membershipCategories = {};
+
+    for (const m of allMembers) {
+      const st = normalizeMembershipStatus(m.membershipStatus || m.status);
+      if (statusCounts[st] !== undefined) {
+        statusCounts[st] += 1;
+      } else {
+        statusCounts.Active += 1;
+      }
+
+      const cat = m.packageType || 'Silver';
+      membershipCategories[cat] = (membershipCategories[cat] || 0) + 1;
+    }
+
     const totalOutstandingBalance = allMembers.reduce((sum, m) => sum + (Number(m.outstandingBalance) || 0), 0);
     const totalCollected = allMembers.reduce((sum, m) => sum + (Number(m.totalAmountPaid) || 0), 0);
 
@@ -2811,18 +3005,50 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       (await this.getMemberRequests({ status: 'Under Review' })).length;
 
     const pendingChangeRequests = (await this.getChangeRequests({ status: 'Pending' })).length;
-    const newBookings = (await this.getBookings({ status: 'New' })).length;
+
+    // Real-time booking requests breakdown
+    const allBookings = await this.getBookings();
+    const bookingStatusCounts = {
+      total: allBookings.length,
+      pending: allBookings.filter((b) => {
+        const s = (b.status || '').toLowerCase();
+        return s === 'pending' || s === 'new' || s === 'submitted';
+      }).length,
+      confirmed: allBookings.filter((b) => {
+        const s = (b.status || '').toLowerCase();
+        return s === 'confirmed' || s === 'approved' || s === 'completed';
+      }).length,
+      cancelled: allBookings.filter((b) => {
+        const s = (b.status || '').toLowerCase();
+        return s === 'cancelled' || s === 'closed - lost' || s === 'rejected';
+      }).length,
+    };
+
+    const newBookings = bookingStatusCounts.pending;
+
+    let recentActivity = [];
+    try {
+      recentActivity = await this.getAuditLogs(10);
+    } catch (e) {}
 
     return {
       totalMembers,
-      activeMembers,
-      goldMembers,
-      silverMembers,
+      activeMembers: statusCounts.Active,
+      statusCounts,
+      membershipCategories,
+      goldMembers: membershipCategories['Gold'] || 0,
+      silverMembers: membershipCategories['Silver'] || 0,
       totalOutstandingBalance,
       totalCollected,
+      totalCollectedRevenue: totalCollected,
       pendingRequests,
+      pendingMemberRequests: pendingRequests,
       pendingChangeRequests,
       newBookings,
+      bookingsSummary: bookingStatusCounts,
+      bookingStatusCounts,
+      recentBookings: allBookings.slice(0, 10),
+      recentActivity,
     };
   }
 

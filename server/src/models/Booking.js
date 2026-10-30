@@ -2,11 +2,27 @@ import mongoose from 'mongoose';
 
 const bookingSchema = new mongoose.Schema(
   {
+    _id: {
+      type: mongoose.Schema.Types.Mixed,
+    },
     enquiryNumber: {
       type: String,
       required: true,
       unique: true,
       uppercase: true,
+      index: true,
+    },
+    referenceNumber: {
+      type: String,
+      trim: true,
+      default: '',
+      index: true,
+    },
+    memberId: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: '',
       index: true,
     },
     // Standard Booking Request Format Fields
@@ -67,19 +83,22 @@ const bookingSchema = new mongoose.Schema(
     activitiesRequired: { type: String, required: true, trim: true },
     budgetRange: { type: String, default: 'Flexible' },
     notes: { type: String, default: '' },
+    specialRequests: { type: String, trim: true, default: '' },
     consent: { type: Boolean, required: true, default: true },
     status: {
       type: String,
       enum: [
+        'Pending',
         'New',
         'Contacted',
         'Awaiting Customer Response',
         'Awaiting Supplier Confirmation',
         'Confirmed',
+        'Approved',
         'Cancelled',
         'Completed',
       ],
-      default: 'New',
+      default: 'Pending',
       index: true,
     },
     internalNotes: [
@@ -105,6 +124,9 @@ const bookingSchema = new mongoose.Schema(
 bookingSchema.pre('save', function (next) {
   if (!this.customerName) {
     this.customerName = `${this.prefix || ''} ${this.firstName || ''} ${this.lastName || ''}`.trim();
+  }
+  if (!this.referenceNumber && this.enquiryNumber) {
+    this.referenceNumber = this.enquiryNumber;
   }
   next();
 });

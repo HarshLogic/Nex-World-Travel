@@ -143,7 +143,7 @@ export async function fetchDashboardMetrics() {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || 'Failed to fetch dashboard metrics.');
-  return data;
+  return data.metrics ? { ...data, ...data.metrics } : data;
 }
 
 export async function fetchAdminMembers(params = {}) {
@@ -297,7 +297,7 @@ export async function fetchAdminBookings(params = {}) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || 'Failed to fetch bookings.');
-  return data.data || [];
+  return data.data || data.bookings || [];
 }
 
 export async function updateBookingStatus(id, status, note = '') {

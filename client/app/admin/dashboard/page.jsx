@@ -88,6 +88,7 @@ import {
 } from '../../../lib/api';
 import { getAuthUser, clearAuth } from '../../../lib/auth';
 import { PERMISSION_OPTIONS } from '../../../lib/permissions';
+import { formatAED } from '../../../lib/currency';
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -120,6 +121,8 @@ export default function AdminDashboardPage() {
     phone: '',
     password: '',
     packageType: 'Gold',
+    allottedNights: 14,
+    usedNights: 0,
     nightsAvailable: 14,
     extraOffers: 'Airport Transfer, VIP Lounge, Travel Concierge',
     tenurePeriod: '3 Years',
@@ -127,7 +130,9 @@ export default function AdminDashboardPage() {
     purchaseDate: new Date().toISOString().split('T')[0],
     productPrice: 12500,
     initialPaidAmount: 5000,
-    membershipStatus: 'Open',
+    paymentMethod: 'Bank Transfer',
+    paymentReference: '',
+    membershipStatus: 'Active',
     hasEmi: true,
     emiAmount: 1250,
     emiFrequency: 'Monthly',
@@ -243,6 +248,7 @@ export default function AdminDashboardPage() {
   // Bookings state
   const [bookings, setBookings] = useState([]);
   const [bookingStatusFilter, setBookingStatusFilter] = useState('');
+  const [bookingSearch, setBookingSearch] = useState('');
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [bookingNoteText, setBookingNoteText] = useState('');
 
@@ -291,6 +297,15 @@ export default function AdminDashboardPage() {
     loadAllDashboardData();
   }, [router]);
 
+  useEffect(() => {
+    if (activeTab === 'bookings') {
+      fetchAdminBookings().then(setBookings).catch(() => {});
+      fetchDashboardMetrics().then((d) => setMetrics(d?.metrics || d)).catch(() => {});
+    } else if (activeTab === 'overview') {
+      fetchDashboardMetrics().then((d) => setMetrics(d?.metrics || d)).catch(() => {});
+    }
+  }, [activeTab]);
+
   const loadAllDashboardData = async () => {
     setLoading(true);
     try {
@@ -308,7 +323,7 @@ export default function AdminDashboardPage() {
           fetchActivities().catch(() => []),
         ]);
 
-      if (metricsData) setMetrics(metricsData);
+      if (metricsData) setMetrics(metricsData.metrics || metricsData);
       if (membersData) {
         setMembers(membersData.members || []);
         if (membersData.pagination) setMembersPagination(membersData.pagination);
@@ -360,14 +375,19 @@ export default function AdminDashboardPage() {
       const payload = {
         memberId: addMemberForm.memberId.trim().toUpperCase(),
         name: addMemberForm.name.trim(),
+        registeredName: addMemberForm.name.trim(),
         email: addMemberForm.email.trim(),
         phone: addMemberForm.phone.trim(),
         password: addMemberForm.password,
+        initialPassword: addMemberForm.password,
         packageType: addMemberForm.packageType,
-        nightsAvailable: Number(addMemberForm.nightsAvailable),
-        availableNights: Number(addMemberForm.nightsAvailable),
-        allottedNights: Number(addMemberForm.nightsAvailable),
-        membershipStatus: addMemberForm.membershipStatus || 'Open',
+        allottedNights: Number(addMemberForm.allottedNights || 14),
+        usedNights: Number(addMemberForm.usedNights || 0),
+        nightsAvailable: Math.max(0, Number(addMemberForm.allottedNights || 14) - Number(addMemberForm.usedNights || 0)),
+        availableNights: Math.max(0, Number(addMemberForm.allottedNights || 14) - Number(addMemberForm.usedNights || 0)),
+        membershipStatus: addMemberForm.membershipStatus || 'Active',
+        paymentMethod: addMemberForm.paymentMethod || 'Bank Transfer',
+        paymentReference: addMemberForm.paymentReference || '',
         extraOffers: addMemberForm.extraOffers,
         tenurePeriod: addMemberForm.tenurePeriod,
         travelCardBenefit: Boolean(addMemberForm.travelCardBenefit),
@@ -398,7 +418,7 @@ export default function AdminDashboardPage() {
       handleMembersSearch(1);
 
       // Reload metrics
-      fetchDashboardMetrics().then(setMetrics).catch(() => {});
+      fetchDashboardMetrics().then((d) => setMetrics(d?.metrics || d)).catch(() => {});
     } catch (err) {
       triggerToast(err.message || 'Failed to create member', 'error');
     } finally {
@@ -512,7 +532,7 @@ export default function AdminDashboardPage() {
       setMembers((prev) => prev.map((m) => (m.memberId === selectedMember.memberId ? updated : m)));
       setPaymentForm({ amount: '', paymentMethod: 'Bank Transfer', transactionReference: '', notes: '', membershipStatus: '' });
       handleMembersSearch(membersPagination.page);
-      fetchDashboardMetrics().then(setMetrics).catch(() => {});
+      fetchDashboardMetrics().then((d) => setMetrics(d?.metrics || d)).catch(() => {});
     } catch (err) {
       triggerToast(err.message || 'Failed to record payment', 'error');
     } finally {
@@ -580,7 +600,7 @@ export default function AdminDashboardPage() {
       const res = await approveChangeRequest(id);
       triggerToast('Change request approved and member record updated!');
       fetchChangeRequests().then(setChangeRequests).catch(() => {});
-      fetchDashboardMetrics().then(setMetrics).catch(() => {});
+      fetchDashboardMetrics().then((d) => setMetrics(d?.metrics || d)).catch(() => {});
       handleMembersSearch(membersPagination.page);
     } catch (err) {
       triggerToast(err.message || 'Failed to approve change request', 'error');
@@ -612,6 +632,7 @@ export default function AdminDashboardPage() {
       await updateBookingStatus(id, status);
       triggerToast(`Booking status updated to ${status}`);
       fetchAdminBookings().then(setBookings).catch(() => {});
+      fetchDashboardMetrics().then((d) => setMetrics(d?.metrics || d)).catch(() => {});
     } catch (err) {
       triggerToast(err.message || 'Failed to update booking status', 'error');
     }
@@ -1080,7 +1101,7 @@ export default function AdminDashboardPage() {
             { id: 'activities', label: `Activities (${activities.length})`, icon: Compass },
             {
               id: 'bookings',
-              label: `Bookings ${bookings.filter((b) => b.status === 'New').length > 0 ? `(${bookings.filter((b) => b.status === 'New').length})` : ''}`,
+              label: `Bookings ${bookings.filter((b) => (b.status || '').toLowerCase() === 'pending' || (b.status || '').toLowerCase() === 'new').length > 0 ? `(${bookings.filter((b) => (b.status || '').toLowerCase() === 'pending' || (b.status || '').toLowerCase() === 'new').length})` : ''}`,
               icon: CalendarCheck,
             },
             {
@@ -1158,25 +1179,41 @@ export default function AdminDashboardPage() {
 
               <div className="bg-white p-5 rounded-2xl border border-border shadow-xs hover:border-accent-primary/40 transition-colors">
                 <div className="flex items-center justify-between text-text-secondary mb-2">
-                  <span className="text-xs font-medium">Gold vs Silver Tiers</span>
+                  <span className="text-xs font-medium">Membership Categories</span>
                   <Award className="w-4 h-4 text-amber-500" />
                 </div>
-                <div className="text-2xl font-black text-text-primary">
-                  {metrics?.goldMembers || 0} <span className="text-xs font-normal text-text-tertiary">/ {metrics?.silverMembers || 0}</span>
+                <div className="text-xl font-black text-text-primary flex items-baseline gap-2">
+                  <span>{metrics?.membershipCategories ? Object.keys(metrics.membershipCategories).length : 0}</span>
+                  <span className="text-xs font-normal text-text-tertiary">Active Tiers</span>
                 </div>
-                <div className="mt-2 text-xs text-text-secondary flex items-center gap-2">
-                  <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-bold text-[10px]">Gold: {metrics?.goldMembers || 0}</span>
-                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">Silver: {metrics?.silverMembers || 0}</span>
+                <div className="mt-2 flex flex-wrap gap-1 max-h-14 overflow-y-auto">
+                  {metrics?.membershipCategories && Object.entries(metrics.membershipCategories).length > 0 ? (
+                    Object.entries(metrics.membershipCategories).map(([cat, count]) => (
+                      <span key={cat} className="px-1.5 py-0.5 rounded bg-surface-50 border border-border text-text-secondary font-bold text-[10px]">
+                        {cat}: {count}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[10px] text-text-tertiary italic">No active tiers</span>
+                  )}
                 </div>
               </div>
 
               <div className="bg-white p-5 rounded-2xl border border-border shadow-xs hover:border-accent-primary/40 transition-colors">
                 <div className="flex items-center justify-between text-text-secondary mb-2">
-                  <span className="text-xs font-medium">Available Nights Pool</span>
-                  <Calendar className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs font-medium">Status Breakdown</span>
+                  <TrendingUp className="w-4 h-4 text-emerald-500" />
                 </div>
-                <div className="text-2xl font-black text-text-primary">{metrics?.totalAvailableNights || 0}</div>
-                <div className="mt-2 text-xs text-text-tertiary">Collective unredeemed nights</div>
+                <div className="text-xl font-black text-emerald-600 flex items-baseline gap-2">
+                  <span>{metrics?.statusCounts?.Active ?? metrics?.activeMembers ?? 0}</span>
+                  <span className="text-xs font-normal text-text-tertiary">Active</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1 text-[10px] font-semibold">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">InActive: {metrics?.statusCounts?.InActive || 0}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">Refunded: {metrics?.statusCounts?.Refunded || 0}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">Hold: {metrics?.statusCounts?.Hold || 0}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700">Cancel: {metrics?.statusCounts?.Cancel || 0}</span>
+                </div>
               </div>
 
               <div className="bg-white p-5 rounded-2xl border border-border shadow-xs hover:border-accent-primary/40 transition-colors">
@@ -1184,11 +1221,11 @@ export default function AdminDashboardPage() {
                   <span className="text-xs font-medium">Outstanding Balance</span>
                   <DollarSign className="w-4 h-4 text-red-500" />
                 </div>
-                <div className="text-2xl font-black text-red-600">
-                  ${(metrics?.totalOutstandingBalance || 0).toLocaleString()}
+                <div className="text-xl font-black text-red-600">
+                  {formatAED(metrics?.totalOutstandingBalance || 0)}
                 </div>
                 <div className="mt-2 text-xs text-emerald-600 font-semibold">
-                  Paid: ${(metrics?.totalCollectedRevenue || 0).toLocaleString()}
+                  Paid: {formatAED(metrics?.totalCollectedRevenue || metrics?.totalCollected || 0)}
                 </div>
               </div>
 
@@ -1209,17 +1246,29 @@ export default function AdminDashboardPage() {
 
               <div className="bg-white p-5 rounded-2xl border border-border shadow-xs hover:border-accent-primary/40 transition-colors">
                 <div className="flex items-center justify-between text-text-secondary mb-2">
-                  <span className="text-xs font-medium">New Booking Enquiries</span>
+                  <span className="text-xs font-medium">Real-Time Booking Requests</span>
                   <CalendarCheck className="w-4 h-4 text-emerald-500" />
                 </div>
-                <div className="text-2xl font-black text-emerald-600">{metrics?.newBookings || 0}</div>
-                <button
-                  onClick={() => setActiveTab('bookings')}
-                  className="mt-2 text-xs text-accent-primary font-semibold hover:underline inline-flex items-center gap-1"
-                >
-                  <span>Manage bookings</span>
-                  <ArrowRight className="w-3 h-3" />
-                </button>
+                <div className="text-xl font-black text-text-primary flex items-baseline gap-1.5">
+                  <span>{metrics?.bookingStatusCounts?.total ?? bookings.length ?? 0}</span>
+                  <span className="text-xs font-normal text-text-tertiary">Total</span>
+                  <span className="text-xs font-bold text-amber-600 ml-1">
+                    ({metrics?.bookingStatusCounts?.pending ?? 0} Pending)
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold">
+                    <span className="text-emerald-700">Conf: {metrics?.bookingStatusCounts?.confirmed || 0}</span>
+                    <span className="text-text-tertiary">•</span>
+                    <span className="text-rose-600">Canc: {metrics?.bookingStatusCounts?.cancelled || 0}</span>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('bookings')}
+                    className="text-accent-primary font-bold hover:underline inline-flex items-center text-[10px]"
+                  >
+                    Manage &rarr;
+                  </button>
+                </div>
               </div>
 
               <div className="bg-white p-5 rounded-2xl border border-border shadow-xs hover:border-accent-primary/40 transition-colors">
@@ -1227,7 +1276,7 @@ export default function AdminDashboardPage() {
                   <span className="text-xs font-medium">Member Support (24h SLA)</span>
                   <MessageSquare className="w-4 h-4 text-purple-500" />
                 </div>
-                <div className="text-2xl font-black text-purple-600">{metrics?.pendingMemberRequests || 0}</div>
+                <div className="text-2xl font-black text-purple-600">{metrics?.pendingMemberRequests ?? metrics?.pendingRequests ?? 0}</div>
                 <button
                   onClick={() => setActiveTab('member-requests')}
                   className="mt-2 text-xs text-accent-primary font-semibold hover:underline inline-flex items-center gap-1"
@@ -1327,6 +1376,67 @@ export default function AdminDashboardPage() {
                     ))}
                     {memberRequests.length === 0 && (
                       <div className="p-8 text-center text-xs text-text-tertiary">No member tickets yet.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Recent Booking Requests */}
+                <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
+                  <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                    <div>
+                      <h2 className="text-base font-bold text-text-primary">Recent Booking Requests</h2>
+                      <p className="text-xs text-text-secondary">Guest holiday enquiries awaiting reservation review</p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('bookings')}
+                      className="text-xs font-semibold text-accent-primary hover:underline"
+                    >
+                      View all ({bookings.length})
+                    </button>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {bookings.slice(0, 4).map((b) => (
+                      <div
+                        key={b.id || b._id}
+                        className="p-4 sm:px-6 hover:bg-surface-50 transition-colors flex items-center justify-between gap-3"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-accent-primary">
+                              {b.bookingReference || b.enquiryNumber || b.id || b._id}
+                            </span>
+                            <span className="text-xs font-semibold text-text-primary">
+                              {b.fullName || b.customerName || b.memberName || `${b.firstName || ''} ${b.lastName || ''}`.trim() || 'Guest'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-text-secondary">
+                            {b.destinationName || b.destinationOrPackage || 'Custom Trip'} • {b.departureDate || b.travelDate || 'Flexible'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              b.status === 'Confirmed' || b.status === 'Approved'
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : b.status === 'Cancelled'
+                                ? 'bg-rose-50 text-rose-700'
+                                : 'bg-amber-50 text-amber-700'
+                            }`}
+                          >
+                            {b.status || 'Pending'}
+                          </span>
+                          <button
+                            onClick={() => setSelectedBooking(b)}
+                            className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary hover:bg-surface-100"
+                            title="View Full Booking Details"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {bookings.length === 0 && (
+                      <div className="p-8 text-center text-xs text-text-tertiary">No booking requests recorded yet.</div>
                     )}
                   </div>
                 </div>
@@ -1452,9 +1562,10 @@ export default function AdminDashboardPage() {
                   className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary focus:outline-none focus:border-accent-primary font-medium"
                 >
                   <option value="">All Statuses</option>
-                  <option value="Open">Activated</option>
-                  <option value="Close">Inactive</option>
-                  <option value="Deactive">Deactive</option>
+                  <option value="Active">Active</option>
+                  <option value="InActive">InActive</option>
+                  <option value="Refunded">Refunded</option>
+                  <option value="Hold">Hold</option>
                   <option value="Cancel">Cancel</option>
                 </select>
 
@@ -1496,27 +1607,31 @@ export default function AdminDashboardPage() {
                         <td className="py-3.5 px-4">
                           <span
                             className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                              (m.membershipStatus || m.status) === 'Open' || (m.membershipStatus || m.status) === 'Active'
+                              (m.membershipStatus || m.status) === 'Active' || (m.membershipStatus || m.status) === 'Open'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : (m.membershipStatus || m.status) === 'Close'
+                                : (m.membershipStatus || m.status) === 'InActive' || (m.membershipStatus || m.status) === 'Close' || (m.membershipStatus || m.status) === 'Deactive'
                                 ? 'bg-slate-100 text-slate-700 border border-slate-300'
-                                : (m.membershipStatus || m.status) === 'Deactive'
+                                : (m.membershipStatus || m.status) === 'Refunded'
+                                ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                : (m.membershipStatus || m.status) === 'Hold'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                 : 'bg-red-50 text-red-700 border border-red-200'
                             }`}
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${
-                                (m.membershipStatus || m.status) === 'Open' || (m.membershipStatus || m.status) === 'Active'
+                                (m.membershipStatus || m.status) === 'Active' || (m.membershipStatus || m.status) === 'Open'
                                   ? 'bg-emerald-500'
-                                  : (m.membershipStatus || m.status) === 'Close'
+                                  : (m.membershipStatus || m.status) === 'InActive' || (m.membershipStatus || m.status) === 'Close' || (m.membershipStatus || m.status) === 'Deactive'
                                   ? 'bg-slate-500'
-                                  : (m.membershipStatus || m.status) === 'Deactive'
+                                  : (m.membershipStatus || m.status) === 'Refunded'
+                                  ? 'bg-purple-500'
+                                  : (m.membershipStatus || m.status) === 'Hold'
                                   ? 'bg-amber-500'
                                   : 'bg-red-500'
                               }`}
                             />
-                            {m.membershipStatus || m.status || 'Open'}
+                            {m.membershipStatus || m.status || 'Active'}
                           </span>
                         </td>
                         <td className="py-3.5 px-4">
@@ -1698,15 +1813,30 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
                 <div className="bg-surface-50 p-3.5 rounded-xl border border-border">
+                  <span className="text-text-tertiary">Registration Timestamp</span>
+                  <p className="text-xs font-semibold text-text-primary mt-0.5">
+                    {selectedMember.registrationDate || selectedMember.createdAt ? (
+                      new Date(selectedMember.registrationDate || selectedMember.createdAt).toLocaleString('en-GB', {
+                        timeZone: 'Asia/Dubai',
+                        year: 'numeric',
+                        month: 'short',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }) + ' (UAE)'
+                    ) : 'N/A'}
+                  </p>
+                </div>
+                <div className="bg-surface-50 p-3.5 rounded-xl border border-border">
                   <span className="text-text-tertiary">Membership Status</span>
                   <div className="mt-1">
                     <select
-                      value={selectedMember.membershipStatus || 'Open'}
+                      value={selectedMember.membershipStatus || selectedMember.status || 'Active'}
                       onChange={async (e) => {
                         const newStatus = e.target.value;
                         try {
                           const res = await updateAdminMember(selectedMember.memberId, { membershipStatus: newStatus });
-                          const updated = res.member || res.profile || { ...selectedMember, membershipStatus: newStatus };
+                          const updated = res.member || res.profile || { ...selectedMember, membershipStatus: newStatus, status: newStatus };
                           setSelectedMember(updated);
                           setMembers((prev) => prev.map((m) => (m.memberId === selectedMember.memberId ? updated : m)));
                           triggerToast(`Membership status updated to ${newStatus}`);
@@ -1716,9 +1846,10 @@ export default function AdminDashboardPage() {
                       }}
                       className="text-xs font-bold rounded-lg px-2.5 py-1 border border-border bg-white text-text-primary focus:border-accent-primary"
                     >
-                      <option value="Open">Open</option>
-                      <option value="Close">Close</option>
-                      <option value="Deactive">Deactive</option>
+                      <option value="Active">Active</option>
+                      <option value="InActive">InActive</option>
+                      <option value="Refunded">Refunded</option>
+                      <option value="Hold">Hold</option>
                       <option value="Cancel">Cancel</option>
                     </select>
                   </div>
@@ -2005,17 +2136,18 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Membership Status *</label>
                     <select
-                      value={addMemberForm.membershipStatus || 'Open'}
+                      value={addMemberForm.membershipStatus || 'Active'}
                       onChange={(e) => setAddMemberForm({ ...addMemberForm, membershipStatus: e.target.value })}
                       className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold text-accent-primary"
                     >
-                      <option value="Open">Open</option>
-                      <option value="Close">Close</option>
-                      <option value="Deactive">Deactive</option>
+                      <option value="Active">Active</option>
+                      <option value="InActive">InActive</option>
+                      <option value="Refunded">Refunded</option>
+                      <option value="Hold">Hold</option>
                       <option value="Cancel">Cancel</option>
                     </select>
                   </div>
@@ -2034,17 +2166,6 @@ export default function AdminDashboardPage() {
                       <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
                     </select>
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Available Nights *</label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      value={addMemberForm.nightsAvailable}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, nightsAvailable: e.target.value })}
-                      className="w-full px-2.5 py-1.5 rounded-xl border border-border"
-                    />
                   </div>
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Travel Card Benefit *</label>
@@ -2071,36 +2192,156 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
 
-                {/* Financial Details */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Total Product Price (AED) *</label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      value={addMemberForm.productPrice}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, productPrice: e.target.value })}
-                      className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold"
-                    />
+                {/* Night Entitlements Calculation Section */}
+                <div className="bg-surface-50 p-3.5 rounded-2xl border border-border space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-text-primary flex items-center gap-1.5 text-xs">
+                      <Calendar className="w-4 h-4 text-accent-primary" />
+                      <span>Night Entitlements & Usage Calculation</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allotted = Number(addMemberForm.allottedNights || 0);
+                        const used = Number(addMemberForm.usedNights || 0);
+                        const avail = Math.max(0, allotted - used);
+                        setAddMemberForm((prev) => ({
+                          ...prev,
+                          nightsAvailable: avail,
+                        }));
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-bold bg-accent-primary text-white hover:bg-accent-primary-hover rounded-lg transition-colors flex items-center gap-1 shadow-xs"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Calculate Used Nights</span>
+                    </button>
                   </div>
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Initial Down Payment (AED) *</label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      value={addMemberForm.initialPaidAmount}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, initialPaidAmount: e.target.value })}
-                      className="w-full px-2.5 py-1.5 rounded-xl border border-border text-emerald-600 font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Estimated Balance</label>
-                    <div className="px-2.5 py-1.5 rounded-xl bg-white border border-border font-bold text-red-600">
-                      AED {Math.max(0, Number(addMemberForm.productPrice) - Number(addMemberForm.initialPaidAmount)).toLocaleString()}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Total Allotted Nights *</label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={addMemberForm.allottedNights}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const allotted = Number(val || 0);
+                          const used = Number(addMemberForm.usedNights || 0);
+                          setAddMemberForm({
+                            ...addMemberForm,
+                            allottedNights: val,
+                            nightsAvailable: Math.max(0, allotted - used),
+                          });
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold text-text-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Previously Used Nights</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={addMemberForm.usedNights}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const used = Number(val || 0);
+                          const allotted = Number(addMemberForm.allottedNights || 0);
+                          setAddMemberForm({
+                            ...addMemberForm,
+                            usedNights: val,
+                            nightsAvailable: Math.max(0, allotted - used),
+                          });
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold text-amber-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Remaining Available Nights</label>
+                      <div className={`px-2.5 py-1.5 rounded-xl border font-bold text-xs flex items-center justify-between ${
+                        Number(addMemberForm.usedNights || 0) > Number(addMemberForm.allottedNights || 0)
+                          ? 'bg-rose-50 border-rose-200 text-rose-600'
+                          : 'bg-white border-border text-emerald-600'
+                      }`}>
+                        <span>{Math.max(0, Number(addMemberForm.allottedNights || 0) - Number(addMemberForm.usedNights || 0))} Nights</span>
+                        <span className="text-[10px] text-text-tertiary">({addMemberForm.allottedNights || 0} - {addMemberForm.usedNights || 0})</span>
+                      </div>
                     </div>
                   </div>
+                  {Number(addMemberForm.usedNights || 0) > Number(addMemberForm.allottedNights || 0) && (
+                    <p className="text-[11px] text-rose-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Warning: Used nights exceed allotted nights! Available nights is capped at 0.</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Financial & Payment Method Details */}
+                <div className="bg-surface-50 p-3.5 rounded-2xl border border-border space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Total Product Price (AED) *</label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={addMemberForm.productPrice}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, productPrice: e.target.value })}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Initial Down Payment (AED) *</label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={addMemberForm.initialPaidAmount}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, initialPaidAmount: e.target.value })}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-border text-emerald-600 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Estimated Balance</label>
+                      <div className="px-2.5 py-1.5 rounded-xl bg-white border border-border font-bold text-red-600">
+                        AED {Math.max(0, Number(addMemberForm.productPrice) - Number(addMemberForm.initialPaidAmount)).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {Number(addMemberForm.initialPaidAmount || 0) > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/60">
+                      <div>
+                        <label className="block font-semibold text-text-secondary mb-1">Payment Method (Down Payment) *</label>
+                        <select
+                          value={addMemberForm.paymentMethod || 'Bank Transfer'}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, paymentMethod: e.target.value })}
+                          className="w-full px-2.5 py-1.5 rounded-xl border border-border font-semibold text-text-primary"
+                        >
+                          <option value="Cash">Cash</option>
+                          <option value="Credit Card">Credit Card</option>
+                          <option value="Debit Card">Debit Card</option>
+                          <option value="Card Machine / POS (Card Swipe)">Card Machine / POS (Card Swipe)</option>
+                          <option value="Bank Transfer">Bank Transfer</option>
+                          <option value="Online Payment">Online Payment</option>
+                          <option value="Payment Link">Payment Link</option>
+                          <option value="Cheque">Cheque</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-text-secondary mb-1">Payment Reference / Transaction ID</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. POS Slip # / Bank Ref / Cheque #"
+                          value={addMemberForm.paymentReference || ''}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, paymentReference: e.target.value })}
+                          className="w-full px-2.5 py-1.5 rounded-xl border border-border font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2236,9 +2477,10 @@ export default function AdminDashboardPage() {
                         onChange={(e) => setEditMemberForm({ ...editMemberForm, membershipStatus: e.target.value })}
                         className="w-full px-3 py-2 rounded-xl border border-border font-bold"
                       >
-                        <option value="Open">Open</option>
-                        <option value="Close">Close</option>
-                        <option value="Deactive">Deactive</option>
+                        <option value="Active">Active</option>
+                        <option value="InActive">InActive</option>
+                        <option value="Refunded">Refunded</option>
+                        <option value="Hold">Hold</option>
                         <option value="Cancel">Cancel</option>
                       </select>
                     </div>
@@ -2953,7 +3195,7 @@ export default function AdminDashboardPage() {
                         <div className="flex items-center justify-between">
                           <h3 className="font-bold text-text-primary text-sm">{dest.title}</h3>
                           <span className="font-bold text-accent-primary text-xs">
-                            {dest.price ? `$${dest.price}` : dest.region}
+                            {dest.price ? `AED ${dest.price}` : dest.region}
                           </span>
                         </div>
                         <p className="text-xs text-text-secondary line-clamp-2">
@@ -3324,7 +3566,7 @@ export default function AdminDashboardPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Price ($)</label>
+                    <label className="block font-semibold text-text-secondary mb-1">Price (AED)</label>
                     <input
                       type="number"
                       min="0"
@@ -3840,94 +4082,176 @@ export default function AdminDashboardPage() {
                   notifications.
                 </p>
               </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[750px] text-left text-xs">
-                  <thead className="bg-surface-50 text-text-tertiary font-bold uppercase tracking-wider border-b border-border">
-                    <tr>
-                      <th className="py-3 px-4">Booking ID</th>
-                      <th className="py-3 px-4">Customer</th>
-                      <th className="py-3 px-4">Destination</th>
-                      <th className="py-3 px-4">Date & Guests</th>
-                      <th className="py-3 px-4">Email Status</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {bookings.map((b) => (
-                      <tr key={b.id || b._id} className="hover:bg-surface-50 transition-colors">
-                        <td className="py-3 px-4 font-mono font-bold text-accent-primary">
-                          {b.bookingReference || b.enquiryNumber || b.id || b._id}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-text-primary">
-                            {b.fullName || b.customerName || `${b.firstName || ''} ${b.lastName || ''}`.trim() || 'Guest'}
-                          </div>
-                          <div className="text-[11px] text-text-tertiary">
-                            {b.email} • {b.phone}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 font-medium text-text-primary">
-                          {b.destinationName || b.destinationOrPackage || 'Custom Trip'}
-                        </td>
-                        <td className="py-3 px-4 text-text-secondary">
-                          <div>{b.departureDate || b.travelDate || 'Flexible'}</div>
-                          <div className="text-[11px] text-text-tertiary">
-                            {b.guests || (b.adults ? `${b.adults} Adults${b.children ? `, ${b.children} Kids` : ''}` : '2 Guests')}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          {b.emailNotificationSent ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
-                              <Check className="w-3.5 h-3.5" /> Sent
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => handleRetryEmail(b.id || b._id)}
-                              className="inline-flex items-center gap-1 text-[11px] text-amber-600 hover:underline font-semibold"
-                              title="Click to retry sending notification"
-                            >
-                              <RefreshCw className="w-3 h-3" /> Retry Dispatch
-                            </button>
-                          )}
-                        </td>
-                        <td className="py-3 px-4">
-                          <select
-                            value={b.status}
-                            onChange={(e) => handleUpdateBookingStatus(b.id || b._id, e.target.value)}
-                            className="px-2 py-1 rounded-lg border border-border bg-surface-50 text-xs font-semibold"
-                          >
-                            <option value="New">New</option>
-                            <option value="Contacted">Contacted</option>
-                            <option value="Confirmed">Confirmed</option>
-                            <option value="Cancelled">Cancelled</option>
-                          </select>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <button
-                            onClick={() => setSelectedBooking(b)}
-                            className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary"
-                            title="View Booking Detail & Notes"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {bookings.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="py-12 text-center text-text-tertiary">
-                          No booking enquiries recorded.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    fetchAdminBookings().then(setBookings).catch(() => {});
+                    fetchDashboardMetrics().then((d) => setMetrics(d?.metrics || d)).catch(() => {});
+                  }}
+                  className="px-3.5 py-1.5 text-xs rounded-xl border border-border bg-white text-text-secondary hover:text-accent-primary flex items-center gap-1.5 font-semibold shadow-xs"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Refresh Enquiries</span>
+                </button>
               </div>
             </div>
+
+            {/* Filter and Search Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-border shadow-xs">
+              <div className="flex-1 relative">
+                <Search className="w-4 h-4 text-text-tertiary absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search by customer name, email, booking ref, destination..."
+                  value={bookingSearch}
+                  onChange={(e) => setBookingSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-surface-50 border border-border rounded-xl focus:border-accent-primary"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={bookingStatusFilter}
+                  onChange={(e) => setBookingStatusFilter(e.target.value)}
+                  className="px-3 py-1.5 text-xs bg-surface-50 border border-border rounded-xl font-semibold text-text-secondary"
+                >
+                  <option value="">All Statuses ({bookings.length})</option>
+                  <option value="Pending">
+                    Pending ({bookings.filter((b) => (b.status || '').toLowerCase() === 'pending' || (b.status || '').toLowerCase() === 'new').length})
+                  </option>
+                  <option value="Contacted">
+                    Contacted ({bookings.filter((b) => (b.status || '').toLowerCase() === 'contacted').length})
+                  </option>
+                  <option value="Confirmed">
+                    Confirmed ({bookings.filter((b) => (b.status || '').toLowerCase() === 'confirmed' || (b.status || '').toLowerCase() === 'approved').length})
+                  </option>
+                  <option value="Cancelled">
+                    Cancelled ({bookings.filter((b) => (b.status || '').toLowerCase() === 'cancelled').length})
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            {(() => {
+              const filteredBookings = bookings.filter((b) => {
+                if (bookingStatusFilter) {
+                  const bs = (b.status || '').toLowerCase();
+                  const fs = bookingStatusFilter.toLowerCase();
+                  if (fs === 'pending') {
+                    if (bs !== 'pending' && bs !== 'new') return false;
+                  } else if (bs !== fs) {
+                    return false;
+                  }
+                }
+                if (bookingSearch.trim()) {
+                  const q = bookingSearch.toLowerCase().trim();
+                  const match =
+                    (b.bookingReference && b.bookingReference.toLowerCase().includes(q)) ||
+                    (b.enquiryNumber && b.enquiryNumber.toLowerCase().includes(q)) ||
+                    (b.fullName && b.fullName.toLowerCase().includes(q)) ||
+                    (b.customerName && b.customerName.toLowerCase().includes(q)) ||
+                    (b.memberName && b.memberName.toLowerCase().includes(q)) ||
+                    (b.firstName && b.firstName.toLowerCase().includes(q)) ||
+                    (b.lastName && b.lastName.toLowerCase().includes(q)) ||
+                    (b.email && b.email.toLowerCase().includes(q)) ||
+                    (b.phone && b.phone.toLowerCase().includes(q)) ||
+                    (b.destinationOrPackage && b.destinationOrPackage.toLowerCase().includes(q));
+                  if (!match) return false;
+                }
+                return true;
+              });
+
+              return (
+                <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[750px] text-left text-xs">
+                      <thead className="bg-surface-50 text-text-tertiary font-bold uppercase tracking-wider border-b border-border">
+                        <tr>
+                          <th className="py-3 px-4">Booking ID</th>
+                          <th className="py-3 px-4">Customer</th>
+                          <th className="py-3 px-4">Destination</th>
+                          <th className="py-3 px-4">Date & Guests</th>
+                          <th className="py-3 px-4">Email Status</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {filteredBookings.map((b) => (
+                          <tr key={b.id || b._id} className="hover:bg-surface-50 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-accent-primary">
+                              {b.bookingReference || b.enquiryNumber || b.id || b._id}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-semibold text-text-primary">
+                                {b.fullName || b.customerName || b.memberName || `${b.firstName || ''} ${b.lastName || ''}`.trim() || 'Guest'}
+                              </div>
+                              <div className="text-[11px] text-text-tertiary">
+                                {b.email} • {b.phone}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 font-medium text-text-primary">
+                              {b.destinationName || b.destinationOrPackage || 'Custom Trip'}
+                            </td>
+                            <td className="py-3 px-4 text-text-secondary">
+                              <div>{b.checkInDate || b.travelDate || b.departureDate || 'Flexible'}</div>
+                              <div className="text-[11px] text-text-tertiary">
+                                {b.guestsCount || b.guests || (b.adults ? `${b.adults} Adults${b.children ? `, ${b.children} Kids` : ''}` : '2 Guests')}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              {b.emailNotificationSent ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
+                                  <Check className="w-3.5 h-3.5" /> Sent
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleRetryEmail(b.id || b._id)}
+                                  className="inline-flex items-center gap-1 text-[11px] text-amber-600 hover:underline font-semibold"
+                                  title="Click to retry sending notification"
+                                >
+                                  <RefreshCw className="w-3 h-3" /> Retry Dispatch
+                                </button>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <select
+                                value={b.status || 'Pending'}
+                                onChange={(e) => handleUpdateBookingStatus(b.id || b._id, e.target.value)}
+                                className="px-2 py-1 rounded-lg border border-border bg-surface-50 text-xs font-semibold"
+                              >
+                                <option value="Pending">Pending</option>
+                                <option value="New">New</option>
+                                <option value="Contacted">Contacted</option>
+                                <option value="Confirmed">Confirmed</option>
+                                <option value="Cancelled">Cancelled</option>
+                              </select>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                onClick={() => setSelectedBooking(b)}
+                                className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary"
+                                title="View Booking Detail & Notes"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {filteredBookings.length === 0 && (
+                          <tr>
+                            <td colSpan={7} className="py-12 text-center text-text-tertiary">
+                              {bookings.length === 0
+                                ? 'No booking enquiries recorded.'
+                                : 'No booking enquiries match your search or filter.'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -3939,7 +4263,7 @@ export default function AdminDashboardPage() {
                 <div>
                   <h3 className="text-base font-bold text-text-primary">Booking Enquiry Details</h3>
                   <p className="font-mono text-xs text-accent-primary">
-                    {selectedBooking.bookingReference || selectedBooking.id || selectedBooking._id}
+                    {selectedBooking.bookingReference || selectedBooking.enquiryNumber || selectedBooking.id || selectedBooking._id}
                   </p>
                 </div>
                 <button
@@ -3954,7 +4278,7 @@ export default function AdminDashboardPage() {
                 <div>
                   <span className="text-text-tertiary">Customer Name</span>
                   <p className="font-bold text-text-primary mt-0.5">
-                    {selectedBooking.fullName || selectedBooking.customerName || `${selectedBooking.prefix || ''} ${selectedBooking.firstName || ''} ${selectedBooking.lastName || ''}`.trim() || 'Guest'}
+                    {selectedBooking.fullName || selectedBooking.customerName || selectedBooking.memberName || `${selectedBooking.prefix || ''} ${selectedBooking.firstName || ''} ${selectedBooking.lastName || ''}`.trim() || 'Guest'}
                   </p>
                 </div>
                 <div>
@@ -3971,16 +4295,68 @@ export default function AdminDashboardPage() {
                     {selectedBooking.destinationName || selectedBooking.destinationOrPackage || 'Custom Trip'}
                   </p>
                 </div>
+                <div>
+                  <span className="text-text-tertiary">Check-in Date</span>
+                  <p className="font-bold text-emerald-700 mt-0.5">
+                    {selectedBooking.checkInDate || selectedBooking.travelDate || selectedBooking.departureDate || 'Flexible'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Check-out Date</span>
+                  <p className="font-bold text-emerald-700 mt-0.5">
+                    {selectedBooking.checkOutDate || selectedBooking.returnDate || 'Flexible'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Guests (PAX)</span>
+                  <p className="font-bold text-text-primary mt-0.5">
+                    {selectedBooking.guestsCount || selectedBooking.guests || (selectedBooking.adults ? `${selectedBooking.adults} Adults${selectedBooking.children ? `, ${selectedBooking.children} Kids` : ''}` : '1 Guest')}
+                    {selectedBooking.kidsAges ? ` (Ages: ${selectedBooking.kidsAges})` : ''}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Submitted Timestamp</span>
+                  <p className="font-bold text-text-primary mt-0.5 text-[11px]">
+                    {selectedBooking.createdAt ? new Date(selectedBooking.createdAt).toLocaleString('en-GB', { timeZone: 'Asia/Dubai' }) + ' (UAE)' : 'N/A'}
+                  </p>
+                </div>
               </div>
+
+              {selectedBooking.spouseName && (
+                <div className="text-xs bg-surface-50 p-3 rounded-xl border border-border">
+                  <span className="text-text-tertiary">Spouse Name: </span>
+                  <span className="font-semibold text-text-primary">{selectedBooking.spouseName}</span>
+                </div>
+              )}
 
               {(selectedBooking.specialRequests || selectedBooking.activitiesRequired || selectedBooking.notes) && (
                 <div className="text-xs">
-                  <span className="font-semibold text-text-secondary block mb-1">Customer Message:</span>
+                  <span className="font-semibold text-text-secondary block mb-1">Special Requests / Customer Message:</span>
                   <p className="bg-surface-50 p-3 rounded-xl border border-border text-text-primary">
                     {selectedBooking.specialRequests || selectedBooking.activitiesRequired || selectedBooking.notes}
                   </p>
                 </div>
               )}
+
+              {/* Status Update Directly from Drawer */}
+              <div className="pt-2 border-t border-border flex items-center justify-between text-xs">
+                <span className="font-semibold text-text-secondary">Current Status:</span>
+                <select
+                  value={selectedBooking.status || 'Pending'}
+                  onChange={async (e) => {
+                    const newStatus = e.target.value;
+                    await handleUpdateBookingStatus(selectedBooking.id || selectedBooking._id, newStatus);
+                    setSelectedBooking((prev) => (prev ? { ...prev, status: newStatus } : null));
+                  }}
+                  className="px-2.5 py-1 rounded-xl border border-border bg-surface-50 text-xs font-bold"
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="New">New</option>
+                  <option value="Contacted">Contacted</option>
+                  <option value="Confirmed">Confirmed</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </div>
 
               {/* Staff Notes section */}
               <div className="space-y-2 pt-2 border-t border-border">
@@ -3989,8 +4365,8 @@ export default function AdminDashboardPage() {
                   {(selectedBooking.internalNotes || []).map((note, idx) => (
                     <div key={idx} className="p-2.5 rounded-xl bg-surface-50 text-xs border border-border">
                       <div className="flex justify-between text-[10px] text-text-tertiary mb-0.5">
-                        <span className="font-semibold text-text-primary">{note.authorName}</span>
-                        <span>{new Date(note.timestamp).toLocaleDateString()}</span>
+                        <span className="font-semibold text-text-primary">{note.authorName || note.author}</span>
+                        <span>{new Date(note.timestamp || note.createdAt).toLocaleDateString()}</span>
                       </div>
                       <p className="text-text-secondary">{note.note}</p>
                     </div>

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { Mail, Phone, MapPin, ArrowRight, ShieldCheck, Sparkles, Shield, Clock, Building } from 'lucide-react';
+import { Mail, Phone, MapPin, ArrowRight, ShieldCheck, Sparkles, Shield, Clock, Building, Users } from 'lucide-react';
 
 const SOCIAL_LINKS = [
   {
@@ -196,13 +196,27 @@ export default function Footer() {
                   Contact & Support
                 </Link>
               </li>
-              <li className="pt-2 mt-1 border-t border-border/60">
+              <li className="pt-2 mt-1 border-t border-border/60 flex flex-col gap-2">
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-accent-primary transition-colors font-medium"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Member Portal</span>
+                </Link>
+                <Link
+                  href="/employee/login"
+                  className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-accent-primary transition-colors font-medium"
+                >
+                  <Users className="w-3.5 h-3.5 text-sky-500" />
+                  <span>Employee Login</span>
+                </Link>
                 <Link
                   href="/admin/login"
                   className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-accent-primary transition-colors font-medium"
                 >
                   <Shield className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Master Head Admin</span>
+                  <span>Admin Portal</span>
                 </Link>
               </li>
             </ul>
@@ -259,6 +273,20 @@ export default function Footer() {
         <div className="pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-text-secondary text-center sm:text-left">
           <p>© {new Date().getFullYear()} Nex World Travel & Tourism LLC-SPC. A Nex Group Company. All rights reserved.</p>
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-6">
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1 text-text-muted hover:text-accent-primary transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>Member Portal</span>
+            </Link>
+            <Link
+              href="/employee/login"
+              className="inline-flex items-center gap-1 text-text-muted hover:text-accent-primary transition-colors"
+            >
+              <Users className="w-3.5 h-3.5 text-sky-500" />
+              <span>Employee Login</span>
+            </Link>
             <Link
               href="/admin/login"
               className="inline-flex items-center gap-1 text-text-muted hover:text-accent-primary transition-colors"

@@ -39,14 +39,19 @@ export const createBooking = async (req, res, next) => {
       closingMessage:
         'Once your request is received, our Reservations Team will check availability and assist you accordingly.',
       data: {
-        referenceNumber: booking.enquiryNumber,
+        id: booking.id || booking._id || booking.enquiryNumber,
+        referenceNumber: booking.referenceNumber || booking.enquiryNumber,
         enquiryNumber: booking.enquiryNumber,
         status: booking.status,
         recipient: booking.memberName || `${booking.prefix} ${booking.firstName} ${booking.lastName}`,
+        customerName: booking.customerName || booking.memberName,
+        email: booking.email,
+        phone: booking.phone,
         destination: booking.destinationOrPackage,
         checkInDate: booking.checkInDate || booking.travelDate,
         checkOutDate: booking.checkOutDate || booking.returnDate,
         guestsCount: booking.guestsCount || booking.adults,
+        specialRequests: booking.specialRequests || booking.notes || '',
         createdAt: booking.createdAt,
       },
     });
@@ -63,6 +68,7 @@ export const getBookings = async (req, res, next) => {
       success: true,
       count: bookings.length,
       data: bookings,
+      bookings,
     });
   } catch (error) {
     next(error);

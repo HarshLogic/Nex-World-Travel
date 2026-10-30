@@ -32,6 +32,7 @@ import {
   Download,
   Info,
   Calendar,
+  DollarSign,
 } from 'lucide-react';
 import {
   fetchCurrentUser,
@@ -88,14 +89,18 @@ export default function EmployeeDashboardPage() {
     address: '',
     password: 'Member123!',
     packageType: 'Gold',
+    allottedNights: 14,
+    usedNights: 0,
     nightsAvailable: 14,
-    membershipStatus: 'Open',
+    membershipStatus: 'Active',
     extraOffers: 'Airport Transfer, VIP Lounge, Travel Concierge',
     tenurePeriod: '3 Years',
     travelCardBenefit: true,
     purchaseDate: new Date().toISOString().split('T')[0],
     productPrice: 12500,
     initialPaidAmount: 5000,
+    paymentMethod: 'Bank Transfer',
+    paymentReference: '',
     hasEmi: true,
     emiAmount: 1250,
     emiFrequency: 'Monthly',
@@ -199,6 +204,12 @@ export default function EmployeeDashboardPage() {
     }
   };
 
+  useEffect(() => {
+    if (activeTab === 'bookings' && hasPerm('manage_bookings')) {
+      fetchAdminBookings().then(setBookings).catch(() => {});
+    }
+  }, [activeTab]);
+
   const handleMembersSearch = async (page = 1, overrideFilters = null) => {
     try {
       const searchVal = overrideFilters && overrideFilters.search !== undefined ? overrideFilters.search : memberSearch.trim();
@@ -290,9 +301,13 @@ export default function EmployeeDashboardPage() {
         initialPassword: addMemberForm.password || 'Member123!',
         password: addMemberForm.password || 'Member123!',
         packageType: addMemberForm.packageType,
-        availableNights: Number(addMemberForm.nightsAvailable || 14),
-        nightsAvailable: Number(addMemberForm.nightsAvailable || 14),
-        membershipStatus: addMemberForm.membershipStatus || 'Open',
+        allottedNights: Number(addMemberForm.allottedNights || 14),
+        usedNights: Number(addMemberForm.usedNights || 0),
+        availableNights: Math.max(0, Number(addMemberForm.allottedNights || 14) - Number(addMemberForm.usedNights || 0)),
+        nightsAvailable: Math.max(0, Number(addMemberForm.allottedNights || 14) - Number(addMemberForm.usedNights || 0)),
+        membershipStatus: addMemberForm.membershipStatus || 'Active',
+        paymentMethod: addMemberForm.paymentMethod || 'Bank Transfer',
+        paymentReference: addMemberForm.paymentReference || '',
         extraOffers: addMemberForm.extraOffers,
         tenurePeriod: addMemberForm.tenurePeriod,
         travelCardBenefit: Boolean(addMemberForm.travelCardBenefit),
@@ -667,9 +682,10 @@ export default function EmployeeDashboardPage() {
                   className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary font-medium"
                 >
                   <option value="">All Statuses</option>
-                  <option value="Open">Open</option>
-                  <option value="Close">Close</option>
-                  <option value="Deactive">Deactive</option>
+                  <option value="Active">Active</option>
+                  <option value="InActive">InActive</option>
+                  <option value="Refunded">Refunded</option>
+                  <option value="Hold">Hold</option>
                   <option value="Cancel">Cancel</option>
                 </select>
 
@@ -759,7 +775,7 @@ export default function EmployeeDashboardPage() {
                           )}
                         </td>
                         <td className="py-3.5 px-4 font-bold text-red-600">
-                          ${m.outstandingBalance?.toLocaleString()}
+                          AED {m.outstandingBalance?.toLocaleString()}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -884,7 +900,22 @@ export default function EmployeeDashboardPage() {
                 <div>
                   <span className="text-text-tertiary">Outstanding Balance</span>
                   <p className="font-bold text-red-600 mt-0.5">
-                    ${selectedMember.outstandingBalance?.toLocaleString()}
+                    AED {selectedMember.outstandingBalance?.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Registration Timestamp</span>
+                  <p className="font-semibold text-text-primary mt-0.5 text-[11px]">
+                    {selectedMember.registrationDate || selectedMember.createdAt ? (
+                      new Date(selectedMember.registrationDate || selectedMember.createdAt).toLocaleString('en-GB', {
+                        timeZone: 'Asia/Dubai',
+                        year: 'numeric',
+                        month: 'short',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }) + ' (UAE)'
+                    ) : 'N/A'}
                   </p>
                 </div>
               </div>
@@ -1020,17 +1051,18 @@ export default function EmployeeDashboardPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Membership Status *</label>
                     <select
-                      value={addMemberForm.membershipStatus || 'Open'}
+                      value={addMemberForm.membershipStatus || 'Active'}
                       onChange={(e) => setAddMemberForm({ ...addMemberForm, membershipStatus: e.target.value })}
                       className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold text-accent-primary"
                     >
-                      <option value="Open">Open</option>
-                      <option value="Close">Close</option>
-                      <option value="Deactive">Deactive</option>
+                      <option value="Active">Active</option>
+                      <option value="InActive">InActive</option>
+                      <option value="Refunded">Refunded</option>
+                      <option value="Hold">Hold</option>
                       <option value="Cancel">Cancel</option>
                     </select>
                   </div>
@@ -1049,17 +1081,6 @@ export default function EmployeeDashboardPage() {
                       <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
                     </select>
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Available Nights *</label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      value={addMemberForm.nightsAvailable}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, nightsAvailable: e.target.value })}
-                      className="w-full px-2.5 py-1.5 rounded-xl border border-border"
-                    />
                   </div>
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Travel Card Benefit *</label>
@@ -1086,36 +1107,156 @@ export default function EmployeeDashboardPage() {
                   </div>
                 </div>
 
-                {/* Financial Details */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-surface-50 p-3 rounded-2xl border border-border">
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Total Product Price ($) *</label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      value={addMemberForm.productPrice}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, productPrice: e.target.value })}
-                      className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold"
-                    />
+                {/* Night Entitlements Calculation Section */}
+                <div className="bg-surface-50 p-3.5 rounded-2xl border border-border space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-text-primary flex items-center gap-1.5 text-xs">
+                      <Calendar className="w-4 h-4 text-accent-primary" />
+                      <span>Night Entitlements & Usage Calculation</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allotted = Number(addMemberForm.allottedNights || 0);
+                        const used = Number(addMemberForm.usedNights || 0);
+                        const avail = Math.max(0, allotted - used);
+                        setAddMemberForm((prev) => ({
+                          ...prev,
+                          nightsAvailable: avail,
+                        }));
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-bold bg-accent-primary text-white hover:bg-accent-primary-hover rounded-lg transition-colors flex items-center gap-1 shadow-xs"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Calculate Used Nights</span>
+                    </button>
                   </div>
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Initial Down Payment ($) *</label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      value={addMemberForm.initialPaidAmount}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, initialPaidAmount: e.target.value })}
-                      className="w-full px-2.5 py-1.5 rounded-xl border border-border text-emerald-600 font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Estimated Balance</label>
-                    <div className="px-2.5 py-1.5 rounded-xl bg-white border border-border font-bold text-red-600">
-                      ${Math.max(0, Number(addMemberForm.productPrice) - Number(addMemberForm.initialPaidAmount))}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Total Allotted Nights *</label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={addMemberForm.allottedNights}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const allotted = Number(val || 0);
+                          const used = Number(addMemberForm.usedNights || 0);
+                          setAddMemberForm({
+                            ...addMemberForm,
+                            allottedNights: val,
+                            nightsAvailable: Math.max(0, allotted - used),
+                          });
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold text-text-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Previously Used Nights</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={addMemberForm.usedNights}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const used = Number(val || 0);
+                          const allotted = Number(addMemberForm.allottedNights || 0);
+                          setAddMemberForm({
+                            ...addMemberForm,
+                            usedNights: val,
+                            nightsAvailable: Math.max(0, allotted - used),
+                          });
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold text-amber-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Remaining Available Nights</label>
+                      <div className={`px-2.5 py-1.5 rounded-xl border font-bold text-xs flex items-center justify-between ${
+                        Number(addMemberForm.usedNights || 0) > Number(addMemberForm.allottedNights || 0)
+                          ? 'bg-rose-50 border-rose-200 text-rose-600'
+                          : 'bg-white border-border text-emerald-600'
+                      }`}>
+                        <span>{Math.max(0, Number(addMemberForm.allottedNights || 0) - Number(addMemberForm.usedNights || 0))} Nights</span>
+                        <span className="text-[10px] text-text-tertiary">({addMemberForm.allottedNights || 0} - {addMemberForm.usedNights || 0})</span>
+                      </div>
                     </div>
                   </div>
+                  {Number(addMemberForm.usedNights || 0) > Number(addMemberForm.allottedNights || 0) && (
+                    <p className="text-[11px] text-rose-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Warning: Used nights exceed allotted nights! Available nights is capped at 0.</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Financial & Payment Method Details */}
+                <div className="bg-surface-50 p-3.5 rounded-2xl border border-border space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Total Product Price (AED) *</label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={addMemberForm.productPrice}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, productPrice: e.target.value })}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-border font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Initial Down Payment (AED) *</label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={addMemberForm.initialPaidAmount}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, initialPaidAmount: e.target.value })}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-border text-emerald-600 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Estimated Balance</label>
+                      <div className="px-2.5 py-1.5 rounded-xl bg-white border border-border font-bold text-red-600">
+                        AED {Math.max(0, Number(addMemberForm.productPrice) - Number(addMemberForm.initialPaidAmount)).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {Number(addMemberForm.initialPaidAmount || 0) > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/60">
+                      <div>
+                        <label className="block font-semibold text-text-secondary mb-1">Payment Method (Down Payment) *</label>
+                        <select
+                          value={addMemberForm.paymentMethod || 'Bank Transfer'}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, paymentMethod: e.target.value })}
+                          className="w-full px-2.5 py-1.5 rounded-xl border border-border font-semibold text-text-primary"
+                        >
+                          <option value="Cash">Cash</option>
+                          <option value="Credit Card">Credit Card</option>
+                          <option value="Debit Card">Debit Card</option>
+                          <option value="Card Machine / POS (Card Swipe)">Card Machine / POS (Card Swipe)</option>
+                          <option value="Bank Transfer">Bank Transfer</option>
+                          <option value="Online Payment">Online Payment</option>
+                          <option value="Payment Link">Payment Link</option>
+                          <option value="Cheque">Cheque</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-text-secondary mb-1">Payment Reference / Transaction ID</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. POS Slip # / Bank Ref / Cheque #"
+                          value={addMemberForm.paymentReference || ''}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, paymentReference: e.target.value })}
+                          className="w-full px-2.5 py-1.5 rounded-xl border border-border font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1785,10 +1926,11 @@ export default function EmployeeDashboardPage() {
                         </td>
                         <td className="py-3 px-4">
                           <select
-                            value={b.status}
+                            value={b.status || 'Pending'}
                             onChange={(e) => handleUpdateBookingStatus(b.id || b._id, e.target.value)}
                             className="px-2 py-1 rounded-lg border border-border bg-surface-50 text-xs font-semibold"
                           >
+                            <option value="Pending">Pending</option>
                             <option value="New">New</option>
                             <option value="Contacted">Contacted</option>
                             <option value="Confirmed">Confirmed</option>
@@ -1824,7 +1966,9 @@ export default function EmployeeDashboardPage() {
           <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
               <div className="flex items-center justify-between pb-3 border-b border-border">
-                <h3 className="text-base font-bold text-text-primary">Booking Enquiry #{selectedBooking.bookingReference}</h3>
+                <h3 className="text-base font-bold text-text-primary">
+                  Booking Enquiry #{selectedBooking.bookingReference || selectedBooking.enquiryNumber || selectedBooking.id || selectedBooking._id}
+                </h3>
                 <button
                   onClick={() => setSelectedBooking(null)}
                   className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"

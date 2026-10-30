@@ -140,8 +140,8 @@ const memberProfileSchema = new mongoose.Schema(
     },
     membershipStatus: {
       type: String,
-      enum: ['Open', 'Close', 'Deactive', 'Cancel', 'Active', 'Expired', 'Suspended', 'Pending'],
-      default: 'Open',
+      enum: ['Active', 'InActive', 'Refunded', 'Hold', 'Cancel', 'Open', 'Close', 'Deactive', 'Expired', 'Suspended', 'Pending'],
+      default: 'Active',
       index: true,
     },
     // Terms & Conditions Acknowledgement

@@ -7,6 +7,7 @@ export const getDashboardMetrics = async (req, res, next) => {
 
     res.json({
       success: true,
+      ...metrics,
       metrics,
       recentAuditLogs: auditLogs,
     });

@@ -481,7 +481,7 @@ export default function AdminApprovalsPage() {
               <div>
                 <span className="text-text-tertiary">Outstanding Balance</span>
                 <p className="font-bold text-red-600 mt-0.5">
-                  ${inspectedMember.outstandingBalance?.toLocaleString()}
+                  AED {inspectedMember.outstandingBalance?.toLocaleString()}
                 </p>
               </div>
             </div>

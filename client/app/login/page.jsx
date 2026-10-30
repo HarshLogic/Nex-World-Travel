@@ -4,34 +4,28 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { UserCheck, Shield, Briefcase, Lock, Key, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
-import { loginMember, loginStaff } from '../../lib/api';
+import { Key, Lock, ArrowRight, Loader2, UserCheck } from 'lucide-react';
+import { loginMember } from '../../lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('member'); // 'member' | 'master_head' | 'employee'
 
   // Member form state
   const [memberId, setMemberId] = useState('');
-  const [memberPassword, setMemberPassword] = useState('');
-
-  // Staff form state
-  const [staffEmail, setStaffEmail] = useState('');
-  const [staffPassword, setStaffPassword] = useState('');
-
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleMemberSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!memberId.trim() || !memberPassword.trim()) {
+    if (!memberId.trim() || !password.trim()) {
       setError('Please provide both Member ID and Password.');
       return;
     }
     setLoading(true);
     try {
-      await loginMember(memberId, memberPassword);
+      await loginMember(memberId, password);
       router.push('/member/dashboard');
     } catch (err) {
       setError(err.message || 'Invalid credentials.');
@@ -40,33 +34,11 @@ export default function LoginPage() {
     }
   };
 
-  const handleStaffSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    if (!staffEmail.trim() || !staffPassword.trim()) {
-      setError('Please provide both Email Address and Password.');
-      return;
-    }
-    setLoading(true);
-    try {
-      const data = await loginStaff(staffEmail, staffPassword);
-      if (data.user.role === 'master_head') {
-        router.push('/admin/dashboard');
-      } else {
-        router.push('/employee/dashboard');
-      }
-    } catch (err) {
-      setError(err.message || 'Invalid staff credentials.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="py-12 md:py-20 bg-surface-50 min-h-screen flex items-center justify-center">
-      <div className="max-w-xl w-full mx-auto px-4 sm:px-6">
+      <div className="max-w-md w-full mx-auto px-4 sm:px-6">
         {/* Card */}
-        <div className="bg-white rounded-3xl sm:rounded-4xl border border-border shadow-card p-5 sm:p-10">
+        <div className="bg-white rounded-3xl sm:rounded-4xl border border-border shadow-card p-6 sm:p-10">
           {/* Logo & Headline */}
           <div className="text-center mb-8">
             <Link href="/" className="inline-block mb-4">
@@ -81,54 +53,16 @@ export default function LoginPage() {
                 />
               </div>
             </Link>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-primary-light text-accent-primary text-xs font-semibold mb-2">
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Member Portal</span>
+            </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">
-              Portal Access Gateway
+              Member Login Portal
             </h1>
             <p className="text-xs sm:text-sm text-text-secondary mt-1">
-              Select your authorization role to enter your dedicated management space.
+              Enter your Member ID and password to access your membership benefits.
             </p>
-          </div>
-
-          {/* Role Tabs */}
-          <div className="grid grid-cols-3 gap-1 p-1 sm:p-1.5 bg-surface-50 rounded-2xl border border-border mb-6">
-            <button
-              type="button"
-              onClick={() => { setActiveTab('member'); setError(''); }}
-              className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
-                activeTab === 'member'
-                  ? 'bg-white text-accent-primary shadow-subtle'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5 shrink-0" />
-              <span>Member</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => { setActiveTab('master_head'); setError(''); }}
-              className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
-                activeTab === 'master_head'
-                  ? 'bg-white text-accent-primary shadow-subtle'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Master Head</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => { setActiveTab('employee'); setError(''); }}
-              className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
-                activeTab === 'employee'
-                  ? 'bg-white text-accent-primary shadow-subtle'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              <Briefcase className="w-3.5 h-3.5 shrink-0" />
-              <span>Employee</span>
-            </button>
           </div>
 
           {/* Error Message */}
@@ -139,106 +73,58 @@ export default function LoginPage() {
           )}
 
           {/* Form: Member Login */}
-          {activeTab === 'member' && (
-            <form onSubmit={handleMemberSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">
-                  Member ID
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. NEX-M-1001"
-                    value={memberId}
-                    onChange={(e) => setMemberId(e.target.value.toUpperCase())}
-                    className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm font-semibold uppercase tracking-wider text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
-                  />
-                  <Key className="w-4 h-4 text-text-muted absolute right-3.5 top-3.5" />
-                </div>
-                <p className="text-[11px] text-text-muted mt-1">
-                  Log in using your registered Nex World Travel Member ID (no email required).
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••••••"
-                    value={memberPassword}
-                    onChange={(e) => setMemberPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
-                  />
-                  <Lock className="w-4 h-4 text-text-muted absolute right-3.5 top-3.5" />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl font-bold text-sm text-white bg-accent-primary hover:bg-accent-primary-hover shadow-md shadow-accent-primary/20 disabled:opacity-50 transition-all active:scale-95"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Access Member Portal</span>}
-                {!loading && <ArrowRight className="w-4 h-4" />}
-              </button>
-            </form>
-          )}
-
-          {/* Form: Staff / Master Head Login */}
-          {(activeTab === 'master_head' || activeTab === 'employee') && (
-            <form onSubmit={handleStaffSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">
-                  {activeTab === 'master_head' ? 'Master Head Email' : 'Staff Email Address'}
-                </label>
+          <form onSubmit={handleMemberSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1">
+                Member ID
+              </label>
+              <div className="relative">
                 <input
-                  type="email"
+                  type="text"
                   required
-                  placeholder={activeTab === 'master_head' ? 'admin@nex.com' : 'staff@nexworldtravel.com'}
-                  value={staffEmail}
-                  onChange={(e) => setStaffEmail(e.target.value)}
+                  placeholder="e.g. NEX-M-1001"
+                  value={memberId}
+                  onChange={(e) => setMemberId(e.target.value.toUpperCase())}
+                  className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm font-semibold uppercase tracking-wider text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                />
+                <Key className="w-4 h-4 text-text-muted absolute right-3.5 top-3.5" />
+              </div>
+              <p className="text-[11px] text-text-muted mt-1">
+                Log in using your registered Nex World Travel Member ID.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
                 />
+                <Lock className="w-4 h-4 text-text-muted absolute right-3.5 top-3.5" />
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••••••"
-                    value={staffPassword}
-                    onChange={(e) => setStaffPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
-                  />
-                  <Lock className="w-4 h-4 text-text-muted absolute right-3.5 top-3.5" />
-                </div>
+              <div className="flex items-center justify-end mt-1.5">
+                <Link href="/forgot-password" className="text-xs font-semibold text-accent-primary hover:underline">
+                  Forgot password?
+                </Link>
               </div>
+            </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl font-bold text-sm text-white bg-accent-primary hover:bg-accent-primary-hover shadow-md shadow-accent-primary/20 disabled:opacity-50 transition-all active:scale-95"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <span>
-                    {activeTab === 'master_head' ? 'Access Master Head Portal' : 'Access Employee Portal'}
-                  </span>
-                )}
-                {!loading && <ArrowRight className="w-4 h-4" />}
-              </button>
-            </form>
-          )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl font-bold text-sm text-white bg-accent-primary hover:bg-accent-primary-hover shadow-md shadow-accent-primary/20 disabled:opacity-50 transition-all active:scale-95"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Access Member Portal</span>}
+              {!loading && <ArrowRight className="w-4 h-4" />}
+            </button>
+          </form>
         </div>
 
         {/* Support Help */}
@@ -252,4 +138,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

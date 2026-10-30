@@ -65,8 +65,8 @@ export default function Navbar() {
     if (!authUser) {
       return {
         href: '/login',
-        fullLabel: 'Member / Staff Portal',
-        shortLabel: 'Portal',
+        fullLabel: 'Member Portal',
+        shortLabel: 'Member',
         badge: null,
         icon: User,
       };
@@ -316,7 +316,7 @@ export default function Navbar() {
                 <div>
                   <span className="block text-sm font-bold text-text-primary">{portal.fullLabel}</span>
                   <span className="block text-[11px] text-text-secondary">
-                    {authUser ? `Role: ${authUser.role}` : 'Login with credentials'}
+                    {authUser ? `Role: ${authUser.role}` : 'Login with Member ID'}
                   </span>
                 </div>
               </div>
@@ -326,6 +326,25 @@ export default function Navbar() {
                 </span>
               )}
             </Link>
+            {!authUser && (
+              <div className="flex items-center justify-between px-3 pt-2.5 text-xs text-text-muted">
+                <Link
+                  href="/employee/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="hover:text-accent-primary font-medium transition-colors"
+                >
+                  Employee Login
+                </Link>
+                <span className="text-border">•</span>
+                <Link
+                  href="/admin/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="hover:text-accent-primary font-medium transition-colors"
+                >
+                  Admin Portal
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Phone Contact & Booking Consultation */}

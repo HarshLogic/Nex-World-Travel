@@ -106,7 +106,7 @@ export default function AdminLoginPage() {
           </form>
 
           <div className="mt-6 pt-5 border-t border-border flex items-center justify-between text-xs text-text-muted">
-            <Link href="/member/login" className="hover:text-accent-primary transition-colors">
+            <Link href="/login" className="hover:text-accent-primary transition-colors">
               &larr; Member Login
             </Link>
             <Link href="/employee/login" className="hover:text-accent-primary transition-colors">

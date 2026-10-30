@@ -2,12 +2,14 @@ import { z } from 'zod';
 
 const bookingBaseSchema = z.object({
   // Standard Booking Request Format Fields
+  memberId: z.string().trim().optional().default(''),
   memberName: z.string().trim().min(2, 'Member name is required (minimum 2 characters)').optional(),
   spouseName: z.string().trim().optional().default(''),
   kidsAges: z.string().trim().optional().default(''),
   checkInDate: z.string().trim().min(4, 'Check-in date is required').optional(),
   checkOutDate: z.string().trim().min(4, 'Check-out date is required').optional(),
   guestsCount: z.coerce.number().int().min(1, 'Number of guests (PAX) must be at least 1').default(1),
+  numberOfNights: z.coerce.number().int().min(1).optional().default(7),
 
   // Core & Detailed Form Fields
   prefix: z.enum(['Mr.', 'Mrs.', 'Ms.', 'Mx.', 'Miss', 'Dr.', 'Prof.']).default('Mr.'),
@@ -27,6 +29,7 @@ const bookingBaseSchema = z.object({
   activitiesRequired: z.string().trim().min(2, 'Please indicate your requested activities or preferences').default('Holiday Itinerary & Stay'),
   budgetRange: z.string().trim().optional().default('Flexible'),
   notes: z.string().trim().optional().default(''),
+  specialRequests: z.string().trim().optional().default(''),
   consent: z.literal(true, {
     errorMap: () => ({ message: 'You must agree to the terms & conditions of Nex World Travel & Tourism' }),
   }),
@@ -65,6 +68,21 @@ export const bookingSchema = z
       d.checkOutDate = d.returnDate;
     }
 
+    if (d.memberId) {
+      d.memberId = String(d.memberId).toUpperCase().trim();
+    }
+
+    if (d.checkInDate && d.checkOutDate) {
+      const inD = new Date(d.checkInDate);
+      const outD = new Date(d.checkOutDate);
+      if (!isNaN(inD.getTime()) && !isNaN(outD.getTime()) && outD > inD) {
+        const diffNights = Math.round((outD - inD) / (1000 * 60 * 60 * 24));
+        if (diffNights > 0 && (!d.numberOfNights || d.numberOfNights === 7)) {
+          d.numberOfNights = diffNights;
+        }
+      }
+    }
+
     // Number of Guests (PAX)
     if (d.guestsCount !== undefined || d.pax !== undefined) {
       const pax = Number(d.guestsCount || d.pax || 1);
@@ -82,6 +100,8 @@ export const bookingSchema = z
     if (!d.stateProvince) d.stateProvince = 'Abu Dhabi';
     if (!d.nationality) d.nationality = 'United Arab Emirates';
     if (!d.activitiesRequired) d.activitiesRequired = 'Holiday Reservation Booking';
+    if (d.specialRequests && !d.notes) d.notes = d.specialRequests;
+    if (d.notes && !d.specialRequests) d.specialRequests = d.notes;
 
     return d;
   }, bookingBaseSchema)

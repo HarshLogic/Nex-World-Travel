@@ -618,29 +618,29 @@ async function runTests() {
         throw new Error(`Master Head dashboard cannot find newly created member ${testMemberId}`);
       }
       const retrieved = searchData.members[0];
-      if (retrieved.membershipStatus !== 'Open') {
-        throw new Error(`Expected membershipStatus 'Open' but got ${retrieved.membershipStatus}`);
+      if (!['Active', 'Open'].includes(retrieved.membershipStatus)) {
+        throw new Error(`Expected membershipStatus 'Active' or 'Open' but got ${retrieved.membershipStatus}`);
       }
 
-      // Verify status filtering
-      const filterOpen = await fetch(`http://127.0.0.1:5098/api/v1/members?status=Open&search=${testMemberId}`, {
+      // Verify status filtering (supports standardized 'Active' as well as legacy 'Open')
+      const filterOpen = await fetch(`http://127.0.0.1:5098/api/v1/members?status=Active&search=${testMemberId}`, {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       const openData = await filterOpen.json();
       if (openData.members.length === 0) {
-        throw new Error('Status filter "Open" failed to include the new member');
+        throw new Error('Status filter "Active" failed to include the new member');
       }
 
-      const filterClose = await fetch(`http://127.0.0.1:5098/api/v1/members?status=Close&search=${testMemberId}`, {
+      const filterClose = await fetch(`http://127.0.0.1:5098/api/v1/members?status=InActive&search=${testMemberId}`, {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       const closeData = await filterClose.json();
       if (closeData.members.length > 0) {
-        throw new Error('Status filter "Close" should not include Open member');
+        throw new Error('Status filter "InActive" should not include Active member');
       }
 
-      // Update status to 'Close', 'Deactive', 'Cancel'
-      for (const nextStatus of ['Deactive', 'Cancel', 'Close']) {
+      // Update status across standardized statuses: InActive, Cancel, Refunded, Hold, Active
+      for (const nextStatus of ['InActive', 'Cancel', 'Refunded', 'Hold', 'Active']) {
         const updateRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${testMemberId}`, {
           method: 'PATCH',
           headers: {
@@ -698,14 +698,14 @@ async function runTests() {
         body: JSON.stringify({
           amount: 2000,
           paymentMethod: 'Credit Card',
-          membershipStatus: 'Open',
+          membershipStatus: 'Active',
         }),
       });
       const payData = await payRes.json();
       if (!payRes.ok || !payData.member) {
         throw new Error('Payment recording failed');
       }
-      if (payData.member.membershipStatus !== 'Open') {
+      if (!['Active', 'Open'].includes(payData.member.membershipStatus)) {
         throw new Error('membershipStatus was not updated via payment endpoint');
       }
       if (!['Up to Date', 'Fully Paid'].includes(payData.member.paymentStatus)) {
@@ -1935,6 +1935,321 @@ async function runTests() {
         headers: { Authorization: `Bearer ${employeeToken}` },
       });
       if (!viewRes.ok) throw new Error('Remaining view_members permission should still work');
+    });
+
+    // 36. Staff & Membership Operations: 5 Statuses, Registration Timestamp, Payment Method, Decoupled Booking
+    await check('Staff & Membership Operations: 5 Statuses, Registration Timestamp, Payment Method, Decoupled Booking', async () => {
+      // 1. Create member with payment method 'Card Machine / POS (Card Swipe)' and initialPaidAmount: 3500
+      const testId = `NEX-OP-${Date.now().toString().slice(-4)}`;
+      const createRes = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          memberId: testId,
+          registeredName: 'Operation Test Member',
+          email: `${testId.toLowerCase()}@nexworldtravel.com`,
+          phone: '+971 50 888 9900',
+          initialPassword: 'OpPassword2026!',
+          packageType: 'Titanium',
+          allottedNights: 21,
+          usedNights: 3,
+          productPrice: 25000,
+          initialPaidAmount: 3500,
+          paymentMethod: 'Card Machine / POS (Card Swipe)',
+          paymentReference: 'POS-REC-9988',
+          membershipStatus: 'Active',
+        }),
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok || !createData.success) {
+        throw new Error(`Failed to create operation test member: ${JSON.stringify(createData)}`);
+      }
+
+      const mem = createData.member;
+      if (mem.membershipStatus !== 'Active') throw new Error(`Expected status Active, got ${mem.membershipStatus}`);
+      if (mem.usedNights !== 3) throw new Error(`Expected usedNights 3, got ${mem.usedNights}`);
+      if (mem.availableNights !== 18) throw new Error(`Expected availableNights 18 (21-3), got ${mem.availableNights}`);
+      if (!mem.registrationDate && !mem.createdAt) throw new Error('Registration timestamp missing on created member');
+      const originalCreatedAt = mem.createdAt;
+
+      // Check payment was recorded with POS payment method
+      const payListRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${testId}/payments`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const payListData = await payListRes.json();
+      if (!payListRes.ok || !payListData.payments || payListData.payments.length === 0) {
+        throw new Error('Initial payment transaction was not recorded for initialPaidAmount > 0');
+      }
+      const initialTxn = payListData.payments[0];
+      if (initialTxn.paymentMethod !== 'Card Machine / POS (Card Swipe)') {
+        throw new Error(`Expected POS payment method, got: ${initialTxn.paymentMethod}`);
+      }
+      if (initialTxn.referenceNumber !== 'POS-REC-9988') {
+        throw new Error(`Expected reference POS-REC-9988, got: ${initialTxn.referenceNumber}`);
+      }
+
+      // Check that editing member CANNOT overwrite createdAt or registrationDate
+      const editRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${testId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          registeredName: 'Operation Test Member Updated',
+          createdAt: '1999-01-01T00:00:00.000Z',
+          registrationDate: '1999-01-01T00:00:00.000Z',
+        }),
+      });
+      const editData = await editRes.json();
+      if (!editRes.ok) throw new Error('Failed to update member');
+      if (editData.member.createdAt === '1999-01-01T00:00:00.000Z') {
+        throw new Error('createdAt was altered by edit request — must be immutable');
+      }
+
+      // 2. Member with initialPaidAmount = 0 does NOT create payment transactions
+      const zeroId = `NEX-ZERO-${Date.now().toString().slice(-4)}`;
+      const zeroRes = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          memberId: zeroId,
+          registeredName: 'Zero Initial Member',
+          email: `${zeroId.toLowerCase()}@nexworldtravel.com`,
+          packageType: 'Gold',
+          allottedNights: 14,
+          productPrice: 15000,
+          initialPaidAmount: 0,
+        }),
+      });
+      const zeroData = await zeroRes.json();
+      if (!zeroRes.ok) throw new Error('Failed to create zero-payment member');
+
+      const zeroPayRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${zeroId}/payments`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const zeroPayData = await zeroPayRes.json();
+      if (zeroPayData.payments && zeroPayData.payments.length > 0) {
+        throw new Error(`Expected 0 payment transactions for initialPaidAmount 0, got ${zeroPayData.payments.length}`);
+      }
+
+      // 3. Test dynamic metrics endpoint with categories and status breakdown
+      const metricsRes = await fetch('http://127.0.0.1:5098/api/v1/dashboard/metrics', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const metricsData = await metricsRes.json();
+      if (!metricsRes.ok || !metricsData.metrics) {
+        throw new Error('Failed to fetch dashboard metrics');
+      }
+      const met = metricsData.metrics;
+      if (!met.membershipCategories || typeof met.membershipCategories !== 'object') {
+        throw new Error('membershipCategories missing in metrics');
+      }
+      if (!met.statusCounts || typeof met.statusCounts !== 'object') {
+        throw new Error('statusCounts missing in metrics');
+      }
+      if (met.statusCounts.Active === undefined || met.statusCounts.InActive === undefined) {
+        throw new Error('5 standardized statuses not tracked in statusCounts');
+      }
+      if (!met.bookingStatusCounts || typeof met.bookingStatusCounts !== 'object') {
+        throw new Error('bookingStatusCounts missing in metrics');
+      }
+
+      // 4. Test booking creation saves immediately even if SMTP is simulated
+      const bookRes = await fetch('http://127.0.0.1:5098/api/v1/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberName: 'Decoupled Booking Guest',
+          email: 'decoupled.guest@example.com',
+          phone: '+971 52 334 5566',
+          destinationOrPackage: 'Abu Dhabi Cultural Tour',
+          travelDate: '2026-11-20',
+          adults: 2,
+          activitiesRequired: 'Louvre Abu Dhabi + Grand Mosque',
+          consent: true,
+        }),
+      });
+      const bookData = await bookRes.json();
+      if (!bookRes.ok || !bookData.success || !bookData.data?.enquiryNumber) {
+        throw new Error('Booking submission failed');
+      }
+    });
+
+    // 37. Complete Dashboard Metrics & Membership Directory Synchronization
+    await check('Complete Dashboard Metrics & Directory Synchronization (Issue 1)', async () => {
+      // Fetch members from directory API
+      const membersRes = await fetch('http://127.0.0.1:5098/api/v1/members?limit=100', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const membersData = await membersRes.json();
+      if (!membersRes.ok || !membersData.success) {
+        throw new Error('Failed to fetch members directory');
+      }
+
+      // Fetch metrics from dashboard API
+      const metricsRes = await fetch('http://127.0.0.1:5098/api/v1/dashboard/metrics', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const metricsData = await metricsRes.json();
+      if (!metricsRes.ok || !metricsData.success) {
+        throw new Error('Failed to fetch dashboard metrics');
+      }
+
+      const totalFromDir = membersData.pagination?.total || membersData.members.length;
+      const totalFromMetrics = metricsData.totalMembers !== undefined ? metricsData.totalMembers : metricsData.metrics?.totalMembers;
+
+      if (totalFromMetrics !== totalFromDir) {
+        throw new Error(`Total members count mismatch: directory has ${totalFromDir}, dashboard metrics has ${totalFromMetrics}`);
+      }
+
+      // Check both top-level and nested .metrics fields
+      const met = metricsData.metrics || metricsData;
+      if (typeof met.activeMembers !== 'number') {
+        throw new Error('activeMembers is missing or not a number in metrics');
+      }
+      if (!met.statusCounts || typeof met.statusCounts !== 'object') {
+        throw new Error('statusCounts is missing in metrics');
+      }
+      const requiredStatuses = ['Active', 'InActive', 'Refunded', 'Hold', 'Cancel'];
+      for (const st of requiredStatuses) {
+        if (met.statusCounts[st] === undefined) {
+          throw new Error(`Status ${st} is missing from statusCounts`);
+        }
+      }
+
+      // Verify dynamic membership categories
+      if (!met.membershipCategories || typeof met.membershipCategories !== 'object') {
+        throw new Error('membershipCategories is missing from metrics');
+      }
+      const catCount = Object.keys(met.membershipCategories).length;
+      if (catCount === 0 && totalFromDir > 0) {
+        throw new Error('membershipCategories should contain categories for existing members');
+      }
+
+      // Verify financial aggregations
+      if (typeof met.totalOutstandingBalance !== 'number') {
+        throw new Error('totalOutstandingBalance is missing or not a number in metrics');
+      }
+      if (typeof met.totalCollected !== 'number' && typeof met.totalCollectedRevenue !== 'number') {
+        throw new Error('totalCollected is missing or not a number in metrics');
+      }
+    });
+
+    // 38. Booking Requests Integration & Permission Enforcement (Issue 2 & Issue 3)
+    await check('Booking Request Submission, Persistence, Permissions & Metrics (Issue 2 & 3)', async () => {
+      const testEmail = `guest-${Date.now()}@example.com`;
+      const testRef = `NEX-TEST-${Date.now().toString().slice(-4)}`;
+
+      // 1. Customer submits booking from public form
+      const submitRes = await fetch('http://127.0.0.1:5098/api/v1/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberName: 'Amina Al Mansoori',
+          prefix: 'Mrs.',
+          firstName: 'Amina',
+          lastName: 'Al Mansoori',
+          spouseName: 'Sultan Al Mansoori',
+          kidsAges: '4, 7',
+          email: testEmail,
+          phone: '+971 50 987 6543',
+          destinationOrPackage: 'Switzerland Winter Alps & St. Moritz',
+          checkInDate: '2026-12-15',
+          checkOutDate: '2026-12-22',
+          guestsCount: 4,
+          specialRequests: 'Adjoining rooms and private helicopter transfer from Zurich',
+          consent: true,
+        }),
+      });
+
+      const submitData = await submitRes.json();
+      if (!submitRes.ok || !submitData.success || !submitData.data?.referenceNumber) {
+        throw new Error('Public booking submission failed: ' + JSON.stringify(submitData));
+      }
+
+      const bookingEnquiryNo = submitData.data.referenceNumber;
+      if (submitData.data.status !== 'Pending') {
+        throw new Error(`Expected initial booking status 'Pending', got '${submitData.data.status}'`);
+      }
+
+      // 2. Master Head views booking request in admin bookings
+      const adminBookingsRes = await fetch('http://127.0.0.1:5098/api/v1/bookings', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const adminBookingsData = await adminBookingsRes.json();
+      if (!adminBookingsRes.ok || !adminBookingsData.success) {
+        throw new Error('Master Head failed to fetch bookings');
+      }
+
+      const allBookings = adminBookingsData.data || adminBookingsData.bookings || [];
+      const found = allBookings.find((b) => b.enquiryNumber === bookingEnquiryNo || b.bookingReference === bookingEnquiryNo);
+      if (!found) {
+        throw new Error(`Submitted booking '${bookingEnquiryNo}' not found in Master Head bookings list`);
+      }
+      if (found.email !== testEmail) {
+        throw new Error(`Booking email mismatch: expected ${testEmail}, got ${found.email}`);
+      }
+      if (!found.specialRequests && !found.notes) {
+        throw new Error('Special requests not preserved in booking record');
+      }
+
+      // 3. Unauthorized Employee (without manage_bookings) is BLOCKED with 403 Forbidden
+      const unauthRes = await fetch('http://127.0.0.1:5098/api/v1/bookings', {
+        headers: { Authorization: `Bearer ${employeeToken}` },
+      });
+      if (unauthRes.status !== 403) {
+        throw new Error(`Expected 403 Forbidden for unauthorized employee, got HTTP ${unauthRes.status}`);
+      }
+
+      // 4. Grant manage_bookings permission to employee
+      const grantRes = await fetch('http://127.0.0.1:5098/api/v1/employees/user-staff-1/permissions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ permissions: ['view_members', 'manage_bookings'] }),
+      });
+      if (!grantRes.ok) throw new Error('Failed to grant manage_bookings permission');
+
+      // 5. Authorized Employee now accesses bookings successfully (HTTP 200)
+      const authStaffRes = await fetch('http://127.0.0.1:5098/api/v1/bookings', {
+        headers: { Authorization: `Bearer ${employeeToken}` },
+      });
+      const authStaffData = await authStaffRes.json();
+      if (!authStaffRes.ok || !authStaffData.success) {
+        throw new Error('Authorized employee failed to fetch bookings: HTTP ' + authStaffRes.status);
+      }
+      const staffBookings = authStaffData.data || authStaffData.bookings || [];
+      const staffFound = staffBookings.find((b) => b.enquiryNumber === bookingEnquiryNo || b.bookingReference === bookingEnquiryNo);
+      if (!staffFound) {
+        throw new Error(`Authorized employee cannot see submitted booking '${bookingEnquiryNo}'`);
+      }
+
+      // 6. Update booking status to Confirmed & add staff note
+      const updateRes = await fetch(`http://127.0.0.1:5098/api/v1/bookings/${bookingEnquiryNo}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${employeeToken}` },
+        body: JSON.stringify({ status: 'Confirmed', note: 'Customer called and dates verified with hotel.' }),
+      });
+      const updateData = await updateRes.json();
+      if (!updateRes.ok || !updateData.success || updateData.booking?.status !== 'Confirmed') {
+        throw new Error('Failed to update booking status to Confirmed');
+      }
+
+      // 7. Verify dashboard metrics reflect the confirmed booking and pending count
+      const updatedMetricsRes = await fetch('http://127.0.0.1:5098/api/v1/dashboard/metrics', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const updatedMetricsData = await updatedMetricsRes.json();
+      const updatedMet = updatedMetricsData.metrics || updatedMetricsData;
+      if (!updatedMet.bookingStatusCounts || updatedMet.bookingStatusCounts.confirmed < 1) {
+        throw new Error('Dashboard metrics did not reflect confirmed booking');
+      }
     });
 
     console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
