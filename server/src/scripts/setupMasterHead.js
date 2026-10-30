@@ -19,7 +19,7 @@ if (fs.existsSync('server/.env')) {
 }
 
 const EMAIL = process.argv[2] || process.env.MASTER_HEAD_EMAIL || 'adityar@nexworldtravel.com';
-const PASSWORD = process.argv[3] || process.env.MASTER_HEAD_PASSWORD || 'Aditiya@1993';
+const PASSWORD = process.argv[3] || process.env.MASTER_HEAD_PASSWORD;
 const NAME = process.argv[4] || process.env.MASTER_HEAD_NAME || 'Aditya R';
 
 async function setup() {

@@ -49,8 +49,7 @@ const runMigration = async () => {
 
   const mongoUri =
     process.env.MONGO_URI ||
-    process.env.MONGODB_URI ||
-    'mongodb+srv://harshvardhansinha17_db_user:cXVTvgxC3NVjBZwS@nexworld.wuggq8v.mongodb.net/nex_world_travel?retryWrites=true&w=majority';
+    process.env.MONGODB_URI ;
 
   try {
     await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 8000 });

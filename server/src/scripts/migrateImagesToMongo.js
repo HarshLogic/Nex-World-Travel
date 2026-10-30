@@ -35,9 +35,7 @@ const runMigration = async () => {
 
   const mongoUri =
     process.env.MONGO_URI ||
-    process.env.MONGODB_URI ||
-    'mongodb+srv://harshvardhan:Harsh8084@nexworld.wuggq8v.mongodb.net/nex_world_travel?retryWrites=true&w=majority&appName=Nexworld';
-
+    process.env.MONGODB_URI ;
   try {
     await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 5000 });
     console.log('✅ Connected to MongoDB Atlas successfully.');
