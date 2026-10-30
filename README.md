@@ -487,19 +487,7 @@ The repository includes a comprehensive end-to-end integration test suite ([`ser
 --- Test Suite Completed: ALL 43 TESTS PASSED 🎉 ---
 ```
 
----
-
-## 🎯 Resume Talking Points & Interview Guide
-
-### 📋 Resume Bullet Points (Ready to Copy-Paste):
-
-```markdown
-• Designed and developed an enterprise luxury travel and membership lifecycle management web platform (Next.js 14, Node.js, Express, MongoDB Atlas) managing 1,000+ active members and holiday entitlement pools.
-• Architected a two-tier Maker-Checker governance engine that restricted operational staff from directly modifying financial contracts, routing proposed updates through an asynchronous diff verification and approval queue.
-• Engineered a resilient dual-mode persistence architecture pairing MongoDB Atlas with an in-memory high-availability fallback store, achieving 99.99% uptime and <4ms query response times at a 5,000+ record scale.
-• Solved ephemeral container cloud storage wipes (Railway/Vercel) by creating a direct MongoDB binary media pipeline featuring MD5 ETag caching, conditional HTTP 304 headers, and automated static disk mirroring.
-• Implemented role-based access control (RBAC) supporting 3 distinct user tiers (Master Head, Employee, Member) governed by a 12-point granular permission matrix with JWT authentication and bcrypt password hashing.
-• Authored comprehensive end-to-end integration test suites (43 test suites covering financial ledgers, permission revocation, and binary media delivery) ensuring 100% regression-free continuous deployments.
+Build by :- **Harshvardhan Sinha**
 ```
 
 ---
