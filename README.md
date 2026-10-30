@@ -11,30 +11,7 @@
 
 ---
 
-## 📑 Table of Contents
-1. [Executive Summary & Resume Highlights](#-executive-summary--resume-highlights)
-2. [System Architecture & Design](#-system-architecture--design)
-   - [High-Level Architecture](#1-high-level-architecture)
-   - [Role-Based Access & Maker-Checker Sequence](#2-role-based-access--maker-checker-sequence)
-   - [Database Entity-Relationship (ER) Schema](#3-database-entity-relationship-er-schema)
-   - [Ephemeral Storage & Resilient Media Delivery Pipeline](#4-ephemeral-storage--resilient-media-delivery-pipeline)
-3. [Core Platform Capabilities](#-core-platform-capabilities)
-   - [1. Master Head Control Center](#1-master-head-control-center-super-admin)
-   - [2. Employee Operations & Delegation Desk](#2-employee-operations--delegation-desk)
-   - [3. Member Self-Service Portal](#3-member-self-service-portal)
-   - [4. Public Discovery & Booking Engine](#4-public-discovery--booking-engine)
-4. [Financial & Entitlement Computation Engine](#-financial--entitlement-computation-engine)
-5. [Granular Permission Matrix (12 Rules)](#-granular-permission-matrix)
-6. [Tech Stack & Engineering Decisions](#-tech-stack--engineering-decisions)
-7. [Security & Performance Engineering](#-security--performance-engineering)
-8. [Demo Access Credentials](#-demo-access-credentials)
-9. [Quick Start & Deployment Guide](#-quick-start--deployment-guide)
-10. [Automated Verification & Test Suite](#-automated-verification--test-suite)
-11. [Resume Talking Points & Interview Guide](#-resume-talking-points--interview-guide)
-
----
-
-## 💼 Executive Summary & Resume Highlights
+## 💼 Executive Summary & Highlights
 
 As the lead full-stack software engineer on this project, I designed, developed, and deployed the complete end-to-end web architecture for **Nex World Travel & Tourism**, currently serving **1,000+ active members and enterprise travel consultants**.
 
@@ -526,24 +503,5 @@ The repository includes a comprehensive end-to-end integration test suite ([`ser
 ```
 
 ---
-
-### 🎙️ How to Explain This Project in Technical Interviews:
-
-#### Q: *"What was the most challenging technical problem you solved in this project?"*
-> **Answer**:  
-> *"When deploying containerized Node.js applications to cloud infrastructure like Railway or containerized Kubernetes pods, local filesystem storage is ephemeral — files written to `/uploads` are wiped every time the container restarts or redeploys.  
-> Rather than incurring recurring third-party SaaS costs or risking broken image links, I engineered a MongoDB binary document storage engine. High-resolution images are validated for format signatures, converted to binary buffers, and persisted directly within the database with `select: false` so listing endpoints aren't slowed down. I then built dedicated streaming endpoints with MD5 ETags and `Cache-Control: public, max-age=86400`, allowing browsers to receive `304 Not Modified` on subsequent visits. Additionally, I built an automatic fallback in the static file middleware that queries the database if a requested disk file is missing, guaranteeing zero broken images across localhost and production."*
-
-#### Q: *"How did you handle security and prevent staff members from making unauthorized financial changes?"*
-> **Answer**:  
-> *"In a luxury travel business, contract terms like membership tier, room nights, and product pricing are legally binding. Giving staff direct `PATCH` access was unacceptable.  
-> I implemented an asynchronous Maker-Checker pattern. Staff can view members and update contact information if permitted, but any changes to protected fields (package tier, nights, tenure, prices) are automatically intercepted by a backend middleware. The mutation is transformed into an `EmployeeChangeRequest` with a 'Pending' status and the staff member's business justification. Only the Master Head (Super Admin) can review a side-by-side visual diff of original vs. proposed values and execute an atomic database transaction to apply or reject the update."*
-
-#### Q: *"How does the system perform when the user base or catalog grows?"*
-> **Answer**:  
-> *"I tested and verified the platform against 5,000 active member records. Using indexed MongoDB queries on `memberId`, `email`, and `slug`, paired with paginated API endpoints, searches complete in under 4 milliseconds. In the frontend, Next.js performs incremental static regeneration and pre-renders static marketing pages, keeping P95 load times under 100ms. Furthermore, if database connections ever drop during a network partition, the server's in-memory failover layer seamlessly services requests so users experience zero interruption."*
-
----
-
 ## 📄 License
 This project is proprietary and developed exclusively for **Nex World Travel & Tourism**. All rights reserved.
