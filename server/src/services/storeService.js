@@ -849,19 +849,38 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     // 2. Outstanding Balance: remaining membership liability
     const outstandingBalance = Math.max(0, productPrice - totalAmountPaid);
 
-    // 3. EMI details
-    const hasEMI = Boolean(member.hasEMI && Number(member.emiAmount || 0) > 0);
-    const emiAmount = hasEMI ? Number(member.emiAmount || 0) : 0;
-    const emiTenureMonths = hasEMI ? Number(member.emiTenureMonths || 0) : 0;
+    // 3. EMI details: strictly validate assignment, schedule integrity, and active balance
+    const hasAssignedEMI = Boolean(
+      member.hasEMI !== undefined ? member.hasEMI : member.emiDetails?.hasEmi
+    );
+    const rawEmiAmount = Number(member.emiAmount || member.emiDetails?.emiAmount || 0);
+    const rawEmiTenure = Number(
+      member.emiTenureMonths !== undefined
+        ? member.emiTenureMonths
+        : (member.emiDetails?.totalMonths || member.emiDetails?.tenureMonths || 0)
+    );
 
-    // 4. Calculate emiPaidMonths
+    const hasValidSchedule = rawEmiAmount > 0 && rawEmiTenure > 0;
+    const isPaidUpfront = productPrice > 0 && totalAmountPaid >= productPrice;
+
+    // Active EMI is true ONLY if assigned, valid schedule, has outstanding balance, and did NOT pay full amount upfront
+    const hasEMI = Boolean(hasAssignedEMI && hasValidSchedule && outstandingBalance > 0 && !isPaidUpfront);
+    const emiAmount = hasAssignedEMI ? rawEmiAmount : 0;
+    const emiTenureMonths = hasAssignedEMI ? rawEmiTenure : 0;
+
+    // 4. Calculate emiPaidMonths from explicit property and recorded emi_installment payments
     let emiPaidMonths = Number(member.emiPaidMonths || 0);
     if (hasEMI && emiAmount > 0) {
       const tenureLimit = emiTenureMonths > 0 ? emiTenureMonths : 999;
       const emiTxnCount = Array.isArray(payments)
         ? payments.filter((p) => p.paymentType === 'emi_installment' && !['failed', 'cancelled', 'pending'].includes((p.status || '').toLowerCase())).length
         : 0;
-      emiPaidMonths = Math.min(tenureLimit, Math.max(emiPaidMonths, emiTxnCount, Math.floor(totalAmountPaid / emiAmount)));
+      const emiTxnPaidSum = Array.isArray(payments)
+        ? payments.filter((p) => p.paymentType === 'emi_installment' && !['failed', 'cancelled', 'pending'].includes((p.status || '').toLowerCase()))
+            .reduce((sum, p) => sum + Number(p.amount || 0), 0)
+        : 0;
+      const emiPaidMonthsFromTxns = emiAmount > 0 ? Math.floor(emiTxnPaidSum / emiAmount) : 0;
+      emiPaidMonths = Math.min(tenureLimit, Math.max(emiPaidMonths, emiTxnCount, emiPaidMonthsFromTxns));
     }
 
     // 5. Authoritative Current Payable / Due Calculation
@@ -906,6 +925,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       totalAmountPaid,
       outstandingBalance,
       hasEMI,
+      hasAssignedEMI,
       emiAmount,
       emiTenureMonths,
       emiPaidMonths,
@@ -913,6 +933,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       paymentStatus,
       emiDetails: {
         hasEmi: hasEMI,
+        hasAssignedEmi: hasAssignedEMI,
         emiAmount,
         frequency: 'Monthly',
         paidMonths: emiPaidMonths,
@@ -1087,7 +1108,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       hasEMI: !!data.hasEMI,
       emiAmount: Number(data.emiAmount || 0),
       emiTenureMonths: Number(data.emiTenureMonths || 0),
-      emiPaidMonths: 0,
+      emiPaidMonths: Number(data.emiPaidMonths || 0),
       nextEMIDueDate: data.nextEMIDueDate || null,
       dueAmount: initialPaid > 0 || productPrice === 0 ? 0 : Number(data.dueAmount !== undefined ? data.dueAmount : (data.emiAmount || 0)),
       paymentStatus: productPrice === 0 ? 'Fully Paid' : (data.paymentStatus || 'Up to Date'),
@@ -1284,9 +1305,11 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     }
 
     const emiTenure = Number(member.emiTenureMonths || 0);
-    const emiPaidMonths = member.emiAmount > 0
-      ? Math.min(emiTenure || 999, Math.floor(newPaid / member.emiAmount))
-      : member.emiPaidMonths;
+    let emiPaidMonths = Number(member.emiPaidMonths || 0);
+    if (paymentData.paymentType === 'emi_installment' && member.emiAmount > 0) {
+      const installmentsCovered = Math.max(1, Math.floor(amount / member.emiAmount));
+      emiPaidMonths = Math.min(emiTenure || 999, emiPaidMonths + installmentsCovered);
+    }
 
     const updatePayload = {
       totalAmountPaid: newPaid,

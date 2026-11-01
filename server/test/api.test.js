@@ -2252,6 +2252,210 @@ async function runTests() {
       }
     });
 
+    // 39. Structured EMI Facility Details: Eligibility & Visibility Rules Verification (6 Test Cases)
+    await check('Structured EMI Facility: 6 Visibility Cases (Active 12m, 4-of-12, Full Upfront, Pending Balance w/o EMI, No EMI, Incomplete Config)', async () => {
+      // Helper function to evaluate the exact Member Portal visibility formula
+      const evaluateEmiVisibility = (m) => Boolean(
+        (m.hasEMI === true || m.emiDetails?.hasEmi === true) &&
+        Number(m.outstandingBalance || 0) > 0 &&
+        Number(m.productPrice || 0) > Number(m.totalAmountPaid || 0) &&
+        Number(m.emiAmount || m.emiDetails?.emiAmount || 0) > 0 &&
+        Number(m.emiTenureMonths || m.emiDetails?.totalMonths || 0) > 0
+      );
+
+      // --- CASE 1: Member with an active 12-month EMI plan ---
+      const id1 = `NEX-EMI1-${Date.now().toString().slice(-4)}`;
+      const res1 = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: id1,
+          registeredName: 'Active 12M EMI Member',
+          email: `${id1.toLowerCase()}@nexworldtravel.com`,
+          initialPassword: 'Password123!',
+          productPrice: 15000,
+          initialPaidAmount: 3000,
+          hasEMI: true,
+          emiAmount: 1000,
+          emiTenureMonths: 12,
+          nextEMIDueDate: '2026-12-01',
+        }),
+      });
+      const data1 = await res1.json();
+      if (!res1.ok || !data1.success) throw new Error('Case 1 creation failed: ' + JSON.stringify(data1));
+      const m1 = data1.member;
+      if (m1.hasEMI !== true) throw new Error('Case 1: Expected hasEMI to be true');
+      if (m1.emiAmount !== 1000) throw new Error(`Case 1: Expected emiAmount 1000, got ${m1.emiAmount}`);
+      if (m1.emiTenureMonths !== 12) throw new Error(`Case 1: Expected emiTenureMonths 12, got ${m1.emiTenureMonths}`);
+      if (!evaluateEmiVisibility(m1)) throw new Error('Case 1: Section should be VISIBLE for active 12-month EMI member');
+
+      // --- CASE 2: Member with a 4-of-12 installment schedule ---
+      const id2 = `NEX-EMI2-${Date.now().toString().slice(-4)}`;
+      const res2 = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: id2,
+          registeredName: '4 of 12 EMI Member',
+          email: `${id2.toLowerCase()}@nexworldtravel.com`,
+          initialPassword: 'Password123!',
+          productPrice: 15000,
+          initialPaidAmount: 3000,
+          hasEMI: true,
+          emiAmount: 1000,
+          emiTenureMonths: 12,
+          emiPaidMonths: 4,
+          nextEMIDueDate: '2026-12-01',
+        }),
+      });
+      const data2 = await res2.json();
+      if (!res2.ok || !data2.success) throw new Error('Case 2 creation failed');
+      const m2 = data2.member;
+      if (m2.hasEMI !== true) throw new Error('Case 2: Expected hasEMI to be true');
+      if (m2.emiPaidMonths !== 4) throw new Error(`Case 2: Expected emiPaidMonths 4, got ${m2.emiPaidMonths}`);
+      if (m2.emiTenureMonths !== 12) throw new Error(`Case 2: Expected emiTenureMonths 12, got ${m2.emiTenureMonths}`);
+      const progressString = `${m2.emiPaidMonths} of ${m2.emiTenureMonths} installments completed`;
+      if (progressString !== '4 of 12 installments completed') {
+        throw new Error(`Case 2: Expected '4 of 12 installments completed', got '${progressString}'`);
+      }
+      if (!evaluateEmiVisibility(m2)) throw new Error('Case 2: Section should be VISIBLE with 4 of 12 progress');
+
+      // --- CASE 3: Member who paid the full amount upfront ---
+      const id3 = `NEX-EMI3-${Date.now().toString().slice(-4)}`;
+      const res3 = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: id3,
+          registeredName: 'Upfront Paid Member',
+          email: `${id3.toLowerCase()}@nexworldtravel.com`,
+          initialPassword: 'Password123!',
+          productPrice: 12000,
+          initialPaidAmount: 12000,
+          hasEMI: false,
+        }),
+      });
+      const data3 = await res3.json();
+      if (!res3.ok || !data3.success) throw new Error('Case 3 creation failed');
+      const m3 = data3.member;
+      if (m3.outstandingBalance !== 0) throw new Error(`Case 3: Expected balance 0, got ${m3.outstandingBalance}`);
+      if (m3.hasEMI !== false) throw new Error('Case 3: Expected hasEMI to be false for upfront paid member');
+      if (evaluateEmiVisibility(m3)) throw new Error('Case 3: Section should be HIDDEN for upfront paid member');
+
+      // Also verify when member had hasEMI: true passed, but paid full amount upfront
+      const id3b = `NEX-EMI3B-${Date.now().toString().slice(-4)}`;
+      const res3b = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: id3b,
+          registeredName: 'Full Paid with EMI Flag Member',
+          email: `${id3b.toLowerCase()}@nexworldtravel.com`,
+          initialPassword: 'Password123!',
+          productPrice: 15000,
+          initialPaidAmount: 15000,
+          hasEMI: true,
+          emiAmount: 1250,
+          emiTenureMonths: 12,
+        }),
+      });
+      const data3b = await res3b.json();
+      const m3b = data3b.member;
+      if (m3b.hasEMI !== false) throw new Error('Case 3b: Expected hasEMI to be false when balance is 0');
+      if (evaluateEmiVisibility(m3b)) throw new Error('Case 3b: Section should be HIDDEN when full amount is paid');
+
+      // --- CASE 4: Member with an ordinary outstanding balance but no EMI assignment ---
+      const id4 = `NEX-EMI4-${Date.now().toString().slice(-4)}`;
+      const res4 = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: id4,
+          registeredName: 'Ordinary Balance Member',
+          email: `${id4.toLowerCase()}@nexworldtravel.com`,
+          initialPassword: 'Password123!',
+          productPrice: 16000,
+          initialPaidAmount: 6000,
+          hasEMI: false,
+        }),
+      });
+      const data4 = await res4.json();
+      const m4 = data4.member;
+      if (m4.outstandingBalance !== 10000) throw new Error(`Case 4: Expected balance 10000, got ${m4.outstandingBalance}`);
+      if (m4.hasEMI !== false) throw new Error('Case 4: Expected hasEMI to be false for ordinary balance');
+      if (evaluateEmiVisibility(m4)) throw new Error('Case 4: Section should be HIDDEN merely because balance is pending');
+
+      // --- CASE 5: Member without an EMI facility ---
+      const id5 = `NEX-EMI5-${Date.now().toString().slice(-4)}`;
+      const res5 = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: id5,
+          registeredName: 'No EMI Facility Member',
+          email: `${id5.toLowerCase()}@nexworldtravel.com`,
+          initialPassword: 'Password123!',
+          productPrice: 8000,
+          initialPaidAmount: 8000,
+          hasEMI: false,
+        }),
+      });
+      const data5 = await res5.json();
+      const m5 = data5.member;
+      if (m5.hasEMI !== false) throw new Error('Case 5: Expected hasEMI to be false');
+      if (evaluateEmiVisibility(m5)) throw new Error('Case 5: Section should be HIDDEN for member without EMI facility');
+
+      // --- CASE 6: Member with incomplete EMI configuration ---
+      const id6 = `NEX-EMI6-${Date.now().toString().slice(-4)}`;
+      const res6 = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: id6,
+          registeredName: 'Incomplete EMI Member',
+          email: `${id6.toLowerCase()}@nexworldtravel.com`,
+          initialPassword: 'Password123!',
+          productPrice: 10000,
+          initialPaidAmount: 2000,
+          hasEMI: true,
+          emiAmount: 0, // incomplete installment
+          emiTenureMonths: 0, // incomplete tenure
+        }),
+      });
+      const data6 = await res6.json();
+      const m6 = data6.member;
+      if (m6.hasEMI !== false) throw new Error('Case 6: Expected hasEMI to be false for incomplete configuration');
+      if (evaluateEmiVisibility(m6)) throw new Error('Case 6: Section should be HIDDEN for incomplete EMI configuration');
+
+      // --- VERIFY: Member only sees own EMI info via /api/v1/members/me ---
+      const loginRes1 = await fetch('http://127.0.0.1:5098/api/v1/auth/member/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId: id1, password: 'Password123!' }),
+      });
+      const loginData1 = await loginRes1.json();
+      if (!loginRes1.ok || !loginData1.token) throw new Error('Member 1 login failed');
+
+      const meRes = await fetch('http://127.0.0.1:5098/api/v1/members/me', {
+        headers: { Authorization: `Bearer ${loginData1.token}` },
+      });
+      const meData = await meRes.json();
+      if (!meRes.ok || !meData.success || meData.member.memberId !== id1) {
+        throw new Error('Member did not receive their own profile via /members/me');
+      }
+      if (meData.member.emiAmount !== 1000 || meData.member.emiTenureMonths !== 12) {
+        throw new Error('Member did not receive correct EMI information for their own account');
+      }
+
+      // Member cannot access full directory or other members' data
+      const forbiddenRes = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        headers: { Authorization: `Bearer ${loginData1.token}` },
+      });
+      if (forbiddenRes.status !== 403) {
+        throw new Error(`Expected 403 Forbidden for member accessing /members, got ${forbiddenRes.status}`);
+      }
+    });
+
     console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
   } finally {
     server.close();

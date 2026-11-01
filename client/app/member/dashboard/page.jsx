@@ -313,6 +313,18 @@ export default function MemberDashboard() {
     ? Number(member.availableNights)
     : Math.max(0, allottedNights - usedNights);
 
+  // Structured EMI Facility eligibility:
+  // 1. Must be actively assigned EMI facility
+  // 2. Must NOT have paid full amount upfront (must have outstanding balance)
+  // 3. Must have a valid installment schedule (non-zero installment amount & tenure)
+  const isEmiEligible = Boolean(
+    (member.hasEMI === true || member.emiDetails?.hasEmi === true) &&
+    Number(member.outstandingBalance || 0) > 0 &&
+    Number(member.productPrice || 0) > Number(member.totalAmountPaid || 0) &&
+    Number(member.emiAmount || member.emiDetails?.emiAmount || 0) > 0 &&
+    Number(member.emiTenureMonths || member.emiDetails?.totalMonths || 0) > 0
+  );
+
   const currentTierStyle = TIER_CONFIG[member.packageType] || {
     icon: '⭐',
     badge: 'bg-slate-100 text-slate-800 border border-slate-300',
@@ -460,8 +472,8 @@ export default function MemberDashboard() {
             </div>
             <p className="text-[11px] text-text-secondary mt-3 leading-tight">
               {member.travelCardBenefit
-                ? 'VIP lounges, priority check-in, and exclusive resort discount privileges enabled.'
-                : 'Standard membership entitlement. Inquire with support to upgrade.'}
+                ? 'Complimentary Nex World Travel Privilege Card included with your membership portfolio.'
+                : 'Standard membership package without separate travel card privilege.'}
             </p>
           </div>
 
@@ -586,14 +598,16 @@ export default function MemberDashboard() {
               </div>
               <p className="text-[11px] text-text-secondary mt-1">
                 {Number(member.dueAmount) > 0
-                  ? `Installment due by ${member.nextEMIDueDate ? new Date(member.nextEMIDueDate).toLocaleDateString() : 'scheduled date'}`
-                  : (Number(member.outstandingBalance) === 0 ? 'All dues settled in full' : 'Current installment paid')}
+                  ? (isEmiEligible
+                      ? `Installment due by ${member.nextEMIDueDate ? new Date(member.nextEMIDueDate).toLocaleDateString() : 'scheduled date'}`
+                      : 'Payment due on outstanding balance')
+                  : (Number(member.outstandingBalance) === 0 ? 'All dues settled in full' : (isEmiEligible ? 'Current installment paid' : 'Account in good standing'))}
               </p>
             </div>
           </div>
 
-          {/* EMI Schedule if applicable */}
-          {member.hasEMI && (
+          {/* Structured EMI Facility Details (Exclusively for EMI-Enrolled Members with Active Schedule) */}
+          {isEmiEligible && (
             <div className="p-5 rounded-2xl bg-surface-50 border border-border mb-8 space-y-2">
               <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
                 <CreditCard className="w-4 h-4 text-accent-primary" />
@@ -602,11 +616,15 @@ export default function MemberDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
                 <div>
                   <span className="text-text-secondary">Monthly Installment:</span>
-                  <strong className="block text-text-primary text-sm font-bold">AED {member.emiAmount} / month</strong>
+                  <strong className="block text-text-primary text-sm font-bold">
+                    AED {Number(member.emiAmount || member.emiDetails?.emiAmount || 0).toLocaleString()} / month
+                  </strong>
                 </div>
                 <div>
                   <span className="text-text-secondary">Tenure / Progress:</span>
-                  <strong className="block text-text-primary text-sm font-bold">{member.emiPaidMonths} of {member.emiTenureMonths} installments completed</strong>
+                  <strong className="block text-text-primary text-sm font-bold">
+                    {member.emiPaidMonths || 0} of {member.emiTenureMonths || member.emiDetails?.totalMonths || 0} installments completed
+                  </strong>
                 </div>
                 <div>
                   <span className="text-text-secondary">Next Installment Due Date:</span>

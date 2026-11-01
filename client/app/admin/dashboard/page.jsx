@@ -133,11 +133,12 @@ export default function AdminDashboardPage() {
     paymentMethod: 'Bank Transfer',
     paymentReference: '',
     membershipStatus: 'Active',
-    hasEmi: true,
-    emiAmount: 1250,
+    hasEmi: false,
+    emiAmount: 0,
+    emiTenureMonths: 12,
     emiFrequency: 'Monthly',
-    nextEmiDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    dueAmount: 1250,
+    nextEmiDueDate: '',
+    dueAmount: 0,
   });
 
   // Detailed Edit Member Form
@@ -394,12 +395,18 @@ export default function AdminDashboardPage() {
         purchaseDate: addMemberForm.purchaseDate,
         productPrice: Number(addMemberForm.productPrice),
         initialPaidAmount: Number(addMemberForm.initialPaidAmount),
+        hasEMI: Boolean(addMemberForm.hasEmi && Number(addMemberForm.productPrice) > Number(addMemberForm.initialPaidAmount)),
+        emiAmount: addMemberForm.hasEmi ? Number(addMemberForm.emiAmount || 0) : 0,
+        emiTenureMonths: addMemberForm.hasEmi ? Number(addMemberForm.emiTenureMonths || 12) : 0,
+        nextEMIDueDate: addMemberForm.hasEmi ? (addMemberForm.nextEmiDueDate || null) : null,
+        dueAmount: addMemberForm.hasEmi ? Number(addMemberForm.dueAmount || addMemberForm.emiAmount || 0) : 0,
         emiDetails: {
-          hasEmi: Boolean(addMemberForm.hasEmi),
-          emiAmount: Number(addMemberForm.emiAmount),
-          frequency: addMemberForm.emiFrequency,
-          nextDueDate: addMemberForm.nextEmiDueDate,
-          dueAmount: Number(addMemberForm.dueAmount),
+          hasEmi: Boolean(addMemberForm.hasEmi && Number(addMemberForm.productPrice) > Number(addMemberForm.initialPaidAmount)),
+          emiAmount: addMemberForm.hasEmi ? Number(addMemberForm.emiAmount || 0) : 0,
+          frequency: addMemberForm.emiFrequency || 'Monthly',
+          totalMonths: addMemberForm.hasEmi ? Number(addMemberForm.emiTenureMonths || 12) : 0,
+          nextDueDate: addMemberForm.hasEmi ? (addMemberForm.nextEmiDueDate || null) : null,
+          dueAmount: addMemberForm.hasEmi ? Number(addMemberForm.dueAmount || addMemberForm.emiAmount || 0) : 0,
         },
       };
 
@@ -2338,6 +2345,78 @@ export default function AdminDashboardPage() {
                           value={addMemberForm.paymentReference || ''}
                           onChange={(e) => setAddMemberForm({ ...addMemberForm, paymentReference: e.target.value })}
                           className="w-full px-2.5 py-1.5 rounded-xl border border-border font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Structured EMI Facility Allocation (Optional) */}
+                <div className="bg-surface-50 p-3.5 rounded-2xl border border-border space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                        <CreditCard className="w-3.5 h-3.5 text-accent-primary" />
+                        <span>Structured EMI Facility Allocation</span>
+                      </label>
+                      <p className="text-[11px] text-text-secondary mt-0.5">
+                        Assign an installment payment plan or leave as standard/full upfront.
+                      </p>
+                    </div>
+                    <select
+                      value={addMemberForm.hasEmi ? 'yes' : 'no'}
+                      onChange={(e) => {
+                        const isYes = e.target.value === 'yes';
+                        const bal = Math.max(0, Number(addMemberForm.productPrice || 0) - Number(addMemberForm.initialPaidAmount || 0));
+                        const tenure = 12;
+                        const autoEmi = isYes && bal > 0 ? Math.round(bal / tenure) : 0;
+                        setAddMemberForm({
+                          ...addMemberForm,
+                          hasEmi: isYes,
+                          emiAmount: autoEmi,
+                          emiTenureMonths: isYes ? tenure : 0,
+                          dueAmount: isYes ? autoEmi : 0,
+                          nextEmiDueDate: isYes ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : '',
+                        });
+                      }}
+                      className="px-2.5 py-1 text-xs rounded-xl border border-border font-bold bg-white text-text-primary focus:outline-none focus:border-accent-primary"
+                    >
+                      <option value="no">No EMI (Standard / Full)</option>
+                      <option value="yes">Yes (Assign EMI Facility)</option>
+                    </select>
+                  </div>
+
+                  {addMemberForm.hasEmi && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-border/60">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-text-secondary mb-1">Monthly Installment (AED) *</label>
+                        <input
+                          type="number"
+                          min="1"
+                          required={addMemberForm.hasEmi}
+                          value={addMemberForm.emiAmount}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, emiAmount: Number(e.target.value) })}
+                          className="w-full px-2.5 py-1.5 rounded-xl border border-border text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-text-secondary mb-1">Tenure (Months) *</label>
+                        <input
+                          type="number"
+                          min="1"
+                          required={addMemberForm.hasEmi}
+                          value={addMemberForm.emiTenureMonths || 12}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, emiTenureMonths: Number(e.target.value) })}
+                          className="w-full px-2.5 py-1.5 rounded-xl border border-border text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-text-secondary mb-1">First Installment Due Date</label>
+                        <input
+                          type="date"
+                          value={addMemberForm.nextEmiDueDate || ''}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, nextEmiDueDate: e.target.value })}
+                          className="w-full px-2.5 py-1.5 rounded-xl border border-border text-xs"
                         />
                       </div>
                     </div>
