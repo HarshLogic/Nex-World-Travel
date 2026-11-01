@@ -66,7 +66,7 @@ export default function AdminLoginPage() {
               <input
                 type="email"
                 required
-                placeholder="e.g. adityar@nexworldtravel.com"
+                placeholder="e.g. customer@nexworldtravel.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
