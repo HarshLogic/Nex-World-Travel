@@ -94,6 +94,20 @@ const TIER_CONFIG = {
     card: 'bg-white border-border',
     textColor: 'text-slate-700',
   },
+  'Trail Plan': {
+    icon: '🧭',
+    badge: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+    headerBadge: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+    card: 'bg-gradient-to-br from-emerald-50/70 via-white to-emerald-100/40 border-emerald-200',
+    textColor: 'text-emerald-800',
+  },
+  Trail: {
+    icon: '🧭',
+    badge: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+    headerBadge: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+    card: 'bg-gradient-to-br from-emerald-50/70 via-white to-emerald-100/40 border-emerald-200',
+    textColor: 'text-emerald-800',
+  },
 };
 
 export default function MemberDashboard() {

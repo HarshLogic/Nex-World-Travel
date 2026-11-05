@@ -33,7 +33,7 @@ const createMemberBase = z.object({
     .min(4, 'Password must be at least 4 characters')
     .default('Member123!'),
   packageType: z
-    .enum(['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'])
+    .enum(['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan', 'Trail'])
     .default('Gold'),
   availableNights: z.coerce.number().min(0, 'Available nights cannot be negative').default(14),
   allottedNights: z.coerce.number().min(0).optional(),
@@ -132,6 +132,7 @@ export const createMemberSchema = z.preprocess((raw) => {
     else if (p === 'gold') data.packageType = 'Gold';
     else if (p === 'silver plus' || p === 'silver+') data.packageType = 'Silver Plus';
     else if (p === 'silver') data.packageType = 'Silver';
+    else if (p === 'trail plan' || p === 'trail') data.packageType = 'Trail Plan';
   }
 
   return data;
@@ -144,7 +145,7 @@ const updateMemberBase = z.object({
   phone: z.string().trim().optional(),
   address: z.string().trim().optional(),
   packageType: z
-    .enum(['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'])
+    .enum(['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan', 'Trail'])
     .optional(),
   availableNights: z.coerce.number().min(0).optional(),
   allottedNights: z.coerce.number().min(0).optional(),
@@ -184,6 +185,18 @@ export const updateMemberSchema = z.preprocess((raw) => {
   if (data.membershipStatus) {
     data.membershipStatus = normalizeMembershipStatus(data.membershipStatus);
     data.status = data.membershipStatus;
+  }
+  // Normalize package type casing
+  if (typeof data.packageType === 'string') {
+    const p = data.packageType.trim().toLowerCase();
+    if (p === 'titanium') data.packageType = 'Titanium';
+    else if (p === 'platinum+' || p === 'platinum plus') data.packageType = 'Platinum+';
+    else if (p === 'platinum') data.packageType = 'Platinum';
+    else if (p === 'gold plus' || p === 'gold+') data.packageType = 'Gold Plus';
+    else if (p === 'gold') data.packageType = 'Gold';
+    else if (p === 'silver plus' || p === 'silver+') data.packageType = 'Silver Plus';
+    else if (p === 'silver') data.packageType = 'Silver';
+    else if (p === 'trail plan' || p === 'trail') data.packageType = 'Trail Plan';
   }
   return data;
 }, updateMemberBase);

@@ -166,6 +166,7 @@ const mountRoutes = (prefix) => {
   app.use(`${prefix}/terms`, termsRoutes);
   app.use(`${prefix}/dashboard`, dashboardRoutes);
   app.use(`${prefix}/availability`, availabilityRoutes);
+  app.use(`${prefix}/availabilities`, availabilityRoutes);
   app.use(`${prefix}/media`, mediaRoutes);
   app.use(`${prefix}/upload`, mediaRoutes);
 };

@@ -45,7 +45,7 @@ const memberProfileSchema = new mongoose.Schema(
     packageType: {
       type: String,
       required: true,
-      enum: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'],
+      enum: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan', 'Trail'],
       default: 'Gold',
       index: true,
     },

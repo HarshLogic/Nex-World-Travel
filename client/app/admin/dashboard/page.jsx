@@ -276,7 +276,7 @@ export default function AdminDashboardPage() {
     status: 'Available',
     totalSlots: 10,
     availableSlots: 10,
-    tierEligibility: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'],
+    tierEligibility: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan'],
     notes: '',
   });
 
@@ -924,7 +924,7 @@ export default function AdminDashboardPage() {
       status: 'Available',
       totalSlots: 10,
       availableSlots: 10,
-      tierEligibility: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'],
+      tierEligibility: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan'],
       notes: '',
     });
     setShowAvailabilityModal(true);
@@ -943,7 +943,7 @@ export default function AdminDashboardPage() {
       status: item.status || (item.isAvailable !== false ? 'Available' : 'Unavailable'),
       totalSlots: item.totalSlots || 10,
       availableSlots: item.availableSlots || 10,
-      tierEligibility: item.tierEligibility || ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'],
+      tierEligibility: item.tierEligibility || ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan'],
       notes: item.notes || '',
     });
     setShowAvailabilityModal(true);
@@ -1551,7 +1551,7 @@ export default function AdminDashboardPage() {
                   }}
                   className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary focus:outline-none focus:border-accent-primary"
                 >
-                  <option value="">All Tiers (7 Tiers)</option>
+                  <option value="">All Tiers (8 Tiers)</option>
                   <option value="Titanium">Titanium</option>
                   <option value="Platinum+">Platinum+</option>
                   <option value="Platinum">Platinum</option>
@@ -1559,6 +1559,7 @@ export default function AdminDashboardPage() {
                   <option value="Gold">Gold</option>
                   <option value="Silver Plus">Silver Plus</option>
                   <option value="Silver">Silver</option>
+                  <option value="Trail Plan">Trail Plan</option>
                 </select>
 
                 <select
@@ -1644,8 +1645,14 @@ export default function AdminDashboardPage() {
                         <td className="py-3.5 px-4">
                           <span
                             className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                              m.packageType === 'Gold'
+                              m.packageType === 'Gold' || m.packageType === 'Gold Plus'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : m.packageType === 'Trail Plan' || m.packageType === 'Trail'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : m.packageType === 'Titanium'
+                                ? 'bg-slate-900 text-slate-100 border border-slate-700'
+                                : m.packageType === 'Platinum+' || m.packageType === 'Platinum'
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                                 : 'bg-slate-100 text-slate-700 border border-slate-200'
                             }`}
                           >
@@ -1751,7 +1758,7 @@ export default function AdminDashboardPage() {
               <div className="flex items-start justify-between pb-4 border-b border-border">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-2xl bg-accent-primary-light text-accent-primary font-black text-lg flex items-center justify-center">
-                    {selectedMember.packageType === 'Gold' ? 'G' : 'S'}
+                    {selectedMember.packageType ? selectedMember.packageType.charAt(0).toUpperCase() : 'M'}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -2172,6 +2179,7 @@ export default function AdminDashboardPage() {
                       <option value="Gold">Gold</option>
                       <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
+                      <option value="Trail Plan">Trail Plan</option>
                     </select>
                   </div>
                   <div>
@@ -2547,6 +2555,7 @@ export default function AdminDashboardPage() {
                         <option value="Gold">Gold</option>
                         <option value="Silver Plus">Silver Plus</option>
                         <option value="Silver">Silver</option>
+                        <option value="Trail Plan">Trail Plan</option>
                       </select>
                     </div>
                     <div>
@@ -4690,7 +4699,7 @@ export default function AdminDashboardPage() {
                           </td>
                           <td className="py-3.5 px-4 text-text-tertiary">
                             <span className="line-clamp-1 max-w-[140px]">
-                              {item.tierEligibility?.join(', ') || 'All 7 Tiers'}
+                              {item.tierEligibility?.join(', ') || 'All 8 Tiers'}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-right">

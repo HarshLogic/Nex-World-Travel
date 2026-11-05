@@ -2456,6 +2456,137 @@ async function runTests() {
       }
     });
 
+    // 40. Trail Plan Membership Tier Registration, Normalization, Query, Update, Availability & Metrics
+    await check('Trail Plan Membership Tier: Registration, Normalization, Filtering, Update & Availability', async () => {
+      // 1. Register a member with explicit 'Trail Plan'
+      const idTrail1 = `NEX-TRL-${Date.now().toString().slice(-4)}`;
+      const res1 = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: idTrail1,
+          registeredName: 'Zayd Al Hashimi',
+          email: `${idTrail1.toLowerCase()}@nexworldtravel.com`,
+          initialPassword: 'Password123!',
+          packageType: 'Trail Plan',
+          availableNights: 5,
+          productPrice: 7500,
+          initialPaidAmount: 7500,
+          travelCardBenefit: true,
+        }),
+      });
+      const data1 = await res1.json();
+      if (!res1.ok || !data1.success) {
+        throw new Error(`Failed to create member with Trail Plan: ${JSON.stringify(data1)}`);
+      }
+      if (data1.member.packageType !== 'Trail Plan') {
+        throw new Error(`Expected packageType 'Trail Plan', got '${data1.member.packageType}'`);
+      }
+
+      // 2. Register a member with lowercase 'trail' (testing normalization)
+      const idTrail2 = `NEX-TRL2-${Date.now().toString().slice(-4)}`;
+      const res2 = await fetch('http://127.0.0.1:5098/api/v1/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          memberId: idTrail2,
+          registeredName: 'Layla Al Qasimi',
+          email: `${idTrail2.toLowerCase()}@nexworldtravel.com`,
+          initialPassword: 'Password123!',
+          packageType: 'trail',
+          availableNights: 3,
+          productPrice: 5000,
+          initialPaidAmount: 5000,
+        }),
+      });
+      const data2 = await res2.json();
+      if (!res2.ok || !data2.success) {
+        throw new Error(`Failed to create member with normalized 'trail': ${JSON.stringify(data2)}`);
+      }
+      if (data2.member.packageType !== 'Trail Plan') {
+        throw new Error(`Expected normalized packageType 'Trail Plan', got '${data2.member.packageType}'`);
+      }
+
+      // 3. Filter directory by packageType=Trail Plan
+      const filterRes = await fetch('http://127.0.0.1:5098/api/v1/members?packageType=Trail+Plan', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const filterData = await filterRes.json();
+      if (!filterRes.ok || !filterData.success) {
+        throw new Error('Failed to filter members by packageType=Trail Plan');
+      }
+      const trailMembers = filterData.members.filter((m) => m.memberId === idTrail1 || m.memberId === idTrail2);
+      if (trailMembers.length < 2) {
+        throw new Error(`Expected at least 2 Trail Plan members in filter result, got ${trailMembers.length}`);
+      }
+
+      // 4. Update an existing member to 'Trail Plan'
+      const updateRes = await fetch(`http://127.0.0.1:5098/api/v1/members/${idTrail1}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          packageType: 'Trail Plan',
+          availableNights: 8,
+          productPrice: 9000,
+        }),
+      });
+      const updateData = await updateRes.json();
+      if (!updateRes.ok || !updateData.success) {
+        throw new Error(`Failed to update member packageType to Trail Plan: ${JSON.stringify(updateData)}`);
+      }
+      if (updateData.member.availableNights !== 8 || updateData.member.packageType !== 'Trail Plan') {
+        throw new Error('Member update did not persist Trail Plan package changes');
+      }
+
+      // 5. Dashboard Metrics includes Trail Plan
+      const metricsRes = await fetch('http://127.0.0.1:5098/api/v1/dashboard/metrics', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const metricsData = await metricsRes.json();
+      const met = metricsData.metrics || metricsData;
+      if (!met.membershipCategories || !met.membershipCategories['Trail Plan']) {
+        throw new Error('Dashboard metrics does not include Trail Plan in membershipCategories');
+      }
+      if (met.trailMembers < 2) {
+        throw new Error(`Expected at least 2 trailMembers in metrics, got ${met.trailMembers}`);
+      }
+
+      // 6. PlanAvailability with 'Trail Plan' tier
+      const availRes = await fetch('http://127.0.0.1:5098/api/v1/availabilities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          title: 'Hatta Mountain Trail Adventure',
+          destinationOrPlan: 'Hatta Trails Resort',
+          packageTier: 'Trail Plan',
+          startDate: '2027-01-10',
+          endDate: '2027-01-15',
+          isAvailable: true,
+          availableSeats: 6,
+          notes: 'Special expedition for Trail Plan members',
+        }),
+      });
+      const availData = await availRes.json();
+      if (!availRes.ok || !availData.success) {
+        throw new Error(`Failed to create PlanAvailability with Trail Plan tier: ${JSON.stringify(availData)}`);
+      }
+
+      // 7. Query PlanAvailability for 'Trail Plan'
+      const queryAvailRes = await fetch('http://127.0.0.1:5098/api/v1/availabilities?packageTier=Trail+Plan', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const queryAvailData = await queryAvailRes.json();
+      if (!queryAvailRes.ok || !queryAvailData.success) {
+        throw new Error('Failed to query PlanAvailability with packageTier=Trail Plan');
+      }
+      const foundAvail = (queryAvailData.data || queryAvailData).some(
+        (a) => a.title === 'Hatta Mountain Trail Adventure' && a.packageTier === 'Trail Plan'
+      );
+      if (!foundAvail) {
+        throw new Error('Created Trail Plan availability was not found in filtered query');
+      }
+    });
+
     console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
   } finally {
     server.close();

@@ -30,7 +30,7 @@ const planAvailabilitySchema = new mongoose.Schema(
     },
     packageTier: {
       type: String,
-      enum: ['All', 'Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver'],
+      enum: ['All', 'Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan', 'Trail'],
       default: 'All',
       index: true,
     },

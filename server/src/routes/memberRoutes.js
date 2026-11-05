@@ -59,6 +59,19 @@ router.patch(
   updateMember
 );
 
+router.put(
+  '/:id',
+  authenticate,
+  requireRole(['master_head', 'employee']),
+  requirePermission([
+    'edit_member_details',
+    'edit_membership_plans',
+    'update_financial_info',
+    'update_membership_status',
+  ]),
+  updateMember
+);
+
 router.post(
   '/:id/payments',
   authenticate,

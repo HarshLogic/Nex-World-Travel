@@ -155,7 +155,7 @@ erDiagram
     MEMBER_PROFILES {
         string memberId PK
         string fullName
-        string packageType "Gold | Silver | Platinum"
+        string packageType "Titanium | Platinum+ | Platinum | Gold Plus | Gold | Silver Plus | Silver | Trail Plan"
         int totalNights
         int usedNights
         int availableNights "Calculated field"

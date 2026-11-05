@@ -670,7 +670,7 @@ export default function EmployeeDashboardPage() {
                   onChange={(e) => setMemberPackageFilter(e.target.value)}
                   className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary"
                 >
-                  <option value="">All Tiers (7 Tiers)</option>
+                  <option value="">All Tiers (8 Tiers)</option>
                   <option value="Titanium">Titanium</option>
                   <option value="Platinum+">Platinum+</option>
                   <option value="Platinum">Platinum</option>
@@ -678,6 +678,7 @@ export default function EmployeeDashboardPage() {
                   <option value="Gold">Gold</option>
                   <option value="Silver Plus">Silver Plus</option>
                   <option value="Silver">Silver</option>
+                  <option value="Trail Plan">Trail Plan</option>
                 </select>
 
                 <select
@@ -755,8 +756,14 @@ export default function EmployeeDashboardPage() {
                         <td className="py-3.5 px-4">
                           <span
                             className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                              m.packageType === 'Gold'
+                              m.packageType === 'Gold' || m.packageType === 'Gold Plus'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : m.packageType === 'Trail Plan' || m.packageType === 'Trail'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : m.packageType === 'Titanium'
+                                ? 'bg-slate-900 text-slate-100 border border-slate-700'
+                                : m.packageType === 'Platinum+' || m.packageType === 'Platinum'
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                                 : 'bg-slate-100 text-slate-700 border border-slate-200'
                             }`}
                           >
@@ -1084,6 +1091,7 @@ export default function EmployeeDashboardPage() {
                       <option value="Gold">Gold</option>
                       <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
+                      <option value="Trail Plan">Trail Plan</option>
                     </select>
                   </div>
                   <div>
@@ -1404,7 +1412,7 @@ export default function EmployeeDashboardPage() {
                     className="w-full px-3 py-2 rounded-xl border border-border font-bold"
                   >
                     <option value="nightsAvailable">Available Nights Pool</option>
-                    <option value="packageType">Package Tier (All 7 Tiers)</option>
+                    <option value="packageType">Package Tier (All 8 Tiers)</option>
                     <option value="membershipStatus">Membership Status (Open, Close, Deactive, Cancel)</option>
                     <option value="travelCardBenefit">Travel Card Benefit (Yes / No)</option>
                     <option value="extraOffers">Contract Extra Offers</option>
@@ -1439,6 +1447,7 @@ export default function EmployeeDashboardPage() {
                       <option value="Gold">Gold</option>
                       <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
+                      <option value="Trail Plan">Trail Plan</option>
                     </select>
                   ) : crField === 'travelCardBenefit' ? (
                     <select
@@ -1608,6 +1617,7 @@ export default function EmployeeDashboardPage() {
                         <option value="Gold">Gold</option>
                         <option value="Silver Plus">Silver Plus</option>
                         <option value="Silver">Silver</option>
+                        <option value="Trail Plan">Trail Plan</option>
                       </select>
                     </div>
                     <div>

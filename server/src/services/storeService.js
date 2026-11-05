@@ -716,7 +716,11 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
           }
         }
         if (packageType) {
-          filter.packageType = new RegExp('^' + packageType.replace('+', '\\+') + '$', 'i');
+          if (packageType.toLowerCase() === 'trail plan' || packageType.toLowerCase() === 'trail') {
+            filter.packageType = new RegExp('^Trail( Plan)?$', 'i');
+          } else {
+            filter.packageType = new RegExp('^' + packageType.replace('+', '\\+') + '$', 'i');
+          }
         }
         if (search) {
           const regex = new RegExp(search, 'i');
@@ -779,7 +783,13 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
         return ms === s;
       });
     }
-    if (packageType) results = results.filter((m) => m.packageType.toLowerCase() === packageType.toLowerCase());
+    if (packageType) {
+      if (packageType.toLowerCase() === 'trail plan' || packageType.toLowerCase() === 'trail') {
+        results = results.filter((m) => /^trail( plan)?$/i.test(m.packageType));
+      } else {
+        results = results.filter((m) => m.packageType.toLowerCase() === packageType.toLowerCase());
+      }
+    }
     if (search) {
       const q = search.toLowerCase();
       results = results.filter(
@@ -3061,6 +3071,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       membershipCategories,
       goldMembers: membershipCategories['Gold'] || 0,
       silverMembers: membershipCategories['Silver'] || 0,
+      trailMembers: (membershipCategories['Trail Plan'] || 0) + (membershipCategories['Trail'] || 0),
       totalOutstandingBalance,
       totalCollected,
       totalCollectedRevenue: totalCollected,
