@@ -626,7 +626,7 @@ export async function fetchDestinations(region, category) {
 
 export async function fetchDestinationBySlug(slug) {
   try {
-    const res = await fetch(`${BASE_URL}/api/v1/destinations/${slug}`, { next: { revalidate: 30 } });
+    const res = await fetch(`${BASE_URL}/api/v1/destinations/${slug}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.data) return data.data;
@@ -659,7 +659,7 @@ export async function fetchActivities(category, region) {
 export async function fetchPackages(region) {
   try {
     const url = region ? `${BASE_URL}/api/v1/packages?region=${encodeURIComponent(region)}` : `${BASE_URL}/api/v1/packages`;
-    const res = await fetch(url, { next: { revalidate: 60 } });
+    const res = await fetch(url, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.data?.length > 0) return data.data;
@@ -670,7 +670,7 @@ export async function fetchPackages(region) {
 
 export async function fetchPackageBySlug(slug) {
   try {
-    const res = await fetch(`${BASE_URL}/api/v1/packages/${slug}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${BASE_URL}/api/v1/packages/${slug}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.data) return data.data;

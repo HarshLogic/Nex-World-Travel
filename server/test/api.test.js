@@ -2587,6 +2587,47 @@ async function runTests() {
       }
     });
 
+    // 41. Packages Endpoints & System Memory Diagnostics Optimization
+    await check('Packages REST Endpoints & System Memory Diagnostics', async () => {
+      // 1. Packages list
+      const pkgRes = await fetch('http://127.0.0.1:5098/api/v1/packages');
+      const pkgData = await pkgRes.json();
+      if (!pkgRes.ok || !pkgData.success || !Array.isArray(pkgData.data) || pkgData.data.length === 0) {
+        throw new Error('GET /api/v1/packages failed to return packages array');
+      }
+
+      // 2. Package by slug
+      const slug = pkgData.data[0].slug;
+      const singleRes = await fetch(`http://127.0.0.1:5098/api/v1/packages/${slug}`);
+      const singleData = await singleRes.json();
+      if (!singleRes.ok || !singleData.success || singleData.data.slug !== slug) {
+        throw new Error(`GET /api/v1/packages/${slug} failed to return package details`);
+      }
+
+      // 3. System Memory Diagnostics - Unauthenticated should return 401
+      const unauthRes = await fetch('http://127.0.0.1:5098/api/v1/dashboard/system/memory');
+      if (unauthRes.status !== 401) {
+        throw new Error(`Expected 401 for unauthenticated /system/memory, got ${unauthRes.status}`);
+      }
+
+      // 4. System Memory Diagnostics - Authenticated Master Head returns valid metrics
+      const authRes = await fetch('http://127.0.0.1:5098/api/v1/dashboard/system/memory', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      const authData = await authRes.json();
+      if (!authRes.ok || !authData.success) {
+        throw new Error('Authenticated request to /system/memory failed');
+      }
+      if (
+        typeof authData.memory?.rssMB !== 'number' ||
+        typeof authData.memory?.heapUsedMB !== 'number' ||
+        typeof authData.memory?.heapTotalMB !== 'number' ||
+        typeof authData.uptimeSeconds !== 'number'
+      ) {
+        throw new Error('Invalid memory diagnostics payload structure');
+      }
+    });
+
     console.log(`\n--- Test Suite Completed: ${failures === 0 ? 'ALL TESTS PASSED 🎉' : `${failures} TESTS FAILED`} ---`);
   } finally {
     server.close();

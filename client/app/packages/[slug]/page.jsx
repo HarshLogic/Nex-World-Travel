@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { MapPin, Calendar, Clock, CheckCircle2, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { fetchPackageBySlug } from '../../../lib/api';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PackageDetailPage({ params }) {
   const pkg = await fetchPackageBySlug(params.slug);
 

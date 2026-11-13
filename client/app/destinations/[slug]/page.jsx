@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { Compass, Calendar, Clock, MapPin, CheckCircle2, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
 import { fetchDestinationBySlug, getDestinationImageUrl } from '../../../lib/api';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DestinationDetailPage({ params }) {
   const destination = await fetchDestinationBySlug(params.slug);
 

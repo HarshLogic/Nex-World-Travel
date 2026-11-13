@@ -11,6 +11,10 @@ export const connectDB = async (isRetry = false) => {
     mongoose.set('bufferTimeoutMS', 5000);
     const conn = await mongoose.connect(uri, {
       serverSelectionTimeoutMS: 8000,
+      maxPoolSize: 10,
+      minPoolSize: 2,
+      maxIdleTimeMS: 30000,
+      socketTimeoutMS: 45000,
     });
     console.log(`[Database] MongoDB Connected: ${conn.connection.host}`);
     lastConnectionError = null;

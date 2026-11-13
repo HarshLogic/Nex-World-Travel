@@ -621,6 +621,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
     if (!user || !user.isActive) return null;
 
+    this._cleanupExpiredTokens();
     const token = crypto.randomBytes(24).toString('hex');
     this.securityTokens.set(token, {
       userId: user._id ? user._id.toString() : user.id,
@@ -633,7 +634,17 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     return { token, user };
   }
 
+  _cleanupExpiredTokens() {
+    const now = Date.now();
+    for (const [t, data] of this.securityTokens.entries()) {
+      if (now > data.expiresAt) {
+        this.securityTokens.delete(t);
+      }
+    }
+  }
+
   createActivationToken(userId, email, name = '') {
+    this._cleanupExpiredTokens();
     const token = crypto.randomBytes(24).toString('hex');
     this.securityTokens.set(token, {
       userId: userId ? userId.toString() : userId,
@@ -2751,6 +2762,49 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     return { success: true, message: `Activity deleted/archived successfully.` };
   }
 
+  // ==================== PACKAGES ====================
+  async getPackages(filter = {}) {
+    await this.initializeSeedAccounts();
+    if (this.isMongoLive()) {
+      try {
+        const pkgCount = await Package.countDocuments();
+        if (pkgCount === 0 && this.packages.length > 0) {
+          await Package.insertMany(this.packages);
+        }
+        const q = {};
+        if (filter.region) q.region = new RegExp(filter.region, 'i');
+        if (filter.featured !== undefined) q.featured = filter.featured;
+        const mongoResults = await Package.find(q).sort({ createdAt: -1 }).lean();
+        if (mongoResults && mongoResults.length > 0) {
+          return mongoResults;
+        }
+      } catch (e) {
+        console.warn('[StoreService] Mongo getPackages error:', e.message);
+      }
+    }
+
+    let results = [...this.packages];
+    if (filter.region) {
+      results = results.filter((p) => p.region?.toLowerCase().includes(filter.region.toLowerCase()));
+    }
+    if (filter.featured !== undefined) {
+      results = results.filter((p) => p.featured === filter.featured);
+    }
+    return results;
+  }
+
+  async getPackageBySlug(slug) {
+    await this.initializeSeedAccounts();
+    if (!slug) return null;
+    if (this.isMongoLive()) {
+      try {
+        const found = await Package.findOne({ slug: slug.toLowerCase() }).lean();
+        if (found) return found;
+      } catch (e) {}
+    }
+    return this.packages.find((p) => p.slug?.toLowerCase() === slug.toLowerCase()) || null;
+  }
+
   // ==================== BOOKING ENQUIRIES ====================
   async createBooking(bookingData) {
     const enquiryNumber = this.generateCode('NEX-BK');
@@ -3104,6 +3158,9 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       } catch (e) {}
     }
     this.auditLogs.unshift(record);
+    if (this.auditLogs.length > 100) {
+      this.auditLogs.length = 100;
+    }
   }
 
   async getAuditLogs(limit = 50) {
