@@ -83,7 +83,7 @@ export default function Navbar() {
     if (authUser.role === 'employee') {
       return {
         href: '/employee/dashboard',
-        fullLabel: 'Staff Portal',
+        fullLabel: 'Staff Specialist Portal',
         shortLabel: 'Staff',
         badge: 'Staff',
         icon: Shield,
@@ -175,10 +175,10 @@ export default function Navbar() {
               <a
                 href="tel:+97126395908"
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-accent-primary transition-colors py-2 px-2.5 xl:px-3 rounded-full hover:bg-surface-50 shrink-0 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
-                title="Call Nex World Travel Abu Dhabi: +971 2 639 5908"
+                title="Call Nex World Travel Abu Dhabi: +971-263-959-08"
               >
                 <PhoneCall className="w-3.5 h-3.5 text-accent-secondary shrink-0" />
-                <span className="font-mono text-xs">+971 2 639 5908</span>
+                <span className="font-mono text-xs">+971-263-959-08</span>
               </a>
 
               {/* Plan Your Journey CTA Button - Hidden on Admin/Staff Dashboards */}
@@ -360,7 +360,7 @@ export default function Navbar() {
                 <PhoneCall className="w-4 h-4" />
               </div>
               <div>
-                <span className="block text-xs font-bold text-text-primary font-mono">+971 2 639 5908</span>
+                <span className="block text-xs font-bold text-text-primary font-mono">+971-263-959-08</span>
                 <span className="block text-[11px] text-text-secondary">Head Office Desk • Abu Dhabi</span>
               </div>
             </a>
@@ -391,7 +391,7 @@ export default function Navbar() {
       </aside>
 
       {/* Spacer so page content begins neatly below fixed header */}
-      <div className="h-18 sm:h-20 xl:h-22" />
+      <div className="h-[76px] sm:h-[84px] xl:h-[88px]" aria-hidden="true" />
     </>
   );
 }

@@ -139,6 +139,7 @@ export const updateMember = async (req, res, next) => {
         'tenurePeriod',
         'extraOffers',
         'travelCardBenefit',
+        'purchaseDate',
       ];
       // Financial fields
       const financialFields = [

@@ -4,13 +4,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Shield, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { Shield, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react';
 import { loginStaff } from '../../../lib/api';
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -79,17 +80,24 @@ export default function AdminLoginPage() {
               </label>
               <div className="relative">
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                  className="w-full px-4 py-3 pr-11 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
                 />
-                <Lock className="w-4 h-4 text-text-muted absolute right-3.5 top-3.5" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3.5 top-3.5 text-text-muted hover:text-text-primary transition-colors focus:outline-none"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
               <div className="flex items-center justify-end mt-1.5">
-                <Link href="/forgot-password" className="text-xs font-semibold text-accent-primary hover:underline">
+                <Link href="/forgot-password?portal=staff" className="text-xs font-semibold text-accent-primary hover:underline">
                   Forgot password?
                 </Link>
               </div>

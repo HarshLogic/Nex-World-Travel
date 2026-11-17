@@ -534,14 +534,99 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
   async getUserByMemberId(memberId) {
     await this.initializeSeedAccounts();
-    const cleanId = memberId.toUpperCase().trim();
+    if (!memberId || typeof memberId !== 'string') return null;
+    const cleanId = memberId.trim();
+    if (!cleanId) return null;
+
+    const escapeRegex = (s) => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const exactRegex = new RegExp(`^${escapeRegex(cleanId)}$`, 'i');
+    const canonicalId = cleanId.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
     if (this.isMongoLive()) {
       try {
-        const user = await User.findOne({ memberId: cleanId });
+        // 1. Exact case-insensitive match
+        let user = await User.findOne({ memberId: exactRegex });
         if (user) return user.toObject();
-      } catch (e) {}
+
+        // 2. Flexible hyphen/space-insensitive match (only if unique)
+        if (canonicalId.length >= 3) {
+          const chars = canonicalId.split('').map(escapeRegex);
+          const flexPattern = '^\\s*' + chars.join('[-\\s_]*') + '\\s*$';
+          const candidates = await User.find({ memberId: new RegExp(flexPattern, 'i') }).limit(3);
+          if (candidates.length === 1) {
+            return candidates[0].toObject();
+          } else if (candidates.length > 1) {
+            return null; // Reject ambiguous match safely
+          }
+        }
+
+        // 3. Fallback: look up MemberProfile in case User.memberId was unlinked
+        let prof = await MemberProfile.findOne({ memberId: exactRegex }).lean();
+        if (!prof && canonicalId.length >= 3) {
+          const chars = canonicalId.split('').map(escapeRegex);
+          const flexPattern = '^\\s*' + chars.join('[-\\s_]*') + '\\s*$';
+          const profCandidates = await MemberProfile.find({ memberId: new RegExp(flexPattern, 'i') }).limit(3).lean();
+          if (profCandidates.length === 1) {
+            prof = profCandidates[0];
+          }
+        }
+
+        if (prof) {
+          let linkedUser = null;
+          if (prof.userId) {
+            linkedUser = await User.findOne({ _id: prof.userId });
+          }
+          if (!linkedUser && prof.email) {
+            linkedUser = await User.findOne({ email: prof.email.toLowerCase().trim(), role: 'member' });
+          }
+          if (linkedUser) {
+            if (!linkedUser.memberId) {
+              linkedUser.memberId = prof.memberId;
+              await linkedUser.save().catch(() => {});
+            }
+            return linkedUser.toObject();
+          }
+        }
+      } catch (e) {
+        console.warn('[StoreService] getUserByMemberId mongo error:', e.message);
+      }
     }
-    return this.users.find((u) => u.memberId && u.memberId.toUpperCase() === cleanId) || null;
+
+    // In-memory lookup
+    const memExact = this.users.find(
+      (u) => u.memberId && u.memberId.trim().toUpperCase() === cleanId.toUpperCase()
+    );
+    if (memExact) return memExact;
+
+    if (canonicalId.length >= 3) {
+      const candidates = this.users.filter((u) => {
+        if (!u.memberId) return false;
+        return u.memberId.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === canonicalId;
+      });
+      if (candidates.length === 1) return candidates[0];
+      if (candidates.length > 1) return null; // Reject ambiguous match safely
+    }
+
+    // In-memory profile fallback
+    const memProf = this.members.find(
+      (m) =>
+        m.memberId &&
+        (m.memberId.trim().toUpperCase() === cleanId.toUpperCase() ||
+          (canonicalId.length >= 3 && m.memberId.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === canonicalId))
+    );
+    if (memProf) {
+      const linked = this.users.find(
+        (u) =>
+          (memProf.userId && (u._id === memProf.userId || u.id === memProf.userId)) ||
+          (memProf.email && u.email && u.email.toLowerCase() === memProf.email.toLowerCase() && u.role === 'member')
+      );
+      if (linked) {
+        if (!linked.memberId) linked.memberId = memProf.memberId;
+        return linked;
+      }
+    }
+
+    return null;
   }
 
   async getUserById(id) {
@@ -632,6 +717,44 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     });
 
     return { token, user };
+  }
+
+  async createMemberPasswordResetToken(memberId, email) {
+    await this.initializeSeedAccounts();
+    if (!memberId || !email) return { matched: false };
+
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await this.getUserByMemberId(memberId);
+
+    if (!user || user.role !== 'member' || !user.isActive) {
+      return { matched: false };
+    }
+
+    // Verify email matches either User.email or linked MemberProfile.email
+    let emailMatches = user.email && user.email.toLowerCase().trim() === cleanEmail;
+    if (!emailMatches) {
+      const profile = await this.getMemberById(user.memberId);
+      if (profile && profile.email && profile.email.toLowerCase().trim() === cleanEmail) {
+        emailMatches = true;
+      }
+    }
+
+    if (!emailMatches) {
+      return { matched: false };
+    }
+
+    this._cleanupExpiredTokens();
+    const token = crypto.randomBytes(24).toString('hex');
+    this.securityTokens.set(token, {
+      userId: user._id ? user._id.toString() : user.id,
+      email: cleanEmail,
+      name: user.name,
+      memberId: user.memberId,
+      type: 'reset',
+      expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
+    });
+
+    return { matched: true, token, user: { ...user, email: cleanEmail } };
   }
 
   _cleanupExpiredTokens() {
@@ -727,8 +850,9 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
           }
         }
         if (packageType) {
-          if (packageType.toLowerCase() === 'trail plan' || packageType.toLowerCase() === 'trail') {
-            filter.packageType = new RegExp('^Trail( Plan)?$', 'i');
+          const ptLower = packageType.toLowerCase();
+          if (ptLower === 'trail plan' || ptLower === 'trail' || ptLower === 'trial plan' || ptLower === 'trial') {
+            filter.packageType = new RegExp('^(Trai[nl]( Plan)?|Trial Plan|Trail Plan)$', 'i');
           } else {
             filter.packageType = new RegExp('^' + packageType.replace('+', '\\+') + '$', 'i');
           }
@@ -795,8 +919,9 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       });
     }
     if (packageType) {
-      if (packageType.toLowerCase() === 'trail plan' || packageType.toLowerCase() === 'trail') {
-        results = results.filter((m) => /^trail( plan)?$/i.test(m.packageType));
+      const ptLower = packageType.toLowerCase();
+      if (ptLower === 'trail plan' || ptLower === 'trail' || ptLower === 'trial plan' || ptLower === 'trial') {
+        results = results.filter((m) => /^(trail|trial)( plan)?$/i.test(m.packageType));
       } else {
         results = results.filter((m) => m.packageType.toLowerCase() === packageType.toLowerCase());
       }
@@ -1053,26 +1178,53 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
   async getMemberById(memberId) {
     await this.initializeSeedAccounts();
-    const cleanId = memberId.toUpperCase().trim();
+    if (!memberId || typeof memberId !== 'string') return null;
+    const cleanId = memberId.trim();
+    if (!cleanId) return null;
+
+    const escapeRegex = (s) => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const exactRegex = new RegExp(`^${escapeRegex(cleanId)}$`, 'i');
+    const canonicalId = cleanId.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
     let member = null;
     if (this.isMongoLive()) {
       try {
-        member = await MemberProfile.findOne({ memberId: cleanId }).lean();
+        member = await MemberProfile.findOne({ memberId: exactRegex }).lean();
+        if (!member && canonicalId.length >= 3) {
+          const chars = canonicalId.split('').map(escapeRegex);
+          const flexPattern = '^\\s*' + chars.join('[-\\s_]*') + '\\s*$';
+          const candidates = await MemberProfile.find({ memberId: new RegExp(flexPattern, 'i') }).limit(3).lean();
+          if (candidates.length === 1) {
+            member = candidates[0];
+          }
+        }
       } catch (e) {}
     }
     if (!member) {
-      member = this.members.find((m) => m.memberId.toUpperCase() === cleanId) || null;
+      member =
+        this.members.find((m) => m.memberId && m.memberId.trim().toUpperCase() === cleanId.toUpperCase()) ||
+        null;
+      if (!member && canonicalId.length >= 3) {
+        const candidates = this.members.filter(
+          (m) => m.memberId && m.memberId.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === canonicalId
+        );
+        if (candidates.length === 1) member = candidates[0];
+      }
     }
     if (!member) return null;
 
-    const payments = await this.getMemberPayments(cleanId);
-    const bookings = await this.getMemberBookings(cleanId, member.email, member.registeredName);
+    const lookupId = member.memberId;
+    const payments = await this.getMemberPayments(lookupId);
+    const bookings = await this.getMemberBookings(lookupId, member.email, member.registeredName);
 
     const financials = this.calculateMemberFinancials(member, payments);
     const withNights = this.calculateMemberNights(financials, bookings);
     const normalizedStatus = normalizeMembershipStatus(withNights.membershipStatus || withNights.status || 'Active');
     withNights.status = normalizedStatus;
     withNights.membershipStatus = normalizedStatus;
+    if (!withNights.registrationDate) {
+      withNights.registrationDate = member.purchaseDate || member.createdAt;
+    }
 
     return withNights;
   }
@@ -1122,7 +1274,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       tenurePeriod: data.tenurePeriod || '5 Years',
       travelCardBenefit: !!data.travelCardBenefit,
       purchaseDate: data.purchaseDate ? new Date(data.purchaseDate).toISOString() : nowIso,
-      registrationDate: nowIso,
+      registrationDate: data.registrationDate ? new Date(data.registrationDate).toISOString() : nowIso,
       productPrice,
       totalAmountPaid: 0,
       outstandingBalance: productPrice,
@@ -1175,10 +1327,29 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
     // Protect immutable identity and creation timestamps from modification
     delete updateData.createdAt;
-    delete updateData.registrationDate;
     delete updateData._id;
     delete updateData.memberId;
     delete updateData.userId;
+
+    if (updateData.registrationDate) {
+      const parsedReg = new Date(updateData.registrationDate);
+      if (!isNaN(parsedReg.getTime())) {
+        updateData.registrationDate = parsedReg.toISOString();
+        member.registrationDate = updateData.registrationDate;
+        updateData.purchaseDate = updateData.registrationDate;
+        member.purchaseDate = updateData.registrationDate;
+      }
+    } else if (updateData.purchaseDate) {
+      const parsedPurchase = new Date(updateData.purchaseDate);
+      if (!isNaN(parsedPurchase.getTime())) {
+        updateData.purchaseDate = parsedPurchase.toISOString();
+        member.purchaseDate = updateData.purchaseDate;
+        if (!member.registrationDate) {
+          updateData.registrationDate = updateData.purchaseDate;
+          member.registrationDate = updateData.purchaseDate;
+        }
+      }
+    }
 
     if (updateData.name && !updateData.registeredName) updateData.registeredName = updateData.name;
     if (updateData.registeredName && !updateData.name) updateData.name = updateData.registeredName;
@@ -1229,37 +1400,39 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
 
     Object.assign(member, updateData, { updatedAt: new Date().toISOString() });
 
+    const canonicalStoredId = member.memberId;
+
     if (this.isMongoLive()) {
       try {
-        await MemberProfile.findOneAndUpdate({ memberId: memberId.toUpperCase() }, { $set: updateData }, { new: true });
+        await MemberProfile.findOneAndUpdate({ memberId: canonicalStoredId }, { $set: updateData }, { new: true });
         // Also keep linked User account in sync for name, email, phone
         const userUpdates = {};
         if (updateData.registeredName) userUpdates.name = updateData.registeredName;
         if (updateData.email) userUpdates.email = updateData.email;
         if (updateData.phone !== undefined) userUpdates.phone = updateData.phone;
         if (Object.keys(userUpdates).length > 0) {
-          await User.findOneAndUpdate({ memberId: memberId.toUpperCase() }, { $set: userUpdates });
+          await User.findOneAndUpdate({ memberId: canonicalStoredId }, { $set: userUpdates });
         }
       } catch (e) {
         console.error('[StoreService] Mongo MemberProfile.findOneAndUpdate error:', e.message);
       }
     }
-    const idx = this.members.findIndex((m) => m.memberId.toUpperCase() === memberId.toUpperCase());
+    const idx = this.members.findIndex((m) => m.memberId.toUpperCase() === canonicalStoredId.toUpperCase());
     if (idx !== -1) this.members[idx] = member;
 
-    const uIdx = this.users.findIndex((u) => u.memberId && u.memberId.toUpperCase() === memberId.toUpperCase());
+    const uIdx = this.users.findIndex((u) => u.memberId && u.memberId.toUpperCase() === canonicalStoredId.toUpperCase());
     if (uIdx !== -1) {
       if (updateData.registeredName) this.users[uIdx].name = updateData.registeredName;
       if (updateData.email) this.users[uIdx].email = updateData.email;
       if (updateData.phone !== undefined) this.users[uIdx].phone = updateData.phone;
     }
 
-    await this.logAudit('MEMBER_UPDATED', author, 'member', memberId, {
+    await this.logAudit('MEMBER_UPDATED', author, 'member', canonicalStoredId, {
       changedFields: Object.keys(updateData),
       reason: updateData.reason || 'Staff update',
     });
 
-    return await this.getMemberById(memberId);
+    return await this.getMemberById(canonicalStoredId);
   }
 
   async recordPayment(memberId, paymentData, author = 'Master Head') {
@@ -3125,7 +3298,8 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       membershipCategories,
       goldMembers: membershipCategories['Gold'] || 0,
       silverMembers: membershipCategories['Silver'] || 0,
-      trailMembers: (membershipCategories['Trail Plan'] || 0) + (membershipCategories['Trail'] || 0),
+      trailMembers: (membershipCategories['Trail Plan'] || 0) + (membershipCategories['Trail'] || 0) + (membershipCategories['Trial Plan'] || 0) + (membershipCategories['Trial'] || 0),
+      trialMembers: (membershipCategories['Trial Plan'] || 0) + (membershipCategories['Trial'] || 0) + (membershipCategories['Trail Plan'] || 0) + (membershipCategories['Trail'] || 0),
       totalOutstandingBalance,
       totalCollected,
       totalCollectedRevenue: totalCollected,

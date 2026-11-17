@@ -54,6 +54,28 @@ import {
 } from '../../../lib/api';
 import { getAuthUser, clearAuth } from '../../../lib/auth';
 import { PERMISSION_OPTIONS, hasPermission } from '../../../lib/permissions';
+import { formatAED } from '../../../lib/currency';
+import { exportMemberSummaryPdf } from '../../../lib/pdfExport';
+
+const isValidMemberId = (value) => {
+  const trimmed = String(value || '').trim();
+  return trimmed.length >= 3 && trimmed.length <= 30 && /^[A-Za-z0-9\-_ ]+$/.test(trimmed);
+};
+
+const isValidPhoneNumber = (value, required = false) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return !required;
+  if (/[A-Za-z]/.test(trimmed)) return false;
+  const digits = trimmed.replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15;
+};
+
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().split('T')[0];
+};
 
 export default function EmployeeDashboardPage() {
   const router = useRouter();
@@ -292,10 +314,19 @@ export default function EmployeeDashboardPage() {
   // Add Member by Employee with create_member permission
   const handleAddMemberSubmit = async (e) => {
     e.preventDefault();
+    const cleanedMemberId = (addMemberForm.memberId || `NEX-M-${Math.floor(2000 + Math.random() * 8000)}`).trim().toUpperCase();
+    if (!isValidMemberId(cleanedMemberId)) {
+      triggerToast('Member ID must be 3–30 characters using only letters, numbers, hyphens, underscores, or spaces.', 'error');
+      return;
+    }
+    if (!isValidPhoneNumber(addMemberForm.phone, false)) {
+      triggerToast('Phone number must contain 7–15 digits and cannot include letters.', 'error');
+      return;
+    }
     setActionLoading(true);
     try {
       const payload = {
-        memberId: (addMemberForm.memberId || `NEX-M-${Math.floor(2000 + Math.random() * 8000)}`).trim().toUpperCase(),
+        memberId: cleanedMemberId,
         registeredName: addMemberForm.name.trim(),
         name: addMemberForm.name.trim(),
         email: addMemberForm.email.trim(),
@@ -314,6 +345,7 @@ export default function EmployeeDashboardPage() {
         tenurePeriod: addMemberForm.tenurePeriod,
         travelCardBenefit: Boolean(addMemberForm.travelCardBenefit),
         purchaseDate: addMemberForm.purchaseDate || new Date().toISOString().split('T')[0],
+        registrationDate: addMemberForm.purchaseDate || new Date().toISOString().split('T')[0],
         productPrice: Number(addMemberForm.productPrice || 12500),
         initialPaidAmount: Number(addMemberForm.initialPaidAmount || 0),
         hasEMI: Boolean(addMemberForm.hasEmi && Number(addMemberForm.productPrice || 12500) > Number(addMemberForm.initialPaidAmount || 0)),
@@ -363,7 +395,8 @@ export default function EmployeeDashboardPage() {
       packageType: member.packageType || 'Gold',
       membershipStatus: member.membershipStatus || 'Open',
       tenurePeriod: member.tenurePeriod || '3 Years',
-      purchaseDate: member.purchaseDate ? member.purchaseDate.split('T')[0] : '',
+      purchaseDate: toDateInputValue(member.purchaseDate),
+      registrationDate: toDateInputValue(member.registrationDate || member.purchaseDate || member.createdAt),
       allottedNights: member.allottedNights ?? ((member.availableNights || 0) + (member.usedNights || 0)),
       availableNights: member.availableNights ?? member.nightsAvailable ?? 14,
       usedNights: member.usedNights || 0,
@@ -375,17 +408,32 @@ export default function EmployeeDashboardPage() {
       hasEMI: Boolean(member.hasEMI),
       emiAmount: Number(member.emiAmount || 0),
       emiTenureMonths: Number(member.emiTenureMonths || 12),
-      nextEMIDueDate: member.nextEMIDueDate ? member.nextEMIDueDate.split('T')[0] : '',
+      nextEMIDueDate: toDateInputValue(member.nextEMIDueDate),
       dueAmount: Number(member.dueAmount || 0),
       paymentStatus: member.paymentStatus || 'Up to Date',
     });
     setShowDirectEditModal(true);
   };
 
+  // Export Member Summary PDF
+  const handleExportMemberPdf = async (member) => {
+    if (!member) return;
+    try {
+      await exportMemberSummaryPdf(member);
+      triggerToast(`Exported PDF summary for ${member.memberId}.`);
+    } catch (err) {
+      triggerToast(err.message || 'Failed to generate member PDF.', 'error');
+    }
+  };
+
   // Direct Edit Submit (enforcing employee permissions)
   const handleDirectEditSubmit = async (e) => {
     e.preventDefault();
     if (!selectedMember) return;
+    if (!isValidPhoneNumber(directEditForm.phone, true)) {
+      triggerToast('Phone number must contain 7–15 digits and cannot include letters.', 'error');
+      return;
+    }
     setActionLoading(true);
     try {
       const payload = {};
@@ -398,6 +446,7 @@ export default function EmployeeDashboardPage() {
         if (directEditForm.email) payload.email = directEditForm.email.trim();
         if (directEditForm.phone) payload.phone = directEditForm.phone.trim();
         if (directEditForm.address !== undefined) payload.address = directEditForm.address.trim();
+        if (directEditForm.registrationDate) payload.registrationDate = directEditForm.registrationDate;
       }
 
       // Status
@@ -414,6 +463,7 @@ export default function EmployeeDashboardPage() {
         payload.extraOffers = directEditForm.extraOffers;
         payload.travelCardBenefit = Boolean(directEditForm.travelCardBenefit);
         if (directEditForm.purchaseDate) payload.purchaseDate = directEditForm.purchaseDate;
+        if (directEditForm.registrationDate) payload.registrationDate = directEditForm.registrationDate;
       }
 
       // Financial
@@ -511,41 +561,25 @@ export default function EmployeeDashboardPage() {
         </div>
       )}
 
-      {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-border shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="relative h-9 w-36">
-                <Image
-                  src="/images/logo.png"
-                  alt="Nex World Travel"
-                  fill
-                  sizes="144px"
-                  className="object-contain object-left"
-                />
-              </div>
-            </Link>
-            <span className="hidden sm:inline-block h-5 w-[1px] bg-border" />
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                <Shield className="w-3.5 h-3.5 text-blue-600" />
-                Staff Specialist Portal
-              </span>
-            </div>
+      {/* Portal Sub-Header */}
+      <header className="relative z-30 bg-white border-b border-border shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('members');
+                if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+              title="Open Staff Specialist Portal Dashboard"
+            >
+              <Shield className="w-3.5 h-3.5 text-blue-600" />
+              <span>Staff Specialist Portal</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-3">
-            {hasPerm('create_member') && (
-              <button
-                onClick={() => setShowAddMemberModal(true)}
-                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover rounded-xl shadow-xs transition-colors"
-                title="Register New Member"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Register New Member</span>
-              </button>
-            )}
             <div className="text-right hidden sm:block">
               <p className="text-xs font-bold text-text-primary">{currentUser?.name || 'Staff Member'}</p>
               <p className="text-[11px] text-text-tertiary">{currentUser?.email}</p>
@@ -670,7 +704,7 @@ export default function EmployeeDashboardPage() {
                   onChange={(e) => setMemberPackageFilter(e.target.value)}
                   className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary"
                 >
-                  <option value="">All Tiers (8 Tiers)</option>
+                  <option value="">All Tiers</option>
                   <option value="Titanium">Titanium</option>
                   <option value="Platinum+">Platinum+</option>
                   <option value="Platinum">Platinum</option>
@@ -678,7 +712,8 @@ export default function EmployeeDashboardPage() {
                   <option value="Gold">Gold</option>
                   <option value="Silver Plus">Silver Plus</option>
                   <option value="Silver">Silver</option>
-                  <option value="Trail Plan">Trail Plan</option>
+                  <option value="Trial Plan">Trial Plan</option>
+                  <option value="Trail Plan">Trail Plan (Legacy)</option>
                 </select>
 
                 <select
@@ -706,28 +741,28 @@ export default function EmployeeDashboardPage() {
             {/* Members Table */}
             <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[780px] text-left text-xs">
+                <table className="w-full min-w-[960px] text-left text-xs border-collapse">
                   <thead className="bg-surface-50 text-text-tertiary font-bold uppercase tracking-wider border-b border-border">
                     <tr>
-                      <th className="py-3.5 px-4">Member ID</th>
-                      <th className="py-3.5 px-4">Registered Name</th>
-                      <th className="py-3.5 px-4">Membership Status</th>
-                      <th className="py-3.5 px-4">Tier</th>
-                      <th className="py-3.5 px-4">Available Nights</th>
-                      <th className="py-3.5 px-4">Travel Card</th>
-                      <th className="py-3.5 px-4">Balance</th>
-                      <th className="py-3.5 px-4 text-center">Action</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-left">Member ID</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-left">Registered Name</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-left">Membership Status</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-left">Tier</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-left">Available Nights</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-center">Travel Card</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-right">Balance</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {members.map((m) => (
                       <tr key={m.memberId} className="hover:bg-surface-50 transition-colors">
-                        <td className="py-3.5 px-4 font-mono font-bold text-accent-primary">{m.memberId}</td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-accent-primary whitespace-nowrap">{m.memberId}</td>
                         <td className="py-3.5 px-4">
                           <div className="font-semibold text-text-primary">{m.registeredName || m.userId?.name}</div>
                           <div className="text-[11px] text-text-tertiary">{m.email || m.userId?.email}</div>
                         </td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
                           <span
                             className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                               (m.membershipStatus || m.status) === 'Open' || (m.membershipStatus || m.status) === 'Active'
@@ -753,12 +788,12 @@ export default function EmployeeDashboardPage() {
                             {m.membershipStatus || m.status || 'Open'}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
                           <span
                             className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                               m.packageType === 'Gold' || m.packageType === 'Gold Plus'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : m.packageType === 'Trail Plan' || m.packageType === 'Trail'
+                                : m.packageType === 'Trial Plan' || m.packageType === 'Trial' || m.packageType === 'Trail Plan' || m.packageType === 'Trail'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : m.packageType === 'Titanium'
                                 ? 'bg-slate-900 text-slate-100 border border-slate-700'
@@ -771,8 +806,10 @@ export default function EmployeeDashboardPage() {
                             {m.packageType}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-text-primary">{m.nightsAvailable ?? m.availableNights ?? 0} nights</td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 font-bold text-text-primary whitespace-nowrap tabular-nums">
+                          {m.nightsAvailable ?? m.availableNights ?? 0} nights
+                        </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
                           {m.travelCardBenefit ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -785,10 +822,10 @@ export default function EmployeeDashboardPage() {
                             </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-red-600">
-                          AED {m.outstandingBalance?.toLocaleString()}
+                        <td className="py-3.5 px-4 font-bold text-red-600 text-right whitespace-nowrap tabular-nums">
+                          {formatAED(m.outstandingBalance || 0)}
                         </td>
-                        <td className="py-3.5 px-4 text-center">
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-2">
                             <button
                               onClick={() => setSelectedMember(m)}
@@ -817,7 +854,7 @@ export default function EmployeeDashboardPage() {
                                 setCrNewValue(m.packageType === 'Gold' ? 'Silver' : 'Gold');
                                 setShowChangeRequestModal(true);
                               }}
-                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-xs"
+                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-xs whitespace-nowrap"
                             >
                               <FileEdit className="w-3 h-3 text-amber-600" />
                               <span>Request Package Change</span>
@@ -828,7 +865,7 @@ export default function EmployeeDashboardPage() {
                     ))}
                     {members.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-text-tertiary">
+                        <td colSpan={8} className="py-12 text-center text-text-tertiary">
                           No members found.
                         </td>
                       </tr>
@@ -868,26 +905,31 @@ export default function EmployeeDashboardPage() {
         {selectedMember && !showChangeRequestModal && !showDirectEditModal && (
           <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
-              <div className="flex items-center justify-between pb-3 border-b border-border">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-text-primary">
-                    {selectedMember.registeredName || selectedMember.userId?.name}
-                  </h3>
-                  <span className="font-mono text-xs font-bold text-accent-primary bg-accent-primary-light px-2 py-0.5 rounded-full">
-                    {selectedMember.memberId}
-                  </span>
-                </div>
-                <p className="text-xs text-text-tertiary">
-                  {selectedMember.email || selectedMember.userId?.email} • {selectedMember.phone}
-                </p>
-                {selectedMember.address && (
-                  <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-accent-primary shrink-0" /> {selectedMember.address}
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-border">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-bold text-text-primary">
+                      {selectedMember.registeredName || selectedMember.userId?.name}
+                    </h3>
+                    <span className="font-mono text-xs font-bold text-accent-primary bg-accent-primary-light px-2.5 py-0.5 rounded-full">
+                      {selectedMember.memberId}
+                    </span>
+                  </div>
+                  <p className="text-xs text-text-tertiary">
+                    {selectedMember.email || selectedMember.userId?.email}
+                    {selectedMember.phone ? ` • ${selectedMember.phone}` : ''}
                   </p>
-                )}
+                  {selectedMember.address && (
+                    <p className="text-xs text-text-secondary flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-accent-primary shrink-0" />
+                      <span>{selectedMember.address}</span>
+                    </p>
+                  )}
+                </div>
                 <button
                   onClick={() => setSelectedMember(null)}
-                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
+                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg shrink-0"
+                  aria-label="Close member details"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -899,8 +941,16 @@ export default function EmployeeDashboardPage() {
                   <p className="font-bold text-text-primary mt-0.5">{selectedMember.packageType}</p>
                 </div>
                 <div>
+                  <span className="text-text-tertiary">Membership Status</span>
+                  <p className="font-bold text-text-primary mt-0.5">
+                    {selectedMember.membershipStatus || selectedMember.status || 'Active'}
+                  </p>
+                </div>
+                <div>
                   <span className="text-text-tertiary">Available Nights</span>
-                  <p className="font-bold text-accent-primary mt-0.5">{selectedMember.nightsAvailable} Nights</p>
+                  <p className="font-bold text-accent-primary mt-0.5">
+                    {selectedMember.nightsAvailable ?? selectedMember.availableNights ?? 0} Nights
+                  </p>
                 </div>
                 <div>
                   <span className="text-text-tertiary">Travel Card Benefit</span>
@@ -909,16 +959,28 @@ export default function EmployeeDashboardPage() {
                   </p>
                 </div>
                 <div>
-                  <span className="text-text-tertiary">Outstanding Balance</span>
-                  <p className="font-bold text-red-600 mt-0.5">
-                    AED {selectedMember.outstandingBalance?.toLocaleString()}
+                  <span className="text-text-tertiary">Total Product Cost</span>
+                  <p className="font-bold text-text-primary mt-0.5">
+                    {formatAED(selectedMember.productPrice || 0)}
                   </p>
                 </div>
                 <div>
-                  <span className="text-text-tertiary">Registration Timestamp</span>
+                  <span className="text-text-tertiary">Total Paid Amount</span>
+                  <p className="font-bold text-emerald-600 mt-0.5">
+                    {formatAED(selectedMember.totalAmountPaid || 0)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Outstanding Balance</span>
+                  <p className="font-bold text-red-600 mt-0.5">
+                    {formatAED(selectedMember.outstandingBalance || 0)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Registration Date</span>
                   <p className="font-semibold text-text-primary mt-0.5 text-[11px]">
-                    {selectedMember.registrationDate || selectedMember.createdAt ? (
-                      new Date(selectedMember.registrationDate || selectedMember.createdAt).toLocaleString('en-GB', {
+                    {selectedMember.registrationDate || selectedMember.purchaseDate || selectedMember.createdAt ? (
+                      new Date(selectedMember.registrationDate || selectedMember.purchaseDate || selectedMember.createdAt).toLocaleString('en-GB', {
                         timeZone: 'Asia/Dubai',
                         year: 'numeric',
                         month: 'short',
@@ -938,28 +1000,38 @@ export default function EmployeeDashboardPage() {
                 </p>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                {hasPerm('edit_member_details') && (
-                  <button
-                    onClick={() => handleOpenDirectEdit(selectedMember)}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs"
-                  >
-                    <Edit className="w-4 h-4" />
-                    <span>Edit Member Details</span>
-                  </button>
-                )}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border">
                 <button
-                  onClick={() => {
-                    setCrTargetMember(selectedMember);
-                    setCrField('nightsAvailable');
-                    setCrNewValue(selectedMember.nightsAvailable);
-                    setShowChangeRequestModal(true);
-                  }}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs"
+                  type="button"
+                  onClick={() => handleExportMemberPdf(selectedMember)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-colors"
                 >
-                  <FileEdit className="w-4 h-4" />
-                  <span>Request Package Change</span>
+                  <Download className="w-4 h-4" />
+                  <span>Export PDF</span>
                 </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {hasPerm('edit_member_details') && (
+                    <button
+                      onClick={() => handleOpenDirectEdit(selectedMember)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs"
+                    >
+                      <Edit className="w-4 h-4" />
+                      <span>Edit Member Details</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setCrTargetMember(selectedMember);
+                      setCrField('nightsAvailable');
+                      setCrNewValue(selectedMember.nightsAvailable);
+                      setShowChangeRequestModal(true);
+                    }}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs"
+                  >
+                    <FileEdit className="w-4 h-4" />
+                    <span>Request Package Change</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1005,11 +1077,13 @@ export default function EmployeeDashboardPage() {
                     <input
                       type="text"
                       required
+                      maxLength={30}
                       placeholder="e.g. NEX-M-2026"
                       value={addMemberForm.memberId}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, memberId: e.target.value })}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, memberId: e.target.value.slice(0, 30) })}
                       className="w-full px-3 py-2 rounded-xl border border-border font-mono font-bold uppercase focus:border-accent-primary"
                     />
+                    <span className="text-[10px] text-text-muted mt-0.5 block">3–30 chars (letters, numbers, hyphens)</span>
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -1053,12 +1127,17 @@ export default function EmployeeDashboardPage() {
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Phone Number</label>
                     <input
-                      type="text"
-                      placeholder="+971 50 123 4567"
+                      type="tel"
+                      maxLength={25}
+                      inputMode="tel"
+                      placeholder="+971-50-123-4567"
                       value={addMemberForm.phone}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, phone: e.target.value })}
+                      onChange={(e) =>
+                        setAddMemberForm({ ...addMemberForm, phone: e.target.value.replace(/[^0-9+\-\s()]/g, '').slice(0, 25) })
+                      }
                       className="w-full px-3 py-2 rounded-xl border border-border"
                     />
+                    <span className="text-[10px] text-text-muted mt-0.5 block">7–15 digits (international format)</span>
                   </div>
                 </div>
 
@@ -1091,7 +1170,7 @@ export default function EmployeeDashboardPage() {
                       <option value="Gold">Gold</option>
                       <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
-                      <option value="Trail Plan">Trail Plan</option>
+                      <option value="Trial Plan">Trial Plan</option>
                     </select>
                   </div>
                   <div>
@@ -1447,7 +1526,7 @@ export default function EmployeeDashboardPage() {
                       <option value="Gold">Gold</option>
                       <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
-                      <option value="Trail Plan">Trail Plan</option>
+                      <option value="Trial Plan">Trial Plan</option>
                     </select>
                   ) : crField === 'travelCardBenefit' ? (
                     <select
@@ -1565,12 +1644,31 @@ export default function EmployeeDashboardPage() {
                       <input
                         type="tel"
                         required
+                        maxLength={25}
+                        inputMode="tel"
                         value={directEditForm.phone || ''}
-                        onChange={(e) => setDirectEditForm({ ...directEditForm, phone: e.target.value })}
+                        onChange={(e) =>
+                          setDirectEditForm({
+                            ...directEditForm,
+                            phone: e.target.value.replace(/[^0-9+\-\s()]/g, '').slice(0, 25),
+                          })
+                        }
                         className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
                       />
                     </div>
                     <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Registration Date</label>
+                      <input
+                        type="date"
+                        disabled={!hasPerm('edit_member_details') && !hasPerm('edit_membership_plans')}
+                        value={directEditForm.registrationDate || ''}
+                        onChange={(e) =>
+                          setDirectEditForm({ ...directEditForm, registrationDate: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary disabled:opacity-60 disabled:bg-surface-100"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
                       <label className="block font-semibold text-text-secondary mb-1">Physical / Postal Address</label>
                       <input
                         type="text"
@@ -1617,7 +1715,10 @@ export default function EmployeeDashboardPage() {
                         <option value="Gold">Gold</option>
                         <option value="Silver Plus">Silver Plus</option>
                         <option value="Silver">Silver</option>
-                        <option value="Trail Plan">Trail Plan</option>
+                        <option value="Trial Plan">Trial Plan</option>
+                        {directEditForm.packageType === 'Trail Plan' && (
+                          <option value="Trail Plan">Trail Plan (Legacy)</option>
+                        )}
                       </select>
                     </div>
                     <div>
@@ -2367,7 +2468,7 @@ export default function EmployeeDashboardPage() {
                           </td>
                           <td className="py-3.5 px-4 text-text-tertiary">
                             <span className="line-clamp-1 max-w-[150px]">
-                              {item.tierEligibility?.join(', ') || 'All 7 Tiers'}
+                              {item.tierEligibility?.join(', ') || 'All Tiers'}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-right">

@@ -160,27 +160,19 @@ export default function AdminApprovalsPage() {
         </div>
       )}
 
-      {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-border shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/admin/dashboard" className="p-2 rounded-xl border border-border hover:bg-surface-50 text-text-secondary hover:text-text-primary">
+      {/* Portal Sub-Header */}
+      <header className="relative z-30 bg-white border-b border-border shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin/dashboard"
+              className="p-2 rounded-xl border border-border hover:bg-surface-50 text-text-secondary hover:text-text-primary"
+              title="Back to Master Head Dashboard"
+            >
               <ChevronLeft className="w-4 h-4" />
             </Link>
-            <Link href="/" className="flex items-center gap-2">
-              <div className="relative h-9 w-36">
-                <Image
-                  src="/images/logo.png"
-                  alt="Nex World Travel"
-                  fill
-                  sizes="144px"
-                  className="object-contain object-left"
-                />
-              </div>
-            </Link>
-            <span className="hidden sm:inline-block h-5 w-[1px] bg-border" />
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                 <Shield className="w-3.5 h-3.5 text-amber-600" />
                 Package Change Approvals Desk
               </span>

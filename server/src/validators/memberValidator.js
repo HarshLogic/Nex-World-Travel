@@ -16,6 +16,8 @@ const createMemberBase = z.object({
     .string({ required_error: 'Member ID is required (e.g. NEX-M-2001)' })
     .trim()
     .min(3, 'Member ID must be at least 3 characters (e.g. NEX-M-2001)')
+    .max(30, 'Member ID cannot exceed 30 characters')
+    .regex(/^[A-Za-z0-9\-_ ]{3,30}$/, 'Member ID may only contain letters, numbers, hyphens, and underscores')
     .toUpperCase(),
   registeredName: z
     .string({ required_error: 'Member name is required' })
@@ -26,14 +28,24 @@ const createMemberBase = z.object({
     .trim()
     .email('Please enter a valid email address (e.g. name@example.com)')
     .toLowerCase(),
-  phone: z.string().trim().optional().default(''),
+  phone: z
+    .string()
+    .trim()
+    .refine((val) => {
+      if (!val) return true;
+      const digitsOnly = val.replace(/\D/g, '');
+      if (/[a-zA-Z]/.test(val)) return false;
+      return digitsOnly.length >= 7 && digitsOnly.length <= 15;
+    }, 'Phone number must contain between 7 and 15 digits and cannot contain letters')
+    .optional()
+    .default(''),
   address: z.string().trim().optional().default(''),
   initialPassword: z
     .string()
     .min(4, 'Password must be at least 4 characters')
     .default('Member123!'),
   packageType: z
-    .enum(['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan', 'Trail'])
+    .enum(['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trial Plan', 'Trial', 'Trail Plan', 'Trail'])
     .default('Gold'),
   availableNights: z.coerce.number().min(0, 'Available nights cannot be negative').default(14),
   allottedNights: z.coerce.number().min(0).optional(),
@@ -42,6 +54,7 @@ const createMemberBase = z.object({
   tenurePeriod: z.string().trim().default('3 Years'),
   travelCardBenefit: z.boolean().default(true),
   purchaseDate: z.string().optional(),
+  registrationDate: z.string().optional(),
   productPrice: z.coerce.number().min(0, 'Product price must be non-negative').default(12500),
   initialPaidAmount: z.coerce.number().min(0, 'Initial paid amount cannot be negative').default(0),
   paymentMethod: z
@@ -132,6 +145,7 @@ export const createMemberSchema = z.preprocess((raw) => {
     else if (p === 'gold') data.packageType = 'Gold';
     else if (p === 'silver plus' || p === 'silver+') data.packageType = 'Silver Plus';
     else if (p === 'silver') data.packageType = 'Silver';
+    else if (p === 'trial plan' || p === 'trial') data.packageType = 'Trial Plan';
     else if (p === 'trail plan' || p === 'trail') data.packageType = 'Trail Plan';
   }
 
@@ -142,10 +156,19 @@ const updateMemberBase = z.object({
   registeredName: z.string().trim().min(2).optional(),
   name: z.string().trim().min(2).optional(),
   email: z.string().trim().email().toLowerCase().optional(),
-  phone: z.string().trim().optional(),
+  phone: z
+    .string()
+    .trim()
+    .refine((val) => {
+      if (!val) return true;
+      const digitsOnly = val.replace(/\D/g, '');
+      if (/[a-zA-Z]/.test(val)) return false;
+      return digitsOnly.length >= 7 && digitsOnly.length <= 15;
+    }, 'Phone number must contain between 7 and 15 digits and cannot contain letters')
+    .optional(),
   address: z.string().trim().optional(),
   packageType: z
-    .enum(['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan', 'Trail'])
+    .enum(['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trial Plan', 'Trial', 'Trail Plan', 'Trail'])
     .optional(),
   availableNights: z.coerce.number().min(0).optional(),
   allottedNights: z.coerce.number().min(0).optional(),
@@ -155,6 +178,7 @@ const updateMemberBase = z.object({
   tenurePeriod: z.string().trim().optional(),
   travelCardBenefit: z.boolean().optional(),
   purchaseDate: z.string().optional(),
+  registrationDate: z.string().optional(),
   productPrice: z.coerce.number().min(0).optional(),
   totalAmountPaid: z.coerce.number().min(0).optional(),
   outstandingBalance: z.coerce.number().min(0).optional(),
@@ -196,6 +220,7 @@ export const updateMemberSchema = z.preprocess((raw) => {
     else if (p === 'gold') data.packageType = 'Gold';
     else if (p === 'silver plus' || p === 'silver+') data.packageType = 'Silver Plus';
     else if (p === 'silver') data.packageType = 'Silver';
+    else if (p === 'trial plan' || p === 'trial') data.packageType = 'Trial Plan';
     else if (p === 'trail plan' || p === 'trail') data.packageType = 'Trail Plan';
   }
   return data;

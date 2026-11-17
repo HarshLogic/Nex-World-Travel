@@ -56,11 +56,12 @@ export async function fetchCurrentUser() {
   return user;
 }
 
-export async function forgotPassword(email) {
+export async function forgotPassword(email, memberId = null) {
+  const payload = memberId ? { email, memberId } : { email };
   const res = await fetch(`${BASE_URL}/api/v1/auth/forgot-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify(payload),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || 'Failed to submit password reset.');

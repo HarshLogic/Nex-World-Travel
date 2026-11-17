@@ -45,7 +45,7 @@ const memberProfileSchema = new mongoose.Schema(
     packageType: {
       type: String,
       required: true,
-      enum: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan', 'Trail'],
+      enum: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trial Plan', 'Trial', 'Trail Plan', 'Trail'],
       default: 'Gold',
       index: true,
     },
@@ -85,6 +85,11 @@ const memberProfileSchema = new mongoose.Schema(
       type: Date,
       required: true,
       default: Date.now,
+    },
+    registrationDate: {
+      type: Date,
+      default: Date.now,
+      index: true,
     },
     productPrice: {
       type: Number,

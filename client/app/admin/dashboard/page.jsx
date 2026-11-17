@@ -89,6 +89,27 @@ import {
 import { getAuthUser, clearAuth } from '../../../lib/auth';
 import { PERMISSION_OPTIONS } from '../../../lib/permissions';
 import { formatAED } from '../../../lib/currency';
+import { exportMemberSummaryPdf } from '../../../lib/pdfExport';
+
+const isValidMemberId = (value) => {
+  const trimmed = String(value || '').trim();
+  return trimmed.length >= 3 && trimmed.length <= 30 && /^[A-Za-z0-9\-_ ]+$/.test(trimmed);
+};
+
+const isValidPhoneNumber = (value, required = false) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return !required;
+  if (/[A-Za-z]/.test(trimmed)) return false;
+  const digits = trimmed.replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15;
+};
+
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().split('T')[0];
+};
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -276,7 +297,7 @@ export default function AdminDashboardPage() {
     status: 'Available',
     totalSlots: 10,
     availableSlots: 10,
-    tierEligibility: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan'],
+    tierEligibility: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trial Plan', 'Trail Plan'],
     notes: '',
   });
 
@@ -371,10 +392,19 @@ export default function AdminDashboardPage() {
   // Add Member
   const handleAddMemberSubmit = async (e) => {
     e.preventDefault();
+    const cleanedMemberId = addMemberForm.memberId.trim().toUpperCase();
+    if (!isValidMemberId(cleanedMemberId)) {
+      triggerToast('Member ID must be 3–30 characters using only letters, numbers, hyphens, underscores, or spaces.', 'error');
+      return;
+    }
+    if (!isValidPhoneNumber(addMemberForm.phone, false)) {
+      triggerToast('Phone number must contain 7–15 digits and cannot include letters.', 'error');
+      return;
+    }
     setActionLoading(true);
     try {
       const payload = {
-        memberId: addMemberForm.memberId.trim().toUpperCase(),
+        memberId: cleanedMemberId,
         name: addMemberForm.name.trim(),
         registeredName: addMemberForm.name.trim(),
         email: addMemberForm.email.trim(),
@@ -393,6 +423,7 @@ export default function AdminDashboardPage() {
         tenurePeriod: addMemberForm.tenurePeriod,
         travelCardBenefit: Boolean(addMemberForm.travelCardBenefit),
         purchaseDate: addMemberForm.purchaseDate,
+        registrationDate: addMemberForm.purchaseDate || new Date().toISOString().split('T')[0],
         productPrice: Number(addMemberForm.productPrice),
         initialPaidAmount: Number(addMemberForm.initialPaidAmount),
         hasEMI: Boolean(addMemberForm.hasEmi && Number(addMemberForm.productPrice) > Number(addMemberForm.initialPaidAmount)),
@@ -453,7 +484,8 @@ export default function AdminDashboardPage() {
       packageType: member.packageType || 'Gold',
       membershipStatus: member.membershipStatus || member.status || 'Open',
       tenurePeriod: member.tenurePeriod || '3 Years',
-      purchaseDate: member.purchaseDate ? new Date(member.purchaseDate).toISOString().split('T')[0] : '',
+      purchaseDate: toDateInputValue(member.purchaseDate),
+      registrationDate: toDateInputValue(member.registrationDate || member.purchaseDate || member.createdAt),
       allottedNights: allotted,
       availableNights: available,
       usedNights: used,
@@ -465,16 +497,31 @@ export default function AdminDashboardPage() {
       hasEMI: Boolean(member.hasEMI || member.emiDetails?.hasEmi),
       emiAmount: Number(member.emiAmount || member.emiDetails?.emiAmount || 0),
       emiTenureMonths: Number(member.emiTenureMonths || member.emiDetails?.totalMonths || 12),
-      nextEMIDueDate: member.nextEMIDueDate ? new Date(member.nextEMIDueDate).toISOString().split('T')[0] : '',
+      nextEMIDueDate: toDateInputValue(member.nextEMIDueDate),
       dueAmount: Number(member.dueAmount || 0),
       paymentStatus: member.paymentStatus || 'Up to Date',
     });
     setShowEditMemberModal(true);
   };
 
+  // Export Member Summary PDF
+  const handleExportMemberPdf = async (member) => {
+    if (!member) return;
+    try {
+      await exportMemberSummaryPdf(member);
+      triggerToast(`Exported PDF summary for ${member.memberId}.`);
+    } catch (err) {
+      triggerToast(err.message || 'Failed to generate member PDF.', 'error');
+    }
+  };
+
   // Submit Edit Member
   const handleEditMemberSubmit = async (e) => {
     e.preventDefault();
+    if (!isValidPhoneNumber(editMemberForm.phone, true)) {
+      triggerToast('Phone number must contain 7–15 digits and cannot include letters.', 'error');
+      return;
+    }
     setActionLoading(true);
     try {
       const payload = {
@@ -487,6 +534,7 @@ export default function AdminDashboardPage() {
         membershipStatus: editMemberForm.membershipStatus,
         tenurePeriod: editMemberForm.tenurePeriod.trim(),
         purchaseDate: editMemberForm.purchaseDate,
+        registrationDate: editMemberForm.registrationDate || undefined,
         allottedNights: Number(editMemberForm.allottedNights),
         availableNights: Number(editMemberForm.availableNights),
         travelCardBenefit: Boolean(editMemberForm.travelCardBenefit),
@@ -924,7 +972,7 @@ export default function AdminDashboardPage() {
       status: 'Available',
       totalSlots: 10,
       availableSlots: 10,
-      tierEligibility: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan'],
+      tierEligibility: ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trial Plan', 'Trail Plan'],
       notes: '',
     });
     setShowAvailabilityModal(true);
@@ -943,7 +991,7 @@ export default function AdminDashboardPage() {
       status: item.status || (item.isAvailable !== false ? 'Available' : 'Unavailable'),
       totalSlots: item.totalSlots || 10,
       availableSlots: item.availableSlots || 10,
-      tierEligibility: item.tierEligibility || ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trail Plan'],
+      tierEligibility: item.tierEligibility || ['Titanium', 'Platinum+', 'Platinum', 'Gold Plus', 'Gold', 'Silver Plus', 'Silver', 'Trial Plan', 'Trail Plan'],
       notes: item.notes || '',
     });
     setShowAvailabilityModal(true);
@@ -1052,29 +1100,23 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* Top Admin Header Bar */}
-      <header className="sticky top-0 z-40 bg-white border-b border-border shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="relative h-9 w-36">
-                <Image
-                  src="/images/logo.png"
-                  alt="Nex World Travel"
-                  fill
-                  sizes="144px"
-                  className="object-contain object-left"
-                />
-              </div>
-            </Link>
-            <span className="hidden sm:inline-block h-5 w-[1px] bg-border" />
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                <Shield className="w-3.5 h-3.5 text-amber-600" />
-                Master Head Admin
-              </span>
-              <span className="text-xs text-text-tertiary hidden md:inline">Full System Authority</span>
-            </div>
+      {/* Portal Sub-Header */}
+      <header className="relative z-30 bg-white border-b border-border shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('overview');
+                if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
+              title="Master Head Admin Overview"
+            >
+              <Shield className="w-3.5 h-3.5 text-amber-600" />
+              <span>Master Head Admin</span>
+            </button>
+            <span className="text-xs text-text-tertiary hidden md:inline">Full System Authority</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -1551,7 +1593,7 @@ export default function AdminDashboardPage() {
                   }}
                   className="px-3 py-2 text-xs bg-surface-50 rounded-xl border border-border text-text-secondary focus:outline-none focus:border-accent-primary"
                 >
-                  <option value="">All Tiers (8 Tiers)</option>
+                  <option value="">All Tiers</option>
                   <option value="Titanium">Titanium</option>
                   <option value="Platinum+">Platinum+</option>
                   <option value="Platinum">Platinum</option>
@@ -1559,7 +1601,8 @@ export default function AdminDashboardPage() {
                   <option value="Gold">Gold</option>
                   <option value="Silver Plus">Silver Plus</option>
                   <option value="Silver">Silver</option>
-                  <option value="Trail Plan">Trail Plan</option>
+                  <option value="Trial Plan">Trial Plan</option>
+                  <option value="Trail Plan">Trail Plan (Legacy)</option>
                 </select>
 
                 <select
@@ -1589,30 +1632,30 @@ export default function AdminDashboardPage() {
             {/* Members Table */}
             <div className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[850px] text-left text-xs">
+                <table className="w-full min-w-[1040px] text-left text-xs border-collapse">
                   <thead className="bg-surface-50 text-text-tertiary font-bold uppercase tracking-wider border-b border-border">
                     <tr>
-                      <th className="py-3.5 px-4">Member ID</th>
-                      <th className="py-3.5 px-4">Registered Name</th>
-                      <th className="py-3.5 px-4">Membership Status</th>
-                      <th className="py-3.5 px-4">Package</th>
-                      <th className="py-3.5 px-4">Nights Left</th>
-                      <th className="py-3.5 px-4">Travel Card</th>
-                      <th className="py-3.5 px-4">Total Price (AED)</th>
-                      <th className="py-3.5 px-4">Paid (AED)</th>
-                      <th className="py-3.5 px-4">Balance (AED)</th>
-                      <th className="py-3.5 px-4 text-center">Actions</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-left">Member ID</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-left">Registered Name</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-left">Membership Status</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-left">Package</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-left">Nights Left</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-center">Travel Card</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-right">Total Price (AED)</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-right">Paid (AED)</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-right">Balance (AED)</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {members.map((m) => (
                       <tr key={m.memberId} className="hover:bg-surface-50/70 transition-colors">
-                        <td className="py-3.5 px-4 font-mono font-bold text-accent-primary">{m.memberId}</td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-accent-primary whitespace-nowrap">{m.memberId}</td>
                         <td className="py-3.5 px-4">
                           <div className="font-semibold text-text-primary">{m.registeredName || m.userId?.name}</div>
                           <div className="text-[11px] text-text-tertiary">{m.email || m.userId?.email}</div>
                         </td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
                           <span
                             className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                               (m.membershipStatus || m.status) === 'Active' || (m.membershipStatus || m.status) === 'Open'
@@ -1642,12 +1685,12 @@ export default function AdminDashboardPage() {
                             {m.membershipStatus || m.status || 'Active'}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
                           <span
                             className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                               m.packageType === 'Gold' || m.packageType === 'Gold Plus'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : m.packageType === 'Trail Plan' || m.packageType === 'Trail'
+                                : m.packageType === 'Trial Plan' || m.packageType === 'Trial' || m.packageType === 'Trail Plan' || m.packageType === 'Trail'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : m.packageType === 'Titanium'
                                 ? 'bg-slate-900 text-slate-100 border border-slate-700'
@@ -1660,8 +1703,10 @@ export default function AdminDashboardPage() {
                             {m.packageType}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-text-primary">{m.nightsAvailable ?? m.availableNights ?? 0} nights</td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 font-bold text-text-primary whitespace-nowrap tabular-nums">
+                          {m.nightsAvailable ?? m.availableNights ?? 0} nights
+                        </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
                           {m.travelCardBenefit ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -1674,16 +1719,16 @@ export default function AdminDashboardPage() {
                             </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 font-semibold text-text-primary">
-                          AED {m.productPrice?.toLocaleString()}
+                        <td className="py-3.5 px-4 font-semibold text-text-primary text-right whitespace-nowrap tabular-nums">
+                          {formatAED(m.productPrice || 0)}
                         </td>
-                        <td className="py-3.5 px-4 font-semibold text-emerald-600">
-                          AED {m.totalAmountPaid?.toLocaleString()}
+                        <td className="py-3.5 px-4 font-semibold text-emerald-600 text-right whitespace-nowrap tabular-nums">
+                          {formatAED(m.totalAmountPaid || 0)}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-red-600">
-                          AED {m.outstandingBalance?.toLocaleString()}
+                        <td className="py-3.5 px-4 font-bold text-red-600 text-right whitespace-nowrap tabular-nums">
+                          {formatAED(m.outstandingBalance || 0)}
                         </td>
-                        <td className="py-3.5 px-4 text-center">
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               onClick={() => setSelectedMember(m)}
@@ -1827,10 +1872,10 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
                 <div className="bg-surface-50 p-3.5 rounded-xl border border-border">
-                  <span className="text-text-tertiary">Registration Timestamp</span>
+                  <span className="text-text-tertiary">Registration Date</span>
                   <p className="text-xs font-semibold text-text-primary mt-0.5">
-                    {selectedMember.registrationDate || selectedMember.createdAt ? (
-                      new Date(selectedMember.registrationDate || selectedMember.createdAt).toLocaleString('en-GB', {
+                    {selectedMember.registrationDate || selectedMember.purchaseDate || selectedMember.createdAt ? (
+                      new Date(selectedMember.registrationDate || selectedMember.purchaseDate || selectedMember.createdAt).toLocaleString('en-GB', {
                         timeZone: 'Asia/Dubai',
                         year: 'numeric',
                         month: 'short',
@@ -1888,19 +1933,19 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                   <div>
-                    <span className="text-[11px] text-white/60">Product Price</span>
-                    <p className="text-sm sm:text-base font-bold">AED {selectedMember.productPrice?.toLocaleString()}</p>
+                    <span className="text-[11px] text-white/60">Total Product Cost</span>
+                    <p className="text-sm sm:text-base font-bold">{formatAED(selectedMember.productPrice || 0)}</p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-white/60">Total Paid</span>
+                    <span className="text-[11px] text-white/60">Total Paid Amount</span>
                     <p className="text-sm sm:text-base font-bold text-emerald-400">
-                      AED {selectedMember.totalAmountPaid?.toLocaleString()}
+                      {formatAED(selectedMember.totalAmountPaid || 0)}
                     </p>
                   </div>
                   <div>
                     <span className="text-[11px] text-white/60">Outstanding Balance</span>
                     <p className="text-sm sm:text-base font-bold text-red-400">
-                      AED {selectedMember.outstandingBalance?.toLocaleString()}
+                      {formatAED(selectedMember.outstandingBalance || 0)}
                     </p>
                   </div>
                   <div>
@@ -1908,7 +1953,7 @@ export default function AdminDashboardPage() {
                     <p className={`text-sm sm:text-base font-bold ${
                       (Number(selectedMember.dueAmount) > 0) ? 'text-amber-400' : 'text-emerald-400'
                     }`}>
-                      AED {Number(selectedMember.dueAmount || 0)?.toLocaleString()}
+                      {formatAED(Number(selectedMember.dueAmount || 0))}
                     </p>
                   </div>
                 </div>
@@ -1936,21 +1981,31 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border">
                 <button
-                  onClick={() => handleOpenEditMember(selectedMember)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs"
+                  type="button"
+                  onClick={() => handleExportMemberPdf(selectedMember)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors"
                 >
-                  <Edit className="w-4 h-4" />
-                  <span>Edit Member Details</span>
+                  <Download className="w-4 h-4" />
+                  <span>Export PDF</span>
                 </button>
-                <button
-                  onClick={() => setShowPaymentModal(true)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs"
-                >
-                  <DollarSign className="w-4 h-4" />
-                  <span>Record Payment</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => handleOpenEditMember(selectedMember)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span>Edit Member Details</span>
+                  </button>
+                  <button
+                    onClick={() => setShowPaymentModal(true)}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs"
+                  >
+                    <DollarSign className="w-4 h-4" />
+                    <span>Record Payment</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -2096,11 +2151,13 @@ export default function AdminDashboardPage() {
                     <input
                       type="text"
                       required
+                      maxLength={30}
                       placeholder="e.g. NEX-M-1002"
                       value={addMemberForm.memberId}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, memberId: e.target.value })}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, memberId: e.target.value.slice(0, 30) })}
                       className="w-full px-3 py-2 rounded-xl border border-border font-mono font-bold uppercase focus:border-accent-primary"
                     />
+                    <span className="text-[10px] text-text-muted mt-0.5 block">3–30 chars (letters, numbers, hyphens)</span>
                   </div>
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Initial Password *</label>
@@ -2141,12 +2198,20 @@ export default function AdminDashboardPage() {
                   <div>
                     <label className="block font-semibold text-text-secondary mb-1">Phone Number</label>
                     <input
-                      type="text"
-                      placeholder="+971 50 123 4567"
+                      type="tel"
+                      maxLength={25}
+                      inputMode="tel"
+                      placeholder="+971-50-123-4567"
                       value={addMemberForm.phone}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, phone: e.target.value })}
+                      onChange={(e) =>
+                        setAddMemberForm({
+                          ...addMemberForm,
+                          phone: e.target.value.replace(/[^0-9+\-\s()]/g, '').slice(0, 25),
+                        })
+                      }
                       className="w-full px-3 py-2 rounded-xl border border-border"
                     />
+                    <span className="text-[10px] text-text-muted mt-0.5 block">7–15 digits (international format)</span>
                   </div>
                 </div>
 
@@ -2179,7 +2244,7 @@ export default function AdminDashboardPage() {
                       <option value="Gold">Gold</option>
                       <option value="Silver Plus">Silver Plus</option>
                       <option value="Silver">Silver</option>
-                      <option value="Trail Plan">Trail Plan</option>
+                      <option value="Trial Plan">Trial Plan</option>
                     </select>
                   </div>
                   <div>
@@ -2517,12 +2582,30 @@ export default function AdminDashboardPage() {
                       <input
                         type="tel"
                         required
+                        maxLength={25}
+                        inputMode="tel"
                         value={editMemberForm.phone}
-                        onChange={(e) => setEditMemberForm({ ...editMemberForm, phone: e.target.value })}
+                        onChange={(e) =>
+                          setEditMemberForm({
+                            ...editMemberForm,
+                            phone: e.target.value.replace(/[^0-9+\-\s()]/g, '').slice(0, 25),
+                          })
+                        }
                         className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
                       />
                     </div>
                     <div>
+                      <label className="block font-semibold text-text-secondary mb-1">Registration Date</label>
+                      <input
+                        type="date"
+                        value={editMemberForm.registrationDate || ''}
+                        onChange={(e) =>
+                          setEditMemberForm({ ...editMemberForm, registrationDate: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-border focus:border-accent-primary"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
                       <label className="block font-semibold text-text-secondary mb-1">Physical / Postal Address</label>
                       <input
                         type="text"
@@ -2555,7 +2638,10 @@ export default function AdminDashboardPage() {
                         <option value="Gold">Gold</option>
                         <option value="Silver Plus">Silver Plus</option>
                         <option value="Silver">Silver</option>
-                        <option value="Trail Plan">Trail Plan</option>
+                        <option value="Trial Plan">Trial Plan</option>
+                        {editMemberForm.packageType === 'Trail Plan' && (
+                          <option value="Trail Plan">Trail Plan (Legacy)</option>
+                        )}
                       </select>
                     </div>
                     <div>

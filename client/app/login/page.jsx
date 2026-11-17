@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Key, Lock, ArrowRight, Loader2, UserCheck } from 'lucide-react';
+import { Key, Eye, EyeOff, ArrowRight, Loader2, UserCheck } from 'lucide-react';
 import { loginMember } from '../../lib/api';
 
 export default function LoginPage() {
@@ -13,6 +13,7 @@ export default function LoginPage() {
   // Member form state
   const [memberId, setMemberId] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -100,17 +101,24 @@ export default function LoginPage() {
               </label>
               <div className="relative">
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
+                  className="w-full px-4 py-3 pr-11 rounded-2xl border border-border bg-surface-50 text-sm text-text-primary focus:bg-white focus:border-accent-primary focus:outline-none"
                 />
-                <Lock className="w-4 h-4 text-text-muted absolute right-3.5 top-3.5" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
               <div className="flex items-center justify-end mt-1.5">
-                <Link href="/forgot-password" className="text-xs font-semibold text-accent-primary hover:underline">
+                <Link href="/forgot-password?portal=member" className="text-xs font-semibold text-accent-primary hover:underline">
                   Forgot password?
                 </Link>
               </div>
@@ -131,7 +139,7 @@ export default function LoginPage() {
         <p className="text-center text-xs text-text-muted mt-6">
           Need login assistance? Contact our Abu Dhabi office at{' '}
           <a href="tel:+97126395908" className="text-accent-primary font-semibold hover:underline">
-            +971 2 639 5908
+            +971-263-959-08
           </a>
         </p>
       </div>

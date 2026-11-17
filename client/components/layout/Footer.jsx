@@ -239,8 +239,8 @@ export default function Footer() {
               </p>
               <div className="flex items-center gap-2 pt-1">
                 <Phone className="w-3.5 h-3.5 text-accent-secondary shrink-0" />
-                <a href="tel:+97126395908" className="hover:text-text-primary font-medium">
-                  +97126395908
+                <a href="tel:+97126395908" className="hover:text-text-primary font-medium font-mono">
+                  +971-263-959-08
                 </a>
               </div>
             </div>
@@ -270,32 +270,31 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-text-secondary text-center sm:text-left">
-          <p>© {new Date().getFullYear()} Nex World Travel & Tourism LLC-SPC. A Nex Group Company. All rights reserved.</p>
-          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-6">
+        <div className="pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-text-secondary text-center md:text-left">
+          <p className="leading-relaxed">© {new Date().getFullYear()} Nex World Travel &amp; Tourism LLC-SPC. A Nex Group Company. All rights reserved.</p>
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-x-5 gap-y-2">
             <Link
               href="/login"
-              className="inline-flex items-center gap-1 text-text-muted hover:text-accent-primary transition-colors"
+              className="inline-flex items-center gap-1.5 text-text-muted hover:text-accent-primary transition-colors whitespace-nowrap"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
               <span>Member Portal</span>
             </Link>
             <Link
               href="/employee/login"
-              className="inline-flex items-center gap-1 text-text-muted hover:text-accent-primary transition-colors"
+              className="inline-flex items-center gap-1.5 text-text-muted hover:text-accent-primary transition-colors whitespace-nowrap"
             >
-              <Users className="w-3.5 h-3.5 text-sky-500" />
+              <Users className="w-3.5 h-3.5 text-sky-500 shrink-0" />
               <span>Employee Login</span>
             </Link>
             <Link
               href="/admin/login"
-              className="inline-flex items-center gap-1 text-text-muted hover:text-accent-primary transition-colors"
+              className="inline-flex items-center gap-1.5 text-text-muted hover:text-accent-primary transition-colors whitespace-nowrap"
             >
-              <Shield className="w-3.5 h-3.5 text-amber-500" />
+              <Shield className="w-3.5 h-3.5 text-amber-500 shrink-0" />
               <span>Admin Portal</span>
             </Link>
-            <span>Nex-World Travel</span>
-            <div className="flex items-center gap-1.5 text-emerald-600 font-medium">
+            <div className="inline-flex items-center gap-1.5 text-emerald-600 font-medium whitespace-nowrap">
               <ShieldCheck className="w-4 h-4 shrink-0" />
               <span>Verified Agency Service</span>
             </div>

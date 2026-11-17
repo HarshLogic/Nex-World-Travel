@@ -172,7 +172,52 @@ export const logout = (req, res) => {
 
 export const forgotPassword = async (req, res, next) => {
   try {
-    const { email } = req.body;
+    const { email, memberId } = req.body;
+
+    // Member Password Recovery Workflow (requires Member ID + Registered Email)
+    if (memberId) {
+      if (!email || !memberId.trim()) {
+        return res.status(400).json({
+          success: false,
+          matched: false,
+          message: 'Please enter your Membership ID and registered email address.',
+        });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        return res.status(400).json({
+          success: false,
+          matched: false,
+          message: 'Please enter a valid registered email address.',
+        });
+      }
+
+      const result = await store.createMemberPasswordResetToken(memberId, email);
+      if (result && result.matched) {
+        sendPasswordResetEmail(result.user.email, result.user.name, result.token).catch((err) => {
+          console.warn('[ForgotPassword] Member email dispatch error:', err.message);
+        });
+
+        return res.json({
+          success: true,
+          matched: true,
+          message:
+            'If your provided membership details match our records, password reset instructions will be sent to your registered email. Please verify your details or contact the travel desk if you do not receive an email.',
+          token: result.token,
+        });
+      }
+
+      // Security-safe response when details do not match
+      return res.json({
+        success: true,
+        matched: false,
+        message:
+          'If your provided membership details match our records, password reset instructions will be sent to your registered email. Please verify your details or contact the travel desk if you do not receive an email.',
+      });
+    }
+
+    // Staff / Administrator Password Recovery Workflow
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email address is required.' });
     }
@@ -187,6 +232,7 @@ export const forgotPassword = async (req, res, next) => {
     // Generic response that does NOT reveal whether the account exists
     res.json({
       success: true,
+      matched: !!result,
       message: 'If an account is associated with this email address, password reset instructions have been dispatched.',
       token: result ? result.token : undefined, // Provided for testing and local dev
     });

@@ -106,8 +106,8 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <strong className="block text-text-primary font-semibold">Direct Telephone</strong>
-                    <a href="tel:+97126395908" className="text-xs text-accent-primary hover:underline block mt-0.5">
-                      +971 2 639 5908
+                    <a href="tel:+97126395908" className="text-xs text-accent-primary hover:underline block mt-0.5 font-mono">
+                      +971-263-959-08
                     </a>
                   </div>
                 </div>

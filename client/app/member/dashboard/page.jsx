@@ -94,6 +94,20 @@ const TIER_CONFIG = {
     card: 'bg-white border-border',
     textColor: 'text-slate-700',
   },
+  'Trial Plan': {
+    icon: '🧭',
+    badge: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+    headerBadge: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+    card: 'bg-gradient-to-br from-emerald-50/70 via-white to-emerald-100/40 border-emerald-200',
+    textColor: 'text-emerald-800',
+  },
+  Trial: {
+    icon: '🧭',
+    badge: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+    headerBadge: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+    card: 'bg-gradient-to-br from-emerald-50/70 via-white to-emerald-100/40 border-emerald-200',
+    textColor: 'text-emerald-800',
+  },
   'Trail Plan': {
     icon: '🧭',
     badge: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
@@ -374,7 +388,7 @@ export default function MemberDashboard() {
                 {member.registeredName}
               </h1>
               <p className="text-xs text-text-secondary mt-0.5">
-                Member since {new Date(member.purchaseDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                Member since {new Date(member.registrationDate || member.purchaseDate || member.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Dubai' })}
               </p>
             </div>
           </div>
@@ -502,7 +516,7 @@ export default function MemberDashboard() {
               </div>
             </div>
             <p className="text-xs text-text-muted mt-3">
-              Enrolled: {new Date(member.purchaseDate).toLocaleDateString()}
+              Enrolled: {new Date(member.registrationDate || member.purchaseDate || member.createdAt).toLocaleDateString('en-GB', { timeZone: 'Asia/Dubai' })}
             </p>
           </div>
         </div>
