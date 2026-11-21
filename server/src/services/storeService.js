@@ -13,6 +13,7 @@ import { MemberRequest } from '../models/MemberRequest.js';
 import { Destination } from '../models/Destination.js';
 import { Activity } from '../models/Activity.js';
 import { Package } from '../models/Package.js';
+import { UploadedMedia } from '../models/UploadedMedia.js';
 import { Booking } from '../models/Booking.js';
 import { Contact } from '../models/Contact.js';
 import { TermsCondition } from '../models/TermsCondition.js';
@@ -51,7 +52,19 @@ class ResilientStore {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }))];
-    this.packages = [...seedPackages];
+    this.packages = [...seedPackages.map((p, i) => ({
+      ...p,
+      _id: p._id || `pkg-${i + 1}`,
+      coverImage: p.coverImage || p.imageUrl || '/images/hero.jpg',
+      price: p.price || 0,
+      publicationStatus: p.publicationStatus || 'published',
+      isDeleted: false,
+      createdBy: 'Master Head',
+      updatedBy: 'Master Head',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }))];
+    this.uploadedMedia = [];
     this.bookings = [];
     this.contacts = [];
     this.terms = {
@@ -2319,12 +2332,65 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     return null;
   }
 
+  saveUploadedMediaMemory(record) {
+    if (!record || !record.filename) return;
+    const clean = {
+      filename: record.filename,
+      originalName: record.originalName || record.filename,
+      contentType: record.contentType || 'image/jpeg',
+      size: record.size || (record.buffer ? record.buffer.length : 0),
+      buffer: record.buffer,
+      uploadedBy: record.uploadedBy || 'Master Head',
+      createdAt: new Date(),
+    };
+    const idx = this.uploadedMedia.findIndex((m) => m.filename === clean.filename);
+    if (idx >= 0) {
+      this.uploadedMedia[idx] = clean;
+    } else {
+      this.uploadedMedia.unshift(clean);
+    }
+  }
+
   async getUploadedImageFallback(filename) {
     await this.initializeSeedAccounts();
     const cleanFilename = path.basename(filename);
 
-    // 1. Check if any destination in MongoDB has this image data or references it
     if (this.isMongoLive()) {
+      // 1. Check dedicated UploadedMedia collection first (persistent upload storage)
+      try {
+        const mediaDoc = await UploadedMedia.findOne({ filename: cleanFilename }).lean();
+        if (mediaDoc && mediaDoc.data) {
+          return {
+            buffer: mediaDoc.data,
+            contentType: mediaDoc.contentType || 'image/jpeg',
+            size: mediaDoc.size || mediaDoc.data.length,
+            originalName: mediaDoc.originalName || cleanFilename,
+          };
+        }
+      } catch (e) {}
+
+      // 1b. Check if any package in MongoDB has this image data or references it
+      try {
+        const pkg = await Package.findOne({
+          $or: [
+            { 'image.originalName': cleanFilename },
+            { coverImage: { $regex: cleanFilename } },
+            { imageUrl: { $regex: cleanFilename } },
+          ],
+          isDeleted: { $ne: true },
+        }).select('+image.data');
+
+        if (pkg && pkg.image && pkg.image.data) {
+          return {
+            buffer: pkg.image.data,
+            contentType: pkg.image.contentType || 'image/jpeg',
+            size: pkg.image.size || pkg.image.data.length,
+            originalName: pkg.image.originalName || cleanFilename,
+          };
+        }
+      } catch (e) {}
+
+      // 1c. Check if any destination in MongoDB has this image data or references it
       try {
         const dest = await Destination.findOne({
           $or: [
@@ -2345,7 +2411,7 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
         }
       } catch (e) {}
 
-      // 1b. Check if any activity in MongoDB has this image data or references it
+      // 1d. Check if any activity in MongoDB has this image data or references it
       try {
         const act = await Activity.findOne({
           $or: [
@@ -2371,6 +2437,33 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
     const diskFile = await this.readLocalImageFile(`/uploads/${cleanFilename}`);
     if (diskFile) {
       return diskFile;
+    }
+
+    // 3. Fallback to resilient in-memory stores
+    const memMedia = this.uploadedMedia.find((m) => m.filename === cleanFilename);
+    if (memMedia && memMedia.buffer) {
+      return {
+        buffer: Buffer.isBuffer(memMedia.buffer) ? memMedia.buffer : Buffer.from(memMedia.buffer),
+        contentType: memMedia.contentType || 'image/jpeg',
+        size: memMedia.size || memMedia.buffer.length,
+        originalName: memMedia.originalName || cleanFilename,
+      };
+    }
+
+    const memPkg = this.packages.find(
+      (p) =>
+        !p.isDeleted &&
+        (p.image?.originalName === cleanFilename ||
+          p.coverImage?.includes(cleanFilename) ||
+          p.imageUrl?.includes(cleanFilename))
+    );
+    if (memPkg && memPkg.image && memPkg.image.data) {
+      return {
+        buffer: Buffer.isBuffer(memPkg.image.data) ? memPkg.image.data : Buffer.from(memPkg.image.data),
+        contentType: memPkg.image.contentType || 'image/jpeg',
+        size: memPkg.image.size || memPkg.image.data.length,
+        originalName: memPkg.image.originalName || cleanFilename,
+      };
     }
 
     // 3. Fallback to resilient in-memory store
@@ -2942,12 +3035,35 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       try {
         const pkgCount = await Package.countDocuments();
         if (pkgCount === 0 && this.packages.length > 0) {
-          await Package.insertMany(this.packages);
+          await Package.insertMany(
+            this.packages.map((p, i) => ({
+              ...p,
+              _id: p._id || `pkg-${i + 1}`,
+              publicationStatus: p.publicationStatus || 'published',
+              isDeleted: false,
+            }))
+          );
         }
-        const q = {};
-        if (filter.region) q.region = new RegExp(filter.region, 'i');
+        const q = { isDeleted: { $ne: true } };
+        if (!filter.includeDrafts && !filter.publicationStatus) {
+          q.publicationStatus = 'published';
+        } else if (filter.publicationStatus && filter.publicationStatus !== 'All') {
+          q.publicationStatus = filter.publicationStatus;
+        }
+        if (filter.region && filter.region !== 'All') {
+          q.region = new RegExp(`^${filter.region.trim()}$`, 'i');
+        }
         if (filter.featured !== undefined) q.featured = filter.featured;
-        const mongoResults = await Package.find(q).sort({ createdAt: -1 }).lean();
+        if (filter.search) {
+          const s = filter.search.trim();
+          q.$or = [
+            { title: { $regex: s, $options: 'i' } },
+            { destination: { $regex: s, $options: 'i' } },
+            { region: { $regex: s, $options: 'i' } },
+            { overview: { $regex: s, $options: 'i' } },
+          ];
+        }
+        const mongoResults = await Package.find(q).select('-image.data').sort({ createdAt: -1 }).lean();
         if (mongoResults && mongoResults.length > 0) {
           return mongoResults;
         }
@@ -2956,26 +3072,457 @@ Monthly EMI installments must be settled on or before the agreed Next Due Date. 
       }
     }
 
-    let results = [...this.packages];
-    if (filter.region) {
+    let results = this.packages.filter((p) => !p.isDeleted);
+    if (!filter.includeDrafts && !filter.publicationStatus) {
+      results = results.filter((p) => p.publicationStatus !== 'draft' && p.publicationStatus !== 'archived');
+    } else if (filter.publicationStatus && filter.publicationStatus !== 'All') {
+      results = results.filter((p) => p.publicationStatus === filter.publicationStatus);
+    }
+    if (filter.region && filter.region !== 'All') {
       results = results.filter((p) => p.region?.toLowerCase().includes(filter.region.toLowerCase()));
     }
     if (filter.featured !== undefined) {
-      results = results.filter((p) => p.featured === filter.featured);
+      results = results.filter((p) => Boolean(p.featured) === Boolean(filter.featured));
     }
-    return results;
+    if (filter.search) {
+      const s = filter.search.toLowerCase();
+      results = results.filter(
+        (p) =>
+          (p.title && p.title.toLowerCase().includes(s)) ||
+          (p.destination && p.destination.toLowerCase().includes(s)) ||
+          (p.region && p.region.toLowerCase().includes(s)) ||
+          (p.overview && p.overview.toLowerCase().includes(s))
+      );
+    }
+    const sanitized = results.map((p) => {
+      if (p.image && p.image.data) {
+        const copy = { ...p, image: { ...p.image } };
+        delete copy.image.data;
+        return copy;
+      }
+      return p;
+    });
+    return sanitized;
   }
 
-  async getPackageBySlug(slug) {
+  async getPackageBySlug(slugOrId) {
     await this.initializeSeedAccounts();
-    if (!slug) return null;
+    if (!slugOrId) return null;
+    const clean = String(slugOrId).toLowerCase().trim();
     if (this.isMongoLive()) {
       try {
-        const found = await Package.findOne({ slug: slug.toLowerCase() }).lean();
-        if (found) return found;
+        const found = await Package.findOne({
+          $or: [{ slug: clean }, { _id: slugOrId }],
+          isDeleted: { $ne: true },
+        }).select('-image.data').lean();
+        if (found) {
+          if (found.image && found.image.data) delete found.image.data;
+          return found;
+        }
       } catch (e) {}
     }
-    return this.packages.find((p) => p.slug?.toLowerCase() === slug.toLowerCase()) || null;
+    const memFound = this.packages.find(
+      (p) => (p.slug?.toLowerCase() === clean || p._id === slugOrId || p.id === slugOrId) && !p.isDeleted
+    );
+    if (memFound) {
+      if (memFound.image && memFound.image.data) {
+        const copy = { ...memFound, image: { ...memFound.image } };
+        delete copy.image.data;
+        return copy;
+      }
+      return memFound;
+    }
+    return null;
+  }
+
+  async getPackageById(id) {
+    return this.getPackageBySlug(id);
+  }
+
+  async getPackageImage(idOrSlug) {
+    await this.initializeSeedAccounts();
+    if (!idOrSlug) return null;
+    const cleanIdOrSlug = String(idOrSlug).trim();
+
+    if (this.isMongoLive()) {
+      try {
+        const pkg = await Package.findOne({
+          $or: [{ slug: cleanIdOrSlug.toLowerCase() }, { _id: cleanIdOrSlug }],
+          isDeleted: { $ne: true },
+        }).select('+image.data');
+
+        if (pkg) {
+          if (pkg.image && pkg.image.data && pkg.image.data.length > 0) {
+            return {
+              buffer: pkg.image.data,
+              contentType: pkg.image.contentType || 'image/jpeg',
+              size: pkg.image.size || pkg.image.data.length,
+              originalName: pkg.image.originalName || `${pkg.slug}.jpg`,
+              publicationStatus: pkg.publicationStatus,
+              updatedAt: pkg.updatedAt || pkg.createdAt || new Date(),
+              title: pkg.title,
+              slug: pkg.slug,
+              _id: pkg._id,
+            };
+          }
+
+          const candidatePath = pkg.imageUrl || pkg.coverImage;
+          if (candidatePath && !candidatePath.startsWith('http://') && !candidatePath.startsWith('https://')) {
+            const diskFile = await this.readLocalImageFile(candidatePath);
+            if (diskFile) {
+              return {
+                ...diskFile,
+                publicationStatus: pkg.publicationStatus,
+                updatedAt: pkg.updatedAt || pkg.createdAt || new Date(),
+                title: pkg.title,
+                slug: pkg.slug,
+                _id: pkg._id,
+              };
+            }
+          }
+
+          const fallbackPath = this.getStandardPackageImagePath(pkg);
+          const fallbackFile = await this.readLocalImageFile(fallbackPath);
+          if (fallbackFile) {
+            return {
+              ...fallbackFile,
+              publicationStatus: pkg.publicationStatus,
+              updatedAt: pkg.updatedAt || pkg.createdAt || new Date(),
+              title: pkg.title,
+              slug: pkg.slug,
+              _id: pkg._id,
+            };
+          }
+        }
+      } catch (e) {}
+    }
+
+    const memPkg = this.packages.find(
+      (p) =>
+        (p.slug?.toLowerCase() === cleanIdOrSlug.toLowerCase() || p._id === cleanIdOrSlug || p.id === cleanIdOrSlug) &&
+        !p.isDeleted
+    );
+    if (memPkg) {
+      if (memPkg.image && memPkg.image.data) {
+        return {
+          buffer: Buffer.isBuffer(memPkg.image.data) ? memPkg.image.data : Buffer.from(memPkg.image.data),
+          contentType: memPkg.image.contentType || 'image/jpeg',
+          size: memPkg.image.size || memPkg.image.data.length,
+          originalName: memPkg.image.originalName || `${memPkg.slug}.jpg`,
+          publicationStatus: memPkg.publicationStatus,
+          updatedAt: memPkg.updatedAt || memPkg.createdAt || new Date(),
+          title: memPkg.title,
+          slug: memPkg.slug,
+          _id: memPkg._id,
+        };
+      }
+      const fallbackPath = this.getStandardPackageImagePath(memPkg);
+      const fallbackFile = await this.readLocalImageFile(fallbackPath);
+      if (fallbackFile) {
+        return {
+          ...fallbackFile,
+          publicationStatus: memPkg.publicationStatus,
+          updatedAt: memPkg.updatedAt || memPkg.createdAt || new Date(),
+          title: memPkg.title,
+          slug: memPkg.slug,
+          _id: memPkg._id,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  getStandardPackageImagePath(pkg) {
+    if (!pkg) return 'client/public/images/hero.jpg';
+    const reg = (pkg.region || '').toLowerCase();
+    const slug = (pkg.slug || '').toLowerCase();
+    if (reg.includes('europe') || slug.includes('europe')) return 'client/public/images/destinations/europe.jpg';
+    if (reg.includes('asia') || slug.includes('asia')) return 'client/public/images/destinations/asia.jpg';
+    if (reg.includes('australia') || slug.includes('australia')) return 'client/public/images/destinations/australia.jpg';
+    if (reg.includes('middle east') || reg.includes('uae') || slug.includes('emirates'))
+      return 'client/public/images/destinations/uae.jpg';
+    if (reg.includes('africa') || slug.includes('africa')) return 'client/public/images/destinations/africa.jpg';
+    return 'client/public/images/hero.jpg';
+  }
+
+  async savePackageImageDirect(idOrSlug, inputData, originalName = '', author = 'Master Head') {
+    await this.initializeSeedAccounts();
+    const parsed = parseAndValidateImage(inputData, originalName);
+    if (!parsed) {
+      throw new Error('Valid image data is required.');
+    }
+    return await this.updatePackage(
+      idOrSlug,
+      {
+        imageData: parsed.buffer,
+        imageOriginalName: parsed.originalName,
+      },
+      author
+    );
+  }
+
+  async createPackage(data, author = 'Master Head') {
+    await this.initializeSeedAccounts();
+    const baseSlug = (data.slug || data.title || `pkg-${Date.now()}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    let uniqueSlug = baseSlug;
+    let counter = 1;
+    if (this.isMongoLive()) {
+      while (await Package.findOne({ slug: uniqueSlug })) {
+        uniqueSlug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+    } else {
+      while (this.packages.some((p) => p.slug === uniqueSlug)) {
+        uniqueSlug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+    }
+
+    let imageRecord = null;
+    let hasDirectImage = false;
+    const rawImage =
+      data.imageData ||
+      data.imageBuffer ||
+      (data.image &&
+        (typeof data.image === 'string' ||
+          Buffer.isBuffer(data.image) ||
+          data.image.data));
+
+    if (rawImage) {
+      const input = rawImage && rawImage.data ? rawImage.data : rawImage;
+      const origName =
+        data.imageOriginalName ||
+        data.originalName ||
+        (data.image && data.image.originalName) ||
+        `${uniqueSlug}.jpg`;
+      const parsed = parseAndValidateImage(input, origName);
+      if (parsed) {
+        imageRecord = {
+          data: parsed.buffer,
+          contentType: parsed.mimeType,
+          originalName: parsed.originalName,
+          size: parsed.size,
+        };
+        hasDirectImage = true;
+      }
+    }
+
+    const cleanData = { ...data };
+    delete cleanData.imageData;
+    delete cleanData.imageBuffer;
+    delete cleanData.imageOriginalName;
+
+    const record = {
+      ...cleanData,
+      _id: cleanData._id || `pkg-${Date.now()}`,
+      slug: uniqueSlug,
+      title: (cleanData.title || '').trim(),
+      destination: (cleanData.destination || '').trim(),
+      region: (cleanData.region || '').trim(),
+      durationDays: Number(cleanData.durationDays) || 1,
+      durationNights: Number(cleanData.durationNights) || 0,
+      price: Number(cleanData.price) || 0,
+      priceEstimateNote: cleanData.priceEstimateNote || 'Custom quotation based on departure date & preferences',
+      tagline: cleanData.tagline || '',
+      overview: cleanData.overview || '',
+      includes: Array.isArray(cleanData.includes)
+        ? cleanData.includes
+        : typeof cleanData.includes === 'string'
+        ? cleanData.includes.split('\n').map((s) => s.trim()).filter(Boolean)
+        : [],
+      itinerarySummary: Array.isArray(cleanData.itinerarySummary) ? cleanData.itinerarySummary : [],
+      coverImage: hasDirectImage
+        ? `/api/v1/packages/${uniqueSlug}/image`
+        : cleanData.coverImage || cleanData.imageUrl || '/images/hero.jpg',
+      imageUrl: hasDirectImage
+        ? `/api/v1/packages/${uniqueSlug}/image`
+        : cleanData.imageUrl || cleanData.coverImage || '/images/hero.jpg',
+      publicationStatus: cleanData.publicationStatus || 'published',
+      featured: Boolean(cleanData.featured),
+      hasDirectImage,
+      isDeleted: false,
+      createdBy: author,
+      updatedBy: author,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (imageRecord) {
+      record.image = imageRecord;
+    }
+
+    if (this.isMongoLive()) {
+      try {
+        const pkgCount = await Package.countDocuments({ isDeleted: { $ne: true } });
+        if (pkgCount === 0 && this.packages.length > 0) {
+          await Package.insertMany(this.packages);
+        }
+        const doc = await Package.create(record);
+        const obj = doc.toObject();
+        if (obj.image) delete obj.image.data;
+        this.packages.unshift(record);
+        await this.logAudit('PACKAGE_CREATED', author, 'package', uniqueSlug, { title: data.title });
+        return obj;
+      } catch (e) {
+        console.error('[StoreService] Error creating package in Mongo:', e.message);
+      }
+    }
+
+    this.packages.unshift(record);
+    await this.logAudit('PACKAGE_CREATED', author, 'package', uniqueSlug, { title: data.title });
+    const returnRecord = { ...record };
+    if (returnRecord.image) {
+      returnRecord.image = { ...returnRecord.image };
+      delete returnRecord.image.data;
+    }
+    return returnRecord;
+  }
+
+  async updatePackage(idOrSlug, updateData, author = 'Master Head') {
+    await this.initializeSeedAccounts();
+    const cleanUpdate = { ...updateData };
+
+    let newImageRecord = null;
+    let hasNewDirectImage = false;
+    const rawImage =
+      updateData.imageData ||
+      updateData.imageBuffer ||
+      (updateData.image &&
+        (typeof updateData.image === 'string' ||
+          Buffer.isBuffer(updateData.image) ||
+          updateData.image.data));
+
+    if (rawImage) {
+      const input = rawImage && rawImage.data ? rawImage.data : rawImage;
+      const origName =
+        updateData.imageOriginalName ||
+        updateData.originalName ||
+        (updateData.image && updateData.image.originalName) ||
+        'package.jpg';
+      const parsed = parseAndValidateImage(input, origName);
+      if (parsed) {
+        newImageRecord = {
+          data: parsed.buffer,
+          contentType: parsed.mimeType,
+          originalName: parsed.originalName,
+          size: parsed.size,
+        };
+        hasNewDirectImage = true;
+      }
+    }
+
+    delete cleanUpdate.imageData;
+    delete cleanUpdate.imageBuffer;
+    delete cleanUpdate.imageOriginalName;
+
+    if (this.isMongoLive()) {
+      try {
+        const pkgDoc = await Package.findOne({
+          $or: [{ _id: idOrSlug }, { slug: idOrSlug }, { slug: String(idOrSlug).toLowerCase() }],
+        }).select('+image.data');
+
+        if (pkgDoc) {
+          if (hasNewDirectImage) {
+            cleanUpdate.image = newImageRecord;
+            cleanUpdate.hasDirectImage = true;
+            cleanUpdate.imageUrl = `/api/v1/packages/${pkgDoc.slug}/image`;
+            cleanUpdate.coverImage = `/api/v1/packages/${pkgDoc.slug}/image`;
+          } else if (!cleanUpdate.image) {
+            // STRICT PRESERVATION: keep existing image when editing without replacement
+            delete cleanUpdate.image;
+          }
+
+          if (cleanUpdate.durationDays !== undefined) cleanUpdate.durationDays = Number(cleanUpdate.durationDays);
+          if (cleanUpdate.durationNights !== undefined) cleanUpdate.durationNights = Number(cleanUpdate.durationNights);
+          if (cleanUpdate.price !== undefined) cleanUpdate.price = Number(cleanUpdate.price);
+          if (typeof cleanUpdate.includes === 'string') {
+            cleanUpdate.includes = cleanUpdate.includes.split('\n').map((s) => s.trim()).filter(Boolean);
+          }
+
+          Object.assign(pkgDoc, cleanUpdate, { updatedBy: author, updatedAt: new Date().toISOString() });
+          await pkgDoc.save();
+
+          const obj = pkgDoc.toObject();
+          if (obj.image) delete obj.image.data;
+
+          const idx = this.packages.findIndex((p) => p._id === idOrSlug || p.slug === idOrSlug);
+          if (idx !== -1) {
+            this.packages[idx] = { ...this.packages[idx], ...cleanUpdate };
+            if (hasNewDirectImage) this.packages[idx].image = newImageRecord;
+          }
+          await this.logAudit('PACKAGE_UPDATED', author, 'package', pkgDoc.slug, { title: pkgDoc.title });
+          return obj;
+        }
+      } catch (e) {
+        console.error('[StoreService] Error updating package in Mongo:', e.message);
+      }
+    }
+
+    const pkg = this.packages.find((p) => p._id === idOrSlug || p.slug === idOrSlug);
+    if (!pkg) throw new Error(`Package '${idOrSlug}' not found.`);
+
+    if (hasNewDirectImage) {
+      cleanUpdate.image = newImageRecord;
+      cleanUpdate.hasDirectImage = true;
+      cleanUpdate.imageUrl = `/api/v1/packages/${pkg.slug}/image`;
+      cleanUpdate.coverImage = `/api/v1/packages/${pkg.slug}/image`;
+    } else if (!cleanUpdate.image) {
+      delete cleanUpdate.image;
+    }
+
+    if (cleanUpdate.durationDays !== undefined) cleanUpdate.durationDays = Number(cleanUpdate.durationDays);
+    if (cleanUpdate.durationNights !== undefined) cleanUpdate.durationNights = Number(cleanUpdate.durationNights);
+    if (cleanUpdate.price !== undefined) cleanUpdate.price = Number(cleanUpdate.price);
+    if (typeof cleanUpdate.includes === 'string') {
+      cleanUpdate.includes = cleanUpdate.includes.split('\n').map((s) => s.trim()).filter(Boolean);
+    }
+
+    Object.assign(pkg, cleanUpdate, { updatedBy: author, updatedAt: new Date().toISOString() });
+    await this.logAudit('PACKAGE_UPDATED', author, 'package', pkg.slug, { title: pkg.title });
+    const returnRecord = { ...pkg };
+    if (returnRecord.image) {
+      returnRecord.image = { ...returnRecord.image };
+      delete returnRecord.image.data;
+    }
+    return returnRecord;
+  }
+
+  async deletePackage(idOrSlug, author = 'Master Head') {
+    await this.initializeSeedAccounts();
+    if (this.isMongoLive()) {
+      try {
+        const pkgDoc = await Package.findOne({ $or: [{ _id: idOrSlug }, { slug: idOrSlug }] });
+        if (pkgDoc) {
+          pkgDoc.isDeleted = true;
+          pkgDoc.publicationStatus = 'archived';
+          pkgDoc.updatedBy = author;
+          await pkgDoc.save();
+          const idx = this.packages.findIndex((p) => p._id === idOrSlug || p.slug === idOrSlug);
+          if (idx !== -1) {
+            this.packages[idx].isDeleted = true;
+            this.packages[idx].publicationStatus = 'archived';
+          }
+          await this.logAudit('PACKAGE_DELETED', author, 'package', pkgDoc.slug);
+          return { success: true, message: `Package '${pkgDoc.title}' soft-deleted successfully.` };
+        }
+      } catch (e) {
+        console.warn('[StoreService] Mongo deletePackage error:', e.message);
+      }
+    }
+
+    const pkg = this.packages.find((p) => p._id === idOrSlug || p.slug === idOrSlug);
+    if (!pkg) throw new Error(`Package '${idOrSlug}' not found.`);
+
+    pkg.isDeleted = true;
+    pkg.publicationStatus = 'archived';
+    pkg.updatedBy = author;
+    await this.logAudit('PACKAGE_DELETED', author, 'package', pkg.slug);
+    return { success: true, message: `Package '${pkg.title}' soft-deleted successfully.` };
   }
 
   // ==================== BOOKING ENQUIRIES ====================

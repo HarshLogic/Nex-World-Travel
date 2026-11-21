@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MapPin, Calendar, Clock, CheckCircle2, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
-import { fetchPackageBySlug } from '../../../lib/api';
+import { fetchPackageBySlug, getPackageImageUrl } from '../../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +28,7 @@ export default async function PackageDetailPage({ params }) {
         {/* Hero Card */}
         <div className="relative aspect-[16/8] sm:aspect-[21/9] w-full rounded-4xl overflow-hidden shadow-card border border-border mb-12">
           <Image
-            src={pkg.imageUrl}
+            src={getPackageImageUrl(pkg)}
             alt={pkg.title}
             fill
             sizes="100vw"
@@ -115,9 +115,27 @@ export default async function PackageDetailPage({ params }) {
           {/* Right Column: Planning Card */}
           <div className="lg:col-span-4">
             <div className="sticky top-28 bg-white rounded-3xl p-6 sm:p-8 border border-border shadow-card space-y-6">
-              <h3 className="text-xl font-bold text-text-primary">
-                Book This Package
-              </h3>
+              <div>
+                <h3 className="text-xl font-bold text-text-primary">
+                  Book This Package
+                </h3>
+                {pkg.price && Number(pkg.price) > 0 ? (
+                  <div className="mt-2 pt-2 border-t border-border">
+                    <span className="text-[11px] text-text-muted block">Starting From</span>
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <span className="text-2xl font-extrabold text-accent-primary">
+                        AED {Number(pkg.price).toLocaleString()}
+                      </span>
+                      <span className="text-xs text-text-secondary">/ person</span>
+                    </div>
+                    {pkg.priceEstimateNote && (
+                      <p className="text-[11px] text-text-muted mt-1">{pkg.priceEstimateNote}</p>
+                    )}
+                  </div>
+                ) : pkg.priceEstimateNote ? (
+                  <p className="text-xs text-text-secondary mt-1">{pkg.priceEstimateNote}</p>
+                ) : null}
+              </div>
 
               <div className="p-4 rounded-2xl bg-surface-50 border border-border space-y-3 text-xs">
                 <div className="flex justify-between">

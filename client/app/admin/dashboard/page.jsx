@@ -47,6 +47,7 @@ import {
   EyeOff,
   Layers,
   Image as ImageIcon,
+  Package as PackageIcon,
 } from 'lucide-react';
 import {
   fetchDashboardMetrics,
@@ -78,6 +79,12 @@ import {
   deleteActivity,
   fetchActivities,
   uploadActivityImage,
+  fetchPackages,
+  createPackage,
+  updatePackage,
+  deletePackage,
+  uploadPackageImage,
+  getPackageImageUrl,
   uploadMedia,
   fetchTerms,
   updateTerms,
@@ -263,6 +270,34 @@ export default function AdminDashboardPage() {
     featured: false,
   });
 
+  // Holiday Packages state
+  const [packages, setPackages] = useState([]);
+  const [pkgRegionFilter, setPkgRegionFilter] = useState('');
+  const [pkgStatusFilter, setPkgStatusFilter] = useState('');
+  const [pkgSearchQuery, setPkgSearchQuery] = useState('');
+  const [showAddPkgModal, setShowAddPkgModal] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [previewPackage, setPreviewPackage] = useState(null);
+  const [deletePackageConfirm, setDeletePackageConfirm] = useState(null);
+  const [pkgImageFile, setPkgImageFile] = useState(null);
+  const [pkgImagePreview, setPkgImagePreview] = useState('');
+  const [pkgForm, setPkgForm] = useState({
+    title: '',
+    destination: '',
+    region: 'Europe',
+    durationDays: 7,
+    durationNights: 6,
+    price: 0,
+    priceEstimateNote: 'Custom quotation crafted based on departure date & personal choices',
+    tagline: '',
+    overview: '',
+    includes: '',
+    itinerarySummaryText: '',
+    publicationStatus: 'published',
+    featured: false,
+    imageUrl: '',
+  });
+
   // Image Uploading & Deletion Dialog
   const [imageUploading, setImageUploading] = useState(false);
   const [deleteConfirmItem, setDeleteConfirmItem] = useState(null);
@@ -325,25 +360,39 @@ export default function AdminDashboardPage() {
       fetchDashboardMetrics().then((d) => setMetrics(d?.metrics || d)).catch(() => {});
     } else if (activeTab === 'overview') {
       fetchDashboardMetrics().then((d) => setMetrics(d?.metrics || d)).catch(() => {});
+    } else if (activeTab === 'packages') {
+      fetchPackages('', { includeDrafts: true }).then(setPackages).catch(() => {});
     }
   }, [activeTab]);
 
   const loadAllDashboardData = async () => {
     setLoading(true);
     try {
-      const [metricsData, membersData, empsData, crsData, bksData, reqsData, termsData, destsData, availsData, actsData] =
-        await Promise.all([
-          fetchDashboardMetrics().catch(() => null),
-          fetchAdminMembers({ page: 1, limit: 15 }).catch(() => ({ members: [], pagination: {} })),
-          fetchEmployees().catch(() => []),
-          fetchChangeRequests().catch(() => []),
-          fetchAdminBookings().catch(() => []),
-          fetchAdminMemberRequests().catch(() => []),
-          fetchTerms().catch(() => null),
-          fetchDestinations().catch(() => []),
-          fetchAvailabilities().catch(() => []),
-          fetchActivities().catch(() => []),
-        ]);
+      const [
+        metricsData,
+        membersData,
+        empsData,
+        crsData,
+        bksData,
+        reqsData,
+        termsData,
+        destsData,
+        availsData,
+        actsData,
+        pkgsData,
+      ] = await Promise.all([
+        fetchDashboardMetrics().catch(() => null),
+        fetchAdminMembers({ page: 1, limit: 15 }).catch(() => ({ members: [], pagination: {} })),
+        fetchEmployees().catch(() => []),
+        fetchChangeRequests().catch(() => []),
+        fetchAdminBookings().catch(() => []),
+        fetchAdminMemberRequests().catch(() => []),
+        fetchTerms().catch(() => null),
+        fetchDestinations().catch(() => []),
+        fetchAvailabilities().catch(() => []),
+        fetchActivities().catch(() => []),
+        fetchPackages('', { includeDrafts: true }).catch(() => []),
+      ]);
 
       if (metricsData) setMetrics(metricsData.metrics || metricsData);
       if (membersData) {
@@ -361,6 +410,7 @@ export default function AdminDashboardPage() {
       if (destsData) setDestinations(destsData);
       if (availsData) setAvailabilities(availsData);
       if (actsData) setActivities(actsData);
+      if (pkgsData) setPackages(pkgsData);
     } catch (err) {
       triggerToast(err.message || 'Error loading dashboard data', 'error');
     } finally {
@@ -734,8 +784,8 @@ export default function AdminDashboardPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Strict 1MB client-side limit for destinations (Direct MongoDB storage)
-    if (formType === 'destination') {
+    // Strict 1MB client-side limit for destinations & packages (Direct MongoDB storage)
+    if (formType === 'destination' || formType === 'package') {
       if (file.size > 1024 * 1024) {
         triggerToast(
           `Image size (${(file.size / 1024).toFixed(1)} KB) exceeds the maximum allowed limit of 1 MB (1024 KB).`,
@@ -767,6 +817,16 @@ export default function AdminDashboardPage() {
           imageData: dataUrl,
           imageOriginalName: file.name,
         }));
+      } else if (formType === 'package') {
+        // Holiday Package: store raw base64 dataUrl directly for permanent MongoDB storage
+        setPkgForm((prev) => ({
+          ...prev,
+          imageUrl: dataUrl,
+          coverImage: dataUrl,
+          imageData: dataUrl,
+          imageOriginalName: file.name,
+        }));
+        setPkgImagePreview(dataUrl);
       } else {
         // Destination: store raw base64 dataUrl directly so it is written straight to MongoDB
         setDestForm((prev) => ({
@@ -779,7 +839,7 @@ export default function AdminDashboardPage() {
     };
     reader.readAsDataURL(file);
 
-    if (formType === 'destination' || formType === 'activity') {
+    if (formType === 'destination' || formType === 'activity' || formType === 'package') {
       triggerToast('Direct image loaded! It will be stored permanently in MongoDB when you save.', 'success');
       return;
     }
@@ -939,6 +999,142 @@ export default function AdminDashboardPage() {
       setDeleteConfirmItem(null);
     } catch (err) {
       triggerToast(err.message || `Failed to delete ${type}`, 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Holiday Packages Management
+  const handleSavePackage = async (e) => {
+    e.preventDefault();
+    setActionLoading(true);
+    try {
+      let parsedItinerary = [];
+      if (pkgForm.itinerarySummaryText) {
+        parsedItinerary = pkgForm.itinerarySummaryText
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line, idx) => {
+            const dayMatch = line.match(/^Day\s*(\d+)[:\s-]*(.*)$/i);
+            if (dayMatch) {
+              const dayNum = parseInt(dayMatch[1], 10);
+              const parts = dayMatch[2].split(/[-–—:]/);
+              return {
+                day: dayNum,
+                title: parts[0]?.trim() || `Day ${dayNum}`,
+                description: parts.slice(1).join(' - ').trim() || parts[0]?.trim() || '',
+              };
+            }
+            return {
+              day: idx + 1,
+              title: line.length > 40 ? line.slice(0, 37) + '...' : line,
+              description: line,
+            };
+          });
+      } else if (Array.isArray(pkgForm.itinerarySummary)) {
+        parsedItinerary = pkgForm.itinerarySummary;
+      }
+
+      const payload = {
+        title: pkgForm.title.trim(),
+        destination: pkgForm.destination.trim(),
+        region: pkgForm.region.trim(),
+        durationDays: Number(pkgForm.durationDays) || 1,
+        durationNights: Number(pkgForm.durationNights) || 0,
+        price: Number(pkgForm.price) || 0,
+        priceEstimateNote:
+          pkgForm.priceEstimateNote || 'Custom quotation crafted based on departure date & personal choices',
+        tagline: pkgForm.tagline || '',
+        overview: pkgForm.overview || '',
+        includes:
+          typeof pkgForm.includes === 'string'
+            ? pkgForm.includes.split('\n').map((s) => s.trim()).filter(Boolean)
+            : pkgForm.includes || [],
+        itinerarySummary: parsedItinerary,
+        publicationStatus: pkgForm.publicationStatus || 'published',
+        featured: Boolean(pkgForm.featured),
+      };
+
+      // Strict image preservation: only send imageData if user uploaded a new image
+      if (pkgForm.imageData) {
+        payload.imageData = pkgForm.imageData;
+        payload.imageOriginalName = pkgForm.imageOriginalName || `${pkgForm.title}.jpg`;
+      }
+
+      if (selectedPackage) {
+        const id = selectedPackage.id || selectedPackage._id || selectedPackage.slug;
+        const res = await updatePackage(id, payload);
+        triggerToast('Holiday package updated successfully!');
+        if (res?.data) {
+          const updatedDoc = res.data;
+          setPackages((prev) =>
+            prev.map((p) =>
+              (p.id || p._id || p.slug) === (updatedDoc.id || updatedDoc._id || updatedDoc.slug)
+                ? updatedDoc
+                : p
+            )
+          );
+        }
+      } else {
+        const res = await createPackage(payload);
+        triggerToast('Holiday package created successfully!');
+        if (res?.data) {
+          const newDoc = res.data;
+          setPackages((prev) => [
+            newDoc,
+            ...prev.filter((p) => (p.id || p._id || p.slug) !== (newDoc.id || newDoc._id || newDoc.slug)),
+          ]);
+        }
+      }
+      setShowAddPkgModal(false);
+      setSelectedPackage(null);
+      setPkgImageFile(null);
+      setPkgImagePreview('');
+      fetchPackages('', { includeDrafts: true }).then((pkgs) => {
+        if (pkgs && pkgs.length > 0) setPackages(pkgs);
+      }).catch(() => {});
+    } catch (err) {
+      triggerToast(err.message || 'Failed to save holiday package', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleTogglePackageStatus = async (pkg) => {
+    const nextStatus = pkg.publicationStatus === 'published' ? 'draft' : 'published';
+    try {
+      await updatePackage(pkg.id || pkg._id || pkg.slug, { publicationStatus: nextStatus });
+      triggerToast(`Package marked as ${nextStatus}.`);
+      setPackages((prev) =>
+        prev.map((p) =>
+          (p.id || p._id || p.slug) === (pkg.id || pkg._id || pkg.slug)
+            ? { ...p, publicationStatus: nextStatus }
+            : p
+        )
+      );
+      fetchPackages('', { includeDrafts: true }).then((pkgs) => {
+        if (pkgs && pkgs.length > 0) setPackages(pkgs);
+      }).catch(() => {});
+    } catch (err) {
+      triggerToast(err.message || 'Failed to update publication status', 'error');
+    }
+  };
+
+  const handleDeletePackageConfirm = async () => {
+    if (!deletePackageConfirm) return;
+    setActionLoading(true);
+    try {
+      const id = deletePackageConfirm.id || deletePackageConfirm._id || deletePackageConfirm.slug;
+      await deletePackage(id);
+      triggerToast(`Package '${deletePackageConfirm.title}' soft-deleted / archived successfully.`);
+      setPackages((prev) => prev.filter((p) => (p.id || p._id || p.slug) !== id));
+      setDeletePackageConfirm(null);
+      fetchPackages('', { includeDrafts: true }).then((pkgs) => {
+        if (pkgs && pkgs.length > 0) setPackages(pkgs);
+      }).catch(() => {});
+    } catch (err) {
+      triggerToast(err.message || 'Failed to delete package', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -1148,6 +1344,7 @@ export default function AdminDashboardPage() {
             },
             { id: 'destinations', label: `Destinations (${destinations.length})`, icon: MapPin },
             { id: 'activities', label: `Activities (${activities.length})`, icon: Compass },
+            { id: 'packages', label: `Holiday Packages (${packages.length})`, icon: PackageIcon },
             {
               id: 'bookings',
               label: `Bookings ${bookings.filter((b) => (b.status || '').toLowerCase() === 'pending' || (b.status || '').toLowerCase() === 'new').length > 0 ? `(${bookings.filter((b) => (b.status || '').toLowerCase() === 'pending' || (b.status || '').toLowerCase() === 'new').length})` : ''}`,
@@ -4236,6 +4433,692 @@ export default function AdminDashboardPage() {
                   type="button"
                   disabled={actionLoading}
                   onClick={handleConfirmDelete}
+                  className="px-4 py-2 text-xs bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-xs disabled:opacity-50"
+                >
+                  {actionLoading ? 'Deleting...' : 'Confirm Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================== TAB 5.6: HOLIDAY PACKAGES ============================== */}
+        {activeTab === 'packages' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-text-primary">Tailor-Made Holiday Packages Management</h1>
+                <p className="text-sm text-text-secondary">
+                  Curate multi-city grand tours, bespoke luxury packages, and itineraries with permanent MongoDB image storage.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedPackage(null);
+                  setPkgImageFile(null);
+                  setPkgImagePreview('');
+                  setPkgForm({
+                    title: '',
+                    destination: '',
+                    region: 'Europe',
+                    durationDays: 7,
+                    durationNights: 6,
+                    price: 0,
+                    priceEstimateNote: 'Custom quotation crafted based on departure date & personal choices',
+                    tagline: '',
+                    overview: '',
+                    includes:
+                      '11 nights in premium luxury boutique hotels\nPrivate Seine river dinner cruise & Eiffel Tower priority access\nSkip-the-line Colosseum & Vatican City private tour\nAll high-speed European rail transfers between cities\nDaily artisan breakfasts and selected welcome dinners',
+                    itinerarySummaryText:
+                      'Day 1: Arrival in Paris - Private chauffeur transfer to hotel and evening illuminations\nDay 3: Louvre & Montmartre - Curated morning Louvre masterworks and afternoon stroll\nDay 5: Eternal Rome - High-speed rail journey to Rome, check-in near Spanish Steps\nDay 8: Barcelona Splendour - Flight to Catalonia, Gothic quarter tapas journey\nDay 11: Amsterdam Canals - Private canal saloon boat cruise and Rijksmuseum VIP tour',
+                    publicationStatus: 'published',
+                    featured: false,
+                    imageUrl: '',
+                  });
+                  setShowAddPkgModal(true);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover rounded-xl shadow-xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Holiday Package</span>
+              </button>
+            </div>
+
+            {/* Filters Bar: Region Pills, Status, and Search */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {['All', 'Europe', 'Asia', 'Australia', 'Middle East / UAE', 'Americas', 'Africa'].map((reg) => (
+                  <button
+                    key={reg}
+                    onClick={() => setPkgRegionFilter(reg === 'All' ? '' : reg)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                      (reg === 'All' && !pkgRegionFilter) || pkgRegionFilter === reg
+                        ? 'bg-text-primary text-white shadow-xs'
+                        : 'bg-white text-text-secondary border border-border hover:bg-surface-50'
+                    }`}
+                  >
+                    {reg}
+                  </button>
+                ))}
+
+                <select
+                  value={pkgStatusFilter}
+                  onChange={(e) => setPkgStatusFilter(e.target.value)}
+                  className="ml-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-border text-text-secondary hover:bg-surface-50"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="published">Published</option>
+                  <option value="draft">Draft (Hidden)</option>
+                </select>
+              </div>
+
+              <div className="relative max-w-xs w-full">
+                <Search className="w-4 h-4 text-text-tertiary absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={pkgSearchQuery}
+                  onChange={(e) => setPkgSearchQuery(e.target.value)}
+                  placeholder="Search packages or destinations..."
+                  className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-border text-xs bg-white focus:outline-none focus:ring-1 focus:ring-accent-primary"
+                />
+              </div>
+            </div>
+
+            {/* Packages Management Table */}
+            <div className="bg-white rounded-2xl border border-border overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-surface-50 border-b border-border text-text-secondary uppercase tracking-wider text-[11px] font-bold">
+                      <th className="py-3 px-4">Package</th>
+                      <th className="py-3 px-4">Destination</th>
+                      <th className="py-3 px-4">Region</th>
+                      <th className="py-3 px-4">Duration</th>
+                      <th className="py-3 px-4">Price (AED)</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Last Updated</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {packages
+                      .filter((p) => (!pkgRegionFilter ? true : p.region === pkgRegionFilter))
+                      .filter((p) => (!pkgStatusFilter ? true : p.publicationStatus === pkgStatusFilter))
+                      .filter((p) => {
+                        if (!pkgSearchQuery) return true;
+                        const s = pkgSearchQuery.toLowerCase();
+                        return (
+                          p.title?.toLowerCase().includes(s) ||
+                          p.destination?.toLowerCase().includes(s) ||
+                          p.region?.toLowerCase().includes(s) ||
+                          p.tagline?.toLowerCase().includes(s)
+                        );
+                      })
+                      .map((pkg) => {
+                        const isDraft = pkg.publicationStatus === 'draft';
+                        const updatedDateStr = pkg.updatedAt
+                          ? new Date(pkg.updatedAt).toLocaleDateString()
+                          : pkg.createdAt
+                          ? new Date(pkg.createdAt).toLocaleDateString()
+                          : '—';
+                        return (
+                          <tr
+                            key={pkg.id || pkg._id || pkg.slug}
+                            className="hover:bg-surface-50/70 transition-colors"
+                          >
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="relative w-14 h-10 rounded-lg overflow-hidden bg-surface-100 flex-shrink-0 border border-border">
+                                  <Image
+                                    src={getPackageImageUrl(pkg)}
+                                    alt={pkg.title}
+                                    fill
+                                    sizes="56px"
+                                    className="object-cover"
+                                  />
+                                </div>
+                                <div className="min-w-0 max-w-xs">
+                                  <div className="font-bold text-text-primary truncate flex items-center gap-1.5">
+                                    <span>{pkg.title}</span>
+                                    {pkg.featured && (
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
+                                        Featured
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-text-muted truncate">
+                                    {pkg.tagline || pkg.overview?.slice(0, 50) || 'Custom luxury journey'}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5 text-text-secondary font-medium">
+                                <MapPin className="w-3.5 h-3.5 text-accent-secondary flex-shrink-0" />
+                                <span className="truncate max-w-[160px]">{pkg.destination}</span>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-surface-100 text-text-secondary border border-border">
+                                {pkg.region}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-4 font-semibold text-text-primary">
+                              {pkg.durationDays}D / {pkg.durationNights}N
+                            </td>
+
+                            <td className="py-3 px-4">
+                              {pkg.price && Number(pkg.price) > 0 ? (
+                                <span className="font-extrabold text-accent-primary">
+                                  AED {Number(pkg.price).toLocaleString()}
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-text-muted italic">Quotation</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <button
+                                onClick={() => handleTogglePackageStatus(pkg)}
+                                title="Click to toggle publication status"
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
+                                  isDraft
+                                    ? 'bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100'
+                                    : 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                                }`}
+                              >
+                                {isDraft ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                <span>{isDraft ? 'Draft (Hidden)' : 'Published'}</span>
+                              </button>
+                            </td>
+
+                            <td className="py-3 px-4 text-text-muted text-[11px]">
+                              {updatedDateStr}
+                            </td>
+
+                            <td className="py-3 px-4 text-right">
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  onClick={() => setPreviewPackage(pkg)}
+                                  className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-accent-primary hover:bg-surface-50"
+                                  title="Preview Package Card"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedPackage(pkg);
+                                    setPkgImageFile(null);
+                                    setPkgImagePreview(getPackageImageUrl(pkg));
+                                    setPkgForm({
+                                      title: pkg.title || '',
+                                      destination: pkg.destination || '',
+                                      region: pkg.region || 'Europe',
+                                      durationDays: pkg.durationDays || 7,
+                                      durationNights: pkg.durationNights || 6,
+                                      price: pkg.price || 0,
+                                      priceEstimateNote:
+                                        pkg.priceEstimateNote ||
+                                        'Custom quotation crafted based on departure date & personal choices',
+                                      tagline: pkg.tagline || '',
+                                      overview: pkg.overview || '',
+                                      includes: Array.isArray(pkg.includes)
+                                        ? pkg.includes.join('\n')
+                                        : pkg.includes || '',
+                                      itinerarySummaryText: Array.isArray(pkg.itinerarySummary)
+                                        ? pkg.itinerarySummary
+                                            .map((it) => `Day ${it.day}: ${it.title}${it.description ? ` - ${it.description}` : ''}`)
+                                            .join('\n')
+                                        : '',
+                                      publicationStatus: pkg.publicationStatus || 'published',
+                                      featured: Boolean(pkg.featured),
+                                      imageUrl: getPackageImageUrl(pkg),
+                                    });
+                                    setShowAddPkgModal(true);
+                                  }}
+                                  className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-surface-50"
+                                  title="Edit Package"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => setDeletePackageConfirm(pkg)}
+                                  className="p-1.5 rounded-lg border border-border text-text-secondary hover:text-red-600 hover:bg-red-50"
+                                  title="Delete Package"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+
+              {packages.length === 0 && (
+                <div className="py-12 text-center text-text-muted">
+                  <PackageIcon className="w-10 h-10 mx-auto text-text-tertiary mb-2" />
+                  <p className="text-sm font-semibold">No holiday packages found</p>
+                  <p className="text-xs text-text-secondary mt-1">Click &quot;Add Holiday Package&quot; to curate your first itinerary.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ============================== ADD/EDIT HOLIDAY PACKAGE MODAL ============================== */}
+        {showAddPkgModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl max-h-[92vh] overflow-y-auto space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div>
+                  <h3 className="text-base font-bold text-text-primary">
+                    {selectedPackage ? 'Edit Holiday Package' : 'Add New Holiday Package'}
+                  </h3>
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    Images are stored permanently in MongoDB Atlas and survive all server restarts.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAddPkgModal(false)}
+                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSavePackage} className="space-y-4 text-xs">
+                {/* Title & Destination */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Package Title *</label>
+                    <input
+                      type="text"
+                      required
+                      value={pkgForm.title}
+                      onChange={(e) => setPkgForm({ ...pkgForm, title: e.target.value })}
+                      placeholder="e.g. European Elegance & Grand Capitals"
+                      className="w-full px-3 py-2 rounded-xl border border-border focus:ring-1 focus:ring-accent-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Destination Cities / Countries *</label>
+                    <input
+                      type="text"
+                      required
+                      value={pkgForm.destination}
+                      onChange={(e) => setPkgForm({ ...pkgForm, destination: e.target.value })}
+                      placeholder="e.g. Paris, Rome, Barcelona & Amsterdam"
+                      className="w-full px-3 py-2 rounded-xl border border-border focus:ring-1 focus:ring-accent-primary"
+                    />
+                  </div>
+                </div>
+
+                {/* Region, Publication Status & Featured */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Region *</label>
+                    <select
+                      value={pkgForm.region}
+                      onChange={(e) => setPkgForm({ ...pkgForm, region: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    >
+                      <option value="Europe">Europe</option>
+                      <option value="Asia">Asia</option>
+                      <option value="Australia">Australia</option>
+                      <option value="Middle East / UAE">Middle East / UAE</option>
+                      <option value="Africa">Africa</option>
+                      <option value="Americas">Americas</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Publication Status</label>
+                    <select
+                      value={pkgForm.publicationStatus}
+                      onChange={(e) => setPkgForm({ ...pkgForm, publicationStatus: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    >
+                      <option value="published">Published (Visible)</option>
+                      <option value="draft">Draft (Admin Only)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center sm:pt-6">
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pkgForm.featured}
+                        onChange={(e) => setPkgForm({ ...pkgForm, featured: e.target.checked })}
+                        className="w-4 h-4 text-accent-primary rounded border-border"
+                      />
+                      <span className="font-semibold text-text-primary">Featured in Highlights</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Duration & Price */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Duration Days *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={pkgForm.durationDays}
+                      onChange={(e) => setPkgForm({ ...pkgForm, durationDays: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Duration Nights *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={pkgForm.durationNights}
+                      onChange={(e) => setPkgForm({ ...pkgForm, durationNights: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">Price (AED)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={pkgForm.price || ''}
+                      onChange={(e) => setPkgForm({ ...pkgForm, price: Number(e.target.value) })}
+                      placeholder="e.g. 12500"
+                      className="w-full px-3 py-2 rounded-xl border border-border font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* Pricing Note */}
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Pricing / Quotation Note</label>
+                  <input
+                    type="text"
+                    value={pkgForm.priceEstimateNote}
+                    onChange={(e) => setPkgForm({ ...pkgForm, priceEstimateNote: e.target.value })}
+                    placeholder="e.g. Custom quotation crafted based on departure date & personal choices"
+                    className="w-full px-3 py-2 rounded-xl border border-border"
+                  />
+                </div>
+
+                {/* Tagline */}
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Tagline</label>
+                  <input
+                    type="text"
+                    value={pkgForm.tagline}
+                    onChange={(e) => setPkgForm({ ...pkgForm, tagline: e.target.value })}
+                    placeholder="e.g. Iconic monuments, romantic canals, and premier cultural landmarks across Europe."
+                    className="w-full px-3 py-2 rounded-xl border border-border"
+                  />
+                </div>
+
+                {/* Overview */}
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Tour Overview</label>
+                  <textarea
+                    rows={3}
+                    value={pkgForm.overview}
+                    onChange={(e) => setPkgForm({ ...pkgForm, overview: e.target.value })}
+                    placeholder="Comprehensive description of the grand journey..."
+                    className="w-full px-3 py-2 rounded-xl border border-border"
+                  />
+                </div>
+
+                {/* Included Luxuries */}
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">
+                    What&apos;s Included (One item per line)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={pkgForm.includes}
+                    onChange={(e) => setPkgForm({ ...pkgForm, includes: e.target.value })}
+                    placeholder="11 nights in premium luxury boutique hotels&#10;Private Seine river dinner cruise & Eiffel Tower priority access&#10;Skip-the-line Colosseum & Vatican City private tour"
+                    className="w-full px-3 py-2 rounded-xl border border-border font-mono text-[11px]"
+                  />
+                </div>
+
+                {/* Itinerary Summary */}
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">
+                    Day-by-Day Journey (One day per line: e.g. &quot;Day 1: Title - Description&quot;)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={pkgForm.itinerarySummaryText}
+                    onChange={(e) => setPkgForm({ ...pkgForm, itinerarySummaryText: e.target.value })}
+                    placeholder="Day 1: Arrival in Paris - Chauffeur transfer to hotel and evening illuminations&#10;Day 3: Louvre & Montmartre - Curated Louvre tour and bohemian stroll&#10;Day 5: Eternal Rome - High-speed rail to Rome, check-in near Spanish Steps"
+                    className="w-full px-3 py-2 rounded-xl border border-border font-mono text-[11px]"
+                  />
+                </div>
+
+                {/* Image Upload with Strict Preservation Notice */}
+                <div className="p-3.5 bg-surface-50 rounded-2xl border border-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-text-primary flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-accent-primary" />
+                      <span>Package Cover Image (Stored Permanently in MongoDB)</span>
+                    </label>
+                    <span className="text-[10px] text-text-muted">Max 1 MB (JPG, PNG, WebP)</span>
+                  </div>
+
+                  {pkgImagePreview && (
+                    <div className="relative w-full h-36 rounded-xl overflow-hidden border border-border bg-black/5">
+                      <Image
+                        src={pkgImagePreview}
+                        alt="Preview"
+                        fill
+                        className="object-cover"
+                      />
+                      <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-md bg-black/75 backdrop-blur-xs text-[10px] font-semibold text-white">
+                        {pkgForm.imageData ? 'New Image Ready to Save' : 'Current Active Image (Preserved)'}
+                      </div>
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => handleImageFileChange(e, 'package')}
+                    className="block w-full text-xs text-text-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-accent-primary file:text-white hover:file:bg-accent-primary-hover cursor-pointer"
+                  />
+                  <p className="text-[11px] text-text-muted">
+                    {selectedPackage
+                      ? 'Strict Preservation: If no new file is chosen, the existing image will remain 100% untouched.'
+                      : 'Upload a vibrant high-resolution destination image (16:9 ratio recommended).'}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddPkgModal(false)}
+                    className="px-4 py-2 text-xs text-text-secondary hover:bg-surface-50 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-5 py-2 text-xs bg-accent-primary hover:bg-accent-primary-hover text-white font-bold rounded-xl shadow-xs disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    {actionLoading ? 'Saving...' : selectedPackage ? 'Update Holiday Package' : 'Create Holiday Package'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ============================== PREVIEW HOLIDAY PACKAGE MODAL ============================== */}
+        {previewPackage && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-5 animate-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <span className="px-3 py-1 rounded-full bg-accent-primary-light text-accent-primary font-bold text-xs">
+                  Customer Live Preview
+                </span>
+                <button
+                  onClick={() => setPreviewPackage(null)}
+                  className="p-1.5 text-text-tertiary hover:text-text-primary rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Card visual */}
+              <div className="rounded-3xl border border-border overflow-hidden bg-white shadow-card">
+                <div className="relative aspect-[16/9] w-full bg-surface-200">
+                  <Image
+                    src={getPackageImageUrl(previewPackage)}
+                    alt={previewPackage.title}
+                    fill
+                    className="object-cover"
+                  />
+                  <div className="absolute top-3 left-3">
+                    <span className="px-3 py-1 rounded-full bg-white/95 backdrop-blur-md text-xs font-bold text-text-primary shadow-sm">
+                      {previewPackage.region}
+                    </span>
+                  </div>
+                  <div className="absolute top-3 right-3">
+                    <span className="px-3 py-1 rounded-full bg-accent-primary text-white text-xs font-bold shadow-sm">
+                      {previewPackage.durationDays} Days / {previewPackage.durationNights} Nights
+                    </span>
+                  </div>
+                  <div className="absolute bottom-3 left-3 right-3 text-white">
+                    <div className="flex items-center gap-1.5 text-xs text-white/90">
+                      <MapPin className="w-3.5 h-3.5 text-accent-secondary" />
+                      <span className="font-semibold">{previewPackage.destination}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-text-primary">{previewPackage.title}</h2>
+                    {previewPackage.tagline && (
+                      <p className="text-xs font-semibold text-accent-primary mt-1">{previewPackage.tagline}</p>
+                    )}
+                    <p className="text-xs text-text-secondary mt-2 leading-relaxed">{previewPackage.overview}</p>
+                  </div>
+
+                  {previewPackage.includes && previewPackage.includes.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-surface-50 border border-border">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary mb-2">
+                        Included Luxuries:
+                      </h4>
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {previewPackage.includes.slice(0, 4).map((inc) => (
+                          <li key={inc} className="flex items-start gap-1.5 text-xs text-text-secondary">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-accent-secondary flex-shrink-0 mt-0.5" />
+                            <span>{inc}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {previewPackage.itinerarySummary && previewPackage.itinerarySummary.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary">
+                        Itinerary Highlights:
+                      </h4>
+                      <div className="space-y-1.5 text-xs">
+                        {previewPackage.itinerarySummary.slice(0, 4).map((it) => (
+                          <div key={it.day} className="flex items-start gap-2 p-2 rounded-xl bg-surface-50 border border-border">
+                            <span className="px-1.5 py-0.5 rounded font-bold bg-accent-primary-light text-accent-primary text-[10px]">
+                              Day {it.day}
+                            </span>
+                            <div className="min-w-0">
+                              <span className="font-semibold text-text-primary">{it.title}</span>
+                              {it.description && (
+                                <p className="text-[11px] text-text-muted mt-0.5">{it.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-4 border-t border-border flex items-center justify-between">
+                    <div>
+                      <span className="block text-[11px] text-text-muted">Pricing</span>
+                      {previewPackage.price && Number(previewPackage.price) > 0 ? (
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-lg font-extrabold text-accent-primary">
+                            AED {Number(previewPackage.price).toLocaleString()}
+                          </span>
+                          <span className="text-[11px] text-text-secondary">/ person</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-semibold text-text-primary">
+                          {previewPackage.priceEstimateNote || 'Custom quotation'}
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="px-4 py-2 rounded-full text-xs font-semibold bg-accent-primary text-white shadow-xs">
+                      Enquire Journey
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewPackage(null)}
+                  className="px-5 py-2 text-xs bg-surface-100 hover:bg-surface-200 text-text-primary font-bold rounded-xl"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================== DELETE HOLIDAY PACKAGE CONFIRMATION MODAL ============================== */}
+        {deletePackageConfirm && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center gap-3 text-red-600">
+                <div className="p-2.5 rounded-2xl bg-red-50 border border-red-200">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary">Delete Holiday Package</h3>
+                  <p className="text-xs text-text-muted">Soft deletion & archive</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-text-secondary leading-relaxed">
+                Are you sure you want to remove package <strong className="text-text-primary font-bold">{deletePackageConfirm.title}</strong>? It will be safely archived and hidden from public visitors while preserving all booking records and audit history.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setDeletePackageConfirm(null)}
+                  className="px-4 py-2 text-xs text-text-secondary hover:bg-surface-50 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={handleDeletePackageConfirm}
                   className="px-4 py-2 text-xs bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-xs disabled:opacity-50"
                 >
                   {actionLoading ? 'Deleting...' : 'Confirm Delete'}

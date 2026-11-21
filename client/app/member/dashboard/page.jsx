@@ -26,7 +26,6 @@ import {
 } from 'lucide-react';
 import {
   fetchMemberProfile,
-  acknowledgeMemberTerms,
   submitMemberRequest,
   fetchMyMemberRequests,
   submitBookingEnquiry,
@@ -131,11 +130,6 @@ export default function MemberDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Terms state
-  const [termsAgreed, setTermsAgreed] = useState(false);
-  const [termsSubmitting, setTermsSubmitting] = useState(false);
-
-  // Support request form modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestType, setRequestType] = useState('Booking Assistance');
   const [requestSubject, setRequestSubject] = useState('');
@@ -165,7 +159,6 @@ export default function MemberDashboard() {
     try {
       const result = await fetchMemberProfile();
       setData(result);
-      setTermsAgreed(result.member.termsAccepted);
       if (result.member?.registeredName) {
         setBookingFields((prev) => ({
           ...prev,
@@ -185,19 +178,6 @@ export default function MemberDashboard() {
   const handleLogout = () => {
     clearAuth();
     router.push('/login');
-  };
-
-  const handleTermsSubmit = async () => {
-    setTermsSubmitting(true);
-    try {
-      await acknowledgeMemberTerms();
-      setTermsAgreed(true);
-      await loadMemberData();
-    } catch (err) {
-      alert(err.message || 'Failed to acknowledge terms.');
-    } finally {
-      setTermsSubmitting(false);
-    }
   };
 
   const handleCalendarSelectPeriod = (plan) => {
@@ -720,28 +700,19 @@ export default function MemberDashboard() {
             {terms?.content}
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-            <label className={`flex items-start gap-2.5 ${member.termsAccepted ? 'cursor-default' : 'cursor-pointer'}`}>
-              <input
-                type="checkbox"
-                checked={termsAgreed || Boolean(member.termsAccepted)}
-                onChange={handleTermsSubmit}
-                disabled={termsSubmitting || Boolean(member.termsAccepted)}
-                className="w-4 h-4 mt-0.5 rounded text-accent-primary border-border focus:ring-accent-primary disabled:opacity-80"
-              />
-              <span className="text-xs text-text-primary font-medium">
-                {member.termsAccepted
-                  ? 'Official terms & conditions acknowledged and accepted on record.'
-                  : 'I have read, understood, and agreed to the official terms & conditions of Nex World Travel & Tourism.'}
+          {/* Status Display: Acknowledged by default without manual checkbox */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border/60">
+            <div className="flex items-center gap-2 text-emerald-600">
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+              <span className="text-sm font-semibold text-text-primary">
+                Membership Terms & Conditions — Acknowledged
               </span>
-            </label>
+            </div>
 
-            {member.termsAccepted && (
-              <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 self-start sm:self-auto bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                Acknowledged on {new Date(member.termsAcceptedAt || member.purchaseDate).toLocaleDateString()} (Version: {terms?.version || member.termsVersion || 'v1.0-2026'})
-              </span>
-            )}
+            <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1.5 self-start sm:self-auto bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              Acknowledged on {new Date(member.termsAcceptedAt || member.purchaseDate || member.registrationDate || member.createdAt || Date.now()).toLocaleDateString()} (Version: {terms?.version || member.termsVersion || 'v1.0-2026'})
+            </span>
           </div>
         </div>
 

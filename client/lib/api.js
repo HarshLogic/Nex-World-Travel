@@ -442,6 +442,62 @@ export async function uploadActivityImage(id, fileOrBase64, originalName) {
   return data;
 }
 
+export async function createPackage(payload) {
+  const res = await fetch(`${BASE_URL}/api/v1/packages`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to create holiday package.');
+  return data;
+}
+
+export async function updatePackage(id, payload) {
+  const res = await fetch(`${BASE_URL}/api/v1/packages/${id}`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to update holiday package.');
+  return data;
+}
+
+export async function deletePackage(id) {
+  const res = await fetch(`${BASE_URL}/api/v1/packages/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to delete holiday package.');
+  return data;
+}
+
+export async function uploadPackageImage(id, fileOrBase64, originalName) {
+  let base64Data = fileOrBase64;
+  let name = originalName || 'package-image.jpg';
+
+  if (typeof window !== 'undefined' && fileOrBase64 instanceof File) {
+    name = fileOrBase64.name;
+    base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(fileOrBase64);
+    });
+  }
+
+  const res = await fetch(`${BASE_URL}/api/v1/packages/${id}/image`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ data: base64Data, name }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to upload package image.');
+  return data;
+}
+
 export async function uploadMedia(fileOrBase64, filename, mimeType) {
   let dataPayload = fileOrBase64;
   let type = mimeType;
@@ -586,6 +642,59 @@ export function getActivityImageUrl(activity) {
   return '/images/hero.jpg';
 }
 
+/**
+ * Returns the correct image URL for a holiday package, prioritizing direct MongoDB
+ * binary image endpoint when hasDirectImage is true, with seamless fallbacks.
+ */
+export function getPackageImageUrl(pkg) {
+  if (!pkg) return '/images/hero.jpg';
+
+  // 1. Direct MongoDB binary image endpoint (served via same-origin Next.js rewrite or direct backend route)
+  if (pkg.hasDirectImage) {
+    const identifier = pkg.slug || pkg.id || pkg._id;
+    return `/api/v1/packages/${identifier}/image`;
+  }
+
+  // 2. Candidate image fields (imageUrl, coverImage, heroImage, thumbnail)
+  const candidate = pkg.imageUrl || pkg.coverImage || pkg.heroImage || pkg.thumbnail;
+  if (candidate && typeof candidate === 'string') {
+    if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
+      return candidate;
+    }
+    if (candidate.includes('/images/hero/hero-bg.jpg')) {
+      return '/images/hero.jpg';
+    }
+    if (candidate.startsWith('/api/') || candidate.startsWith('/uploads/') || candidate.startsWith('/images/')) {
+      return candidate;
+    }
+    if (candidate.startsWith('/')) {
+      return candidate;
+    }
+    return `/${candidate}`;
+  }
+
+  // 3. Fallback to standard package image based on region or slug
+  const reg = String(pkg.region || '').toLowerCase();
+  const slug = String(pkg.slug || pkg.destination || '').toLowerCase();
+  if (reg.includes('europe') || slug.includes('europe')) {
+    return '/images/destinations/europe.jpg';
+  }
+  if (reg.includes('asia') || slug.includes('asia')) {
+    return '/images/destinations/asia.jpg';
+  }
+  if (reg.includes('australia') || slug.includes('australia')) {
+    return '/images/destinations/australia.jpg';
+  }
+  if (reg.includes('middle east') || reg.includes('uae') || slug.includes('emirates')) {
+    return '/images/destinations/uae.jpg';
+  }
+  if (reg.includes('africa') || slug.includes('africa')) {
+    return '/images/destinations/africa.jpg';
+  }
+
+  return '/images/hero.jpg';
+}
+
 export async function fetchDestinations(region, category) {
   try {
     const params = new URLSearchParams();
@@ -657,21 +766,42 @@ export async function fetchActivities(category, region) {
   return filtered;
 }
 
-export async function fetchPackages(region) {
+export async function fetchPackages(region, options = {}) {
   try {
-    const url = region ? `${BASE_URL}/api/v1/packages?region=${encodeURIComponent(region)}` : `${BASE_URL}/api/v1/packages`;
-    const res = await fetch(url, { cache: 'no-store' });
+    const params = new URLSearchParams();
+    if (region && region !== 'All') params.append('region', region);
+    if (options.publicationStatus) params.append('publicationStatus', options.publicationStatus);
+    if (options.includeDrafts) params.append('includeDrafts', 'true');
+    if (options.search) params.append('search', options.search);
+    const queryString = params.toString();
+    const url = `${BASE_URL}/api/v1/packages${queryString ? `?${queryString}` : ''}`;
+    const res = await fetch(url, { headers: getAuthHeaders(), cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
-      if (data.success && data.data?.length > 0) return data.data;
+      if (data.success && Array.isArray(data.data)) {
+        if (data.data.length > 0) {
+          const apiSlugs = new Set(data.data.map((p) => (p.slug || '').toLowerCase()));
+          const missingSeeds = packagesData.filter(
+            (seed) => !apiSlugs.has((seed.slug || '').toLowerCase())
+          );
+          let combined = [...data.data, ...missingSeeds];
+          if (region && region !== 'All') {
+            combined = combined.filter((p) => p.region?.toLowerCase().includes(region.toLowerCase()));
+          }
+          return combined;
+        }
+        return data.data;
+      }
     }
   } catch (e) {}
-  return region ? packagesData.filter((p) => p.region.toLowerCase() === region.toLowerCase()) : packagesData;
+  return region && region !== 'All'
+    ? packagesData.filter((p) => p.region.toLowerCase().includes(region.toLowerCase()))
+    : packagesData;
 }
 
 export async function fetchPackageBySlug(slug) {
   try {
-    const res = await fetch(`${BASE_URL}/api/v1/packages/${slug}`, { cache: 'no-store' });
+    const res = await fetch(`${BASE_URL}/api/v1/packages/${slug}`, { headers: getAuthHeaders(), cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.data) return data.data;

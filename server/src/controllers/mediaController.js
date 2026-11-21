@@ -1,7 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { fileURLToPath } from 'url';
+import { UploadedMedia } from '../models/UploadedMedia.js';
+import { store } from '../services/storeService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -134,6 +137,39 @@ export const uploadMedia = async (req, res, next) => {
       fs.writeFileSync(clientFilePath, buffer);
     } catch (e) {
       // Non-fatal if client folder is in another directory/deployment
+    }
+
+    // Persist permanently in MongoDB Atlas so image survives Railway ephemeral container wipes/restarts
+    const uploader = req.user?.email || req.user?.name || 'Master Head';
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      try {
+        await UploadedMedia.findOneAndUpdate(
+          { filename },
+          {
+            filename,
+            originalName: name || filename,
+            contentType: mimeType,
+            size: buffer.length,
+            data: buffer,
+            uploadedBy: uploader,
+          },
+          { upsert: true, new: true }
+        );
+      } catch (mongoSaveErr) {
+        console.warn('[MediaController] Notice saving to UploadedMedia in MongoDB:', mongoSaveErr.message);
+      }
+    }
+
+    // Also mirror into storeService's in-memory media array for resilience and test environments
+    if (store && store.saveUploadedMediaMemory) {
+      store.saveUploadedMediaMemory({
+        filename,
+        originalName: name || filename,
+        contentType: mimeType,
+        size: buffer.length,
+        buffer,
+        uploadedBy: uploader,
+      });
     }
 
     const publicUrl = `/uploads/${filename}`;

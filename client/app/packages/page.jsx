@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Calendar, Clock, MapPin, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
 import { packagesData } from '../../data/packages';
+import { fetchPackages, getPackageImageUrl } from '../../lib/api';
 
 const REGIONS = ['All', 'Europe', 'Asia', 'Australia', 'Middle East / UAE'];
 
@@ -14,15 +15,38 @@ function PackagesContent() {
   const initialRegion = searchParams.get('region') || 'All';
 
   const [selectedRegion, setSelectedRegion] = useState(initialRegion);
+  const [packages, setPackages] = useState(packagesData);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const r = searchParams.get('region');
     if (r) setSelectedRegion(r);
   }, [searchParams]);
 
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDynamicPackages() {
+      try {
+        setLoading(true);
+        const data = await fetchPackages(selectedRegion);
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          setPackages(data);
+        }
+      } catch (e) {
+        // Fallback to static packages
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadDynamicPackages();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedRegion]);
+
   const filtered = selectedRegion === 'All'
-    ? packagesData
-    : packagesData.filter((p) => p.region.toLowerCase().includes(selectedRegion.toLowerCase()));
+    ? packages
+    : packages.filter((p) => p.region?.toLowerCase().includes(selectedRegion.toLowerCase()));
 
   return (
     <div className="py-12 md:py-20 bg-surface-50 min-h-screen">
@@ -68,7 +92,7 @@ function PackagesContent() {
               {/* Photo */}
               <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface-200">
                 <Image
-                  src={pkg.imageUrl}
+                  src={getPackageImageUrl(pkg)}
                   alt={pkg.title}
                   fill
                   sizes="(max-width: 768px) 100vw, 50vw"
@@ -105,27 +129,38 @@ function PackagesContent() {
                     {pkg.overview}
                   </p>
 
-                  <div className="mb-6">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary mb-2.5">
-                      Included Luxuries:
-                    </h4>
-                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {pkg.includes.slice(0, 4).map((inc) => (
-                        <li key={inc} className="flex items-start gap-2 text-xs text-text-secondary">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-accent-secondary flex-shrink-0 mt-0.5" />
-                          <span className="line-clamp-2">{inc}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  {pkg.includes && pkg.includes.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary mb-2.5">
+                        Included Luxuries:
+                      </h4>
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {pkg.includes.slice(0, 4).map((inc) => (
+                          <li key={inc} className="flex items-start gap-2 text-xs text-text-secondary">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-accent-secondary flex-shrink-0 mt-0.5" />
+                            <span className="line-clamp-2">{inc}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-5 border-t border-border flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <span className="block text-[11px] text-text-muted">Pricing</span>
-                    <span className="text-xs font-semibold text-text-primary">
-                      {pkg.priceEstimateNote}
-                    </span>
+                    {pkg.price && Number(pkg.price) > 0 ? (
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-base font-extrabold text-accent-primary">
+                          AED {Number(pkg.price).toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-text-secondary">/ person</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-semibold text-text-primary">
+                        {pkg.priceEstimateNote || 'Custom quotation available'}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-3">
