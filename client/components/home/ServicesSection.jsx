@@ -17,11 +17,11 @@ export default function ServicesSection() {
     <section className="py-20 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-secondary-light border border-accent-secondary/20 text-xs font-semibold text-accent-secondary mb-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-teal-light border border-brand-teal/20 text-xs font-semibold text-brand-teal mb-3">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>Dedicated Excellence</span>
           </div>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-text-primary tracking-tight">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-brand-navy tracking-tight">
             Our Travel Services & Visa Pillars
           </h2>
           <p className="text-text-secondary text-base mt-3 leading-relaxed">
@@ -35,7 +35,7 @@ export default function ServicesSection() {
             return (
               <div
                 key={service.id}
-                className="group bg-white rounded-3xl border border-border hover:border-accent-primary/40 shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col overflow-hidden"
+                className="group bg-white rounded-3xl border border-border hover:border-brand-teal/40 shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col overflow-hidden"
               >
                 {/* Service Image with original photography */}
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-surface-100">
@@ -44,22 +44,22 @@ export default function ServicesSection() {
                     alt={service.title}
                     fill
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                    className="object-cover transition-transform duration-700 group-hover:scale-105"
+                    className="object-cover transition-transform duration-700 group-hover:scale-103"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
-                  <div className="absolute top-3.5 right-3.5 p-2.5 rounded-2xl bg-white/90 backdrop-blur-md shadow-sm text-accent-primary">
-                    <Icon className="w-5 h-5" />
+                  <div className="absolute top-3.5 right-3.5 p-2.5 rounded-2xl bg-white/95 backdrop-blur-md shadow-sm text-brand-navy">
+                    <Icon className="w-5 h-5 text-brand-teal" />
                   </div>
                 </div>
 
                 {/* Service Content */}
                 <div className="p-6 flex-1 flex flex-col justify-between">
                   <div>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-accent-secondary">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-brand-teal">
                       {service.category}
                     </span>
-                    <h3 className="text-lg font-bold text-text-primary mt-1 mb-2 group-hover:text-accent-primary transition-colors">
+                    <h3 className="text-lg font-bold text-brand-navy mt-1 mb-2 group-hover:text-brand-teal transition-colors">
                       {service.title}
                     </h3>
                     <p className="text-xs text-text-secondary leading-relaxed mb-4">
@@ -69,7 +69,7 @@ export default function ServicesSection() {
                     <ul className="space-y-2 mb-6">
                       {service.features.map((feat) => (
                         <li key={feat} className="flex items-start gap-2 text-xs text-text-secondary">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-accent-secondary flex-shrink-0 mt-0.5" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-brand-teal flex-shrink-0 mt-0.5" />
                           <span>{feat}</span>
                         </li>
                       ))}
@@ -78,7 +78,7 @@ export default function ServicesSection() {
 
                   <Link
                     href={`/booking?service=${encodeURIComponent(service.title)}`}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl text-xs font-semibold text-accent-primary bg-accent-primary-light hover:bg-accent-primary hover:text-white transition-all duration-200"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl text-xs font-bold text-brand-navy bg-surface-100 hover:bg-brand-teal hover:text-white transition-all duration-200"
                   >
                     <span>{service.actionText}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -92,4 +92,3 @@ export default function ServicesSection() {
     </section>
   );
 }
-

@@ -6,12 +6,16 @@
 
 :root {
   --bg-main: #FFFFFF;
-  --bg-secondary: #F7F9FC;
-  --text-primary: #172033;
-  --text-secondary: #667085;
-  --border-color: #E6EAF0;
-  --accent-primary: #315EFB;
-  --accent-secondary: #48B9B0;
+  --bg-secondary: #F8FAFC;
+  --bg-warm: #FAF8F5;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --border-color: #E2E8F0;
+  --brand-navy: #102A43;
+  --brand-teal: #087F8C;
+  --brand-gold: #C6A66B;
+  --accent-primary: #087F8C;
+  --accent-secondary: #C6A66B;
 }
 
 html,
@@ -23,6 +27,7 @@ body {
   width: 100%;
   max-width: 100vw;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Reduced motion accessibility compliance */
@@ -42,49 +47,47 @@ h1, h2, h3, h4, .font-heading {
   letter-spacing: -0.02em;
 }
 
-/* Futuristic UI utilities */
+/* Luxury Editorial Card styling */
+.editorial-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 20px -2px rgba(16, 42, 67, 0.06);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
+}
+
+.editorial-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 16px 32px -6px rgba(16, 42, 67, 0.10);
+}
+
+/* Subtle luxury pill badge */
+.luxury-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  background: #FAF8F5;
+  border: 1px solid #E2E8F0;
+  color: #102A43;
+}
+
+/* Backdrop Blur Panels */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(230, 234, 240, 0.8);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .glass-pill {
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(230, 234, 240, 0.6);
-}
-
-.futuristic-border {
-  border: 1px solid #E6EAF0;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.futuristic-border:hover {
-  border-color: rgba(49, 94, 251, 0.4);
-  box-shadow: 0 12px 30px -10px rgba(49, 94, 251, 0.12);
-}
-
-/* Subtle futuristic background grid */
-.tech-grid-bg {
-  background-image: radial-gradient(rgba(49, 94, 251, 0.05) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
-/* Subtle glow badge */
-.badge-glow {
-  position: relative;
-}
-.badge-glow::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  background: linear-gradient(90deg, #315EFB, #48B9B0);
-  border-radius: inherit;
-  z-index: -1;
-  opacity: 0.15;
-  filter: blur(4px);
+  border: 1px solid rgba(226, 232, 240, 0.7);
 }
 
 /* Responsive custom scrollbar */
@@ -92,13 +95,12 @@ h1, h2, h3, h4, .font-heading {
   width: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #F7F9FC;
+  background: #F8FAFC;
 }
 ::-webkit-scrollbar-thumb {
-  background: #D0D7E2;
+  background: #CBD5E1;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #98A2B3;
+  background: #94A3B8;
 }
-

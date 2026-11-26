@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, Compass, Sparkles, MapPin } from 'lucide-react';
+import { ArrowRight, Compass } from 'lucide-react';
 import { destinationsData } from '../../data/destinations';
 import { fetchDestinations, getDestinationImageUrl } from '../../lib/api';
 
@@ -27,11 +27,11 @@ export default function FeaturedDestinations() {
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-primary-light border border-accent-primary/20 text-xs font-semibold text-accent-primary mb-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-teal-light border border-brand-teal/20 text-xs font-semibold text-brand-teal mb-3">
               <Compass className="w-3.5 h-3.5" />
               <span>World Horizons</span>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-text-primary tracking-tight">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-brand-navy tracking-tight">
               Dream & Top Destinations
             </h2>
             <p className="text-text-secondary text-base max-w-xl mt-2">
@@ -41,7 +41,7 @@ export default function FeaturedDestinations() {
 
           <Link
             href="/destinations"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-accent-primary hover:text-accent-primary-hover group self-start md:self-auto"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-brand-teal hover:text-brand-teal-dark group self-start md:self-auto"
           >
             <span>Browse All Destination Guides</span>
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
@@ -67,19 +67,19 @@ export default function FeaturedDestinations() {
                     alt={`${dest.title} - Nex World Travel`}
                     fill
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    className="object-cover transition-transform duration-700 group-hover:scale-105"
+                    className="object-cover transition-transform duration-700 group-hover:scale-102"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
 
                   <div className="absolute top-4 left-4">
-                    <span className="px-3 py-1 rounded-full bg-white/90 backdrop-blur-md text-xs font-semibold text-text-primary shadow-sm">
+                    <span className="px-3 py-1 rounded-full bg-white/95 backdrop-blur-md text-xs font-bold text-brand-navy shadow-sm">
                       {dest.region}
                     </span>
                   </div>
 
                   <div className="absolute bottom-4 left-4 right-4 text-white">
                     <h3 className="text-2xl font-bold tracking-tight">{dest.title}</h3>
-                    <p className="text-xs text-white/85 line-clamp-1 mt-0.5">{dest.tagline}</p>
+                    <p className="text-xs text-white/90 line-clamp-1 mt-0.5">{dest.tagline}</p>
                   </div>
                 </div>
 
@@ -103,10 +103,10 @@ export default function FeaturedDestinations() {
                   </div>
 
                   <div className="pt-4 border-t border-border flex items-center justify-between text-xs">
-                    <span className="text-text-muted">Best Time: <strong className="text-text-primary font-medium">{dest.bestTimeToVisit || 'Year Round'}</strong></span>
+                    <span className="text-text-muted">Best Time: <strong className="text-brand-navy font-semibold">{dest.bestTimeToVisit || 'Year Round'}</strong></span>
                     <Link
                       href={`/destinations/${dest.slug}`}
-                      className="inline-flex items-center gap-1 font-semibold text-accent-primary hover:text-accent-primary-hover group-hover:underline"
+                      className="inline-flex items-center gap-1 font-semibold text-brand-teal hover:text-brand-teal-dark group-hover:underline"
                     >
                       <span>Explore</span>
                       <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />

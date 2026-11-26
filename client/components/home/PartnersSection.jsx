@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { Plane, Building2, Handshake, Sparkles, Briefcase, Award, ArrowRight } from 'lucide-react';
+import { Plane, Building2, Handshake, Briefcase, Award, ArrowRight } from 'lucide-react';
 import { partnersData } from '../../data/partners';
 
 export default function PartnersSection() {
@@ -8,7 +8,7 @@ export default function PartnersSection() {
     <section className="py-16 bg-surface-50 border-t border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         {/* Official Travel Partner Announcement Banner */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-white p-6 sm:p-8 shadow-card flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 text-white p-6 sm:p-8 shadow-card flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/30">
               <Award className="w-8 h-8 text-amber-100" />
@@ -27,7 +27,7 @@ export default function PartnersSection() {
           </div>
           <Link
             href="/contact"
-            className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-amber-900 font-bold text-xs hover:bg-amber-50 shadow-sm transition-all"
+            className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-amber-950 font-bold text-xs hover:bg-amber-50 shadow-sm transition-all"
           >
             <span>Partner With Us</span>
             <ArrowRight className="w-4 h-4" />
@@ -38,10 +38,10 @@ export default function PartnersSection() {
         <div>
           <div className="text-center max-w-2xl mx-auto mb-10">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-border text-xs font-semibold text-text-secondary mb-2">
-              <Handshake className="w-3.5 h-3.5 text-accent-primary" />
+              <Handshake className="w-3.5 h-3.5 text-brand-teal" />
               <span>Trusted Global Network</span>
             </div>
-            <h3 className="text-xl sm:text-2xl font-bold text-text-primary">
+            <h3 className="text-xl sm:text-2xl font-bold text-brand-navy">
               Aviation & Hospitality Partners
             </h3>
             <p className="text-xs sm:text-sm text-text-secondary mt-1">
@@ -54,7 +54,7 @@ export default function PartnersSection() {
             <div className="flex flex-wrap items-center justify-around gap-8 sm:gap-12">
               {/* Club Nexa Sister */}
               <div className="flex flex-col items-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-accent-primary mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-teal mb-2">
                   Sister Network
                 </span>
                 <div className="relative h-9 w-32 grayscale hover:grayscale-0 transition-all opacity-85 hover:opacity-100">
@@ -72,7 +72,7 @@ export default function PartnersSection() {
               {partnersData.airlines.map((airline) => (
                 <div key={airline.name} className="flex flex-col items-center">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2 flex items-center gap-1">
-                    <Plane className="w-3 h-3" />
+                    <Plane className="w-3 h-3 text-brand-teal" />
                     Airline
                   </span>
                   <div className="relative h-8 w-28 grayscale hover:grayscale-0 transition-all opacity-80 hover:opacity-100">
@@ -91,7 +91,7 @@ export default function PartnersSection() {
               {partnersData.hospitality.map((hotel) => (
                 <div key={hotel.name} className="flex flex-col items-center">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2 flex items-center gap-1">
-                    <Building2 className="w-3 h-3" />
+                    <Building2 className="w-3 h-3 text-brand-teal" />
                     Hospitality
                   </span>
                   <div className="relative h-8 w-28 grayscale hover:grayscale-0 transition-all opacity-80 hover:opacity-100">
@@ -113,11 +113,11 @@ export default function PartnersSection() {
         <div className="bg-white rounded-3xl p-6 sm:p-10 border border-border shadow-card">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
             <div className="max-w-2xl space-y-3">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-primary-light text-accent-primary text-xs font-semibold">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-teal-light text-brand-teal text-xs font-semibold">
                 <Briefcase className="w-3.5 h-3.5" />
                 <span>Commercial & Corporate Travel Desk</span>
               </div>
-              <h3 className="text-2xl font-bold text-text-primary tracking-tight">
+              <h3 className="text-2xl font-bold text-brand-navy tracking-tight">
                 Corporate Travel, MICE & Commercial Partnerships
               </h3>
               <p className="text-sm text-text-secondary leading-relaxed">
@@ -142,16 +142,16 @@ export default function PartnersSection() {
             <div className="shrink-0 flex flex-col sm:flex-row gap-3">
               <Link
                 href="/contact?subject=Corporate+Travel+and+Partnership"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full text-xs font-bold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-sm transition-all"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full text-xs font-bold text-white bg-brand-navy hover:bg-brand-navy-light shadow-sm transition-all"
               >
                 <Briefcase className="w-4 h-4" />
                 <span>Inquire B2B Contract</span>
               </Link>
               <Link
                 href="/booking"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full text-xs font-bold text-text-primary bg-surface-50 hover:bg-surface-100 border border-border transition-all"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full text-xs font-bold text-brand-navy bg-surface-50 hover:bg-surface-100 border border-border transition-all"
               >
-                <span>Plan Group Travel</span>
+                <span>Schedule Consultation</span>
               </Link>
             </div>
           </div>
@@ -160,4 +160,3 @@ export default function PartnersSection() {
     </section>
   );
 }
-

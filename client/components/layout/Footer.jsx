@@ -57,52 +57,52 @@ const SOCIAL_LINKS = [
 
 export default function Footer() {
   return (
-    <footer className="bg-surface-50 border-t border-border pt-16 pb-12">
+    <footer className="bg-brand-navy text-slate-300 pt-16 pb-12 border-t border-slate-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         {/* Top 5-Column Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
           {/* Brand Info & Corporate Affiliation */}
           <div className="lg:col-span-2 space-y-4">
-            <Link href="/" className="inline-block">
-              <div className="relative h-12 w-48">
+            <Link href="/" className="inline-block bg-white p-3 rounded-2xl shadow-sm">
+              <div className="relative h-10 w-44">
                 <Image
                   src="/images/logo.png"
                   alt="Nex World Travel & Tourism"
                   fill
-                  sizes="192px"
+                  sizes="176px"
                   className="object-contain object-left"
                 />
               </div>
             </Link>
-            <p className="text-sm text-text-secondary leading-relaxed max-w-sm">
+            <p className="text-sm text-slate-300 leading-relaxed max-w-sm">
               Nex World Travel & Tourism is a trusted travel agency headquartered in Abu Dhabi. We curate tailored global journeys, luxury escapes, flight reservations, and unforgettable activities across Asia, Europe, Africa, Australia, and the Middle East.
             </p>
 
             {/* Lulu Events Official Announcement */}
-            <div className="p-3 bg-amber-50/80 rounded-2xl border border-amber-200/80 text-xs text-amber-900 flex items-start gap-2.5 max-w-sm">
-              <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="p-3.5 bg-amber-950/40 rounded-2xl border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5 max-w-sm">
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <strong className="block font-bold">Official Travel Partner</strong>
-                <span className="text-[11px] text-amber-800">
+                <strong className="block font-bold text-amber-100">Official Travel Partner</strong>
+                <span className="text-[11px] text-amber-300/90 leading-tight block mt-0.5">
                   Official Travel Partner for Lulu Events in 2025 (Summer Carnival and Shopathon).
                 </span>
               </div>
             </div>
 
             {/* Nex Group of Companies - Corporate Umbrella */}
-            <div className="p-3.5 bg-white rounded-2xl border border-border shadow-subtle space-y-2 max-w-sm">
+            <div className="p-3 bg-slate-900/60 rounded-2xl border border-slate-700/60 space-y-2 max-w-sm">
               <div className="flex items-center gap-3">
-                <div className="relative h-9 w-28 shrink-0">
+                <div className="relative h-8 w-24 shrink-0 bg-white p-1 rounded">
                   <Image
                     src="/images/nex-group-logo.jpg"
                     alt="Nex Group of Companies"
                     fill
-                    sizes="112px"
-                    className="object-contain object-left"
+                    sizes="96px"
+                    className="object-contain"
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-accent-primary block">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-teal block">
                     A Nex Group Company
                   </span>
                 </div>
@@ -111,7 +111,7 @@ export default function Footer() {
 
             {/* Social Media Links */}
             <div className="pt-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted block mb-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-2.5">
                 Connect With Us
               </span>
               <div className="flex items-center gap-2">
@@ -122,7 +122,7 @@ export default function Footer() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={s.label}
-                    className="w-8 h-8 rounded-full bg-white hover:bg-accent-primary hover:text-white border border-border flex items-center justify-center text-text-secondary transition-colors"
+                    className="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-brand-teal hover:text-white border border-slate-700 flex items-center justify-center text-slate-300 transition-colors"
                   >
                     {s.icon}
                   </a>
@@ -133,32 +133,32 @@ export default function Footer() {
 
           {/* Featured Destinations */}
           <div>
-            <h4 className="text-sm font-semibold text-text-primary tracking-wider uppercase mb-4">
+            <h4 className="text-xs font-bold text-white tracking-wider uppercase mb-4">
               Destinations
             </h4>
-            <ul className="space-y-2.5 text-sm text-text-secondary">
+            <ul className="space-y-2.5 text-sm text-slate-300">
               <li>
-                <Link href="/destinations#asia" className="hover:text-accent-primary transition-colors">
+                <Link href="/destinations#asia" className="hover:text-brand-teal transition-colors">
                   Asia Discovery
                 </Link>
               </li>
               <li>
-                <Link href="/destinations#europe" className="hover:text-accent-primary transition-colors">
+                <Link href="/destinations#europe" className="hover:text-brand-teal transition-colors">
                   Europe Grand Tours
                 </Link>
               </li>
               <li>
-                <Link href="/destinations#africa" className="hover:text-accent-primary transition-colors">
+                <Link href="/destinations#africa" className="hover:text-brand-teal transition-colors">
                   Africa Safaris
                 </Link>
               </li>
               <li>
-                <Link href="/destinations#australia" className="hover:text-accent-primary transition-colors">
+                <Link href="/destinations#australia" className="hover:text-brand-teal transition-colors">
                   Australia Coastal
                 </Link>
               </li>
               <li>
-                <Link href="/destinations#uae" className="hover:text-accent-primary transition-colors">
+                <Link href="/destinations#uae" className="hover:text-brand-teal transition-colors">
                   Emirates & Dubai Luxury
                 </Link>
               </li>
@@ -167,55 +167,55 @@ export default function Footer() {
 
           {/* Quick Links */}
           <div>
-            <h4 className="text-sm font-semibold text-text-primary tracking-wider uppercase mb-4">
+            <h4 className="text-xs font-bold text-white tracking-wider uppercase mb-4">
               Explore
             </h4>
-            <ul className="space-y-2.5 text-sm text-text-secondary">
+            <ul className="space-y-2.5 text-sm text-slate-300">
               <li>
-                <Link href="/packages" className="hover:text-accent-primary transition-colors">
+                <Link href="/packages" className="hover:text-brand-teal transition-colors">
                   Holiday Packages
                 </Link>
               </li>
               <li>
-                <Link href="/activities" className="hover:text-accent-primary transition-colors">
+                <Link href="/activities" className="hover:text-brand-teal transition-colors">
                   Activities & Visa
                 </Link>
               </li>
               <li>
-                <Link href="/about" className="hover:text-accent-primary transition-colors">
+                <Link href="/about" className="hover:text-brand-teal transition-colors">
                   About Our Team
                 </Link>
               </li>
               <li>
-                <Link href="/booking" className="hover:text-accent-primary transition-colors">
+                <Link href="/booking" className="hover:text-brand-teal transition-colors">
                   Trip Planning Consultation
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="hover:text-accent-primary transition-colors">
+                <Link href="/contact" className="hover:text-brand-teal transition-colors">
                   Contact & Support
                 </Link>
               </li>
-              <li className="pt-2 mt-1 border-t border-border/60 flex flex-col gap-2">
+              <li className="pt-3 mt-1 border-t border-slate-800 flex flex-col gap-2">
                 <Link
                   href="/login"
-                  className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-accent-primary transition-colors font-medium"
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-brand-teal transition-colors font-medium"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                   <span>Member Portal</span>
                 </Link>
                 <Link
                   href="/employee/login"
-                  className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-accent-primary transition-colors font-medium"
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-brand-teal transition-colors font-medium"
                 >
-                  <Users className="w-3.5 h-3.5 text-sky-500" />
+                  <Users className="w-3.5 h-3.5 text-sky-400" />
                   <span>Employee Login</span>
                 </Link>
                 <Link
                   href="/admin/login"
-                  className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-accent-primary transition-colors font-medium"
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-brand-teal transition-colors font-medium"
                 >
-                  <Shield className="w-3.5 h-3.5 text-amber-600" />
+                  <Shield className="w-3.5 h-3.5 text-amber-400" />
                   <span>Admin Portal</span>
                 </Link>
               </li>
@@ -224,77 +224,76 @@ export default function Footer() {
 
           {/* Offices & Consultation Hours */}
           <div className="space-y-4">
-            <h4 className="text-sm font-semibold text-text-primary tracking-wider uppercase mb-3">
+            <h4 className="text-xs font-bold text-white tracking-wider uppercase mb-3">
               Office Locations
             </h4>
 
             {/* Head Office UAE */}
-            <div className="space-y-1.5 text-xs text-text-secondary">
-              <strong className="block text-text-primary font-semibold flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-accent-primary shrink-0" />
+            <div className="space-y-1.5 text-xs text-slate-300">
+              <strong className="block text-white font-semibold flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-brand-teal shrink-0" />
                 <span>Branch Office (UAE)</span>
               </strong>
-              <p className="text-[11px] leading-relaxed">
+              <p className="text-[11px] text-slate-300 leading-relaxed">
                 Office 1203, 12th Floor, Bin Hamooda Tower, Khalifa Bin Zayed The First St (St 2), Al Danah Zone 1, Abu Dhabi, U.A.E.
               </p>
               <div className="flex items-center gap-2 pt-1">
-                <Phone className="w-3.5 h-3.5 text-accent-secondary shrink-0" />
-                <a href="tel:+97126395908" className="hover:text-text-primary font-medium font-mono">
+                <Phone className="w-3.5 h-3.5 text-brand-teal shrink-0" />
+                <a href="tel:+97126395908" className="hover:text-white font-medium font-mono text-slate-200">
                   +971-263-959-08
                 </a>
               </div>
             </div>
 
-
             {/* Headquarter Office India */}
-            <div className="pt-3 border-t border-border/70 space-y-1.5 text-xs text-text-secondary">
-              <strong className="block text-text-primary font-semibold flex items-center gap-1.5">
-                <Building className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <div className="pt-3 border-t border-slate-800 space-y-1.5 text-xs text-slate-300">
+              <strong className="block text-white font-semibold flex items-center gap-1.5">
+                <Building className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>Headquarter (IND)</span>
               </strong>
-              <p className="text-[11px] leading-relaxed">
+              <p className="text-[11px] text-slate-300 leading-relaxed">
                 Akshay Complex, 151/152/153, Dholepatil Road, near Ruby Hall, Sangamvadi, Pune, Maharashtra 411001, India
               </p>
             </div>
 
             {/* Consultation Hours */}
-            <div className="pt-3 border-t border-border/70 space-y-1 text-xs text-text-secondary">
-              <strong className="block text-text-primary font-semibold flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-accent-primary shrink-0" />
+            <div className="pt-3 border-t border-slate-800 space-y-1 text-xs text-slate-300">
+              <strong className="block text-white font-semibold flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-brand-teal shrink-0" />
                 <span>Consultation Hours</span>
               </strong>
-              <p className="text-[11px] text-text-secondary">Tuesday to Sunday: 11:00 AM – 07:00 PM</p>
-              <p className="text-[11px] text-rose-600 font-semibold">Monday: Closed</p>
+              <p className="text-[11px] text-slate-300">Tuesday to Sunday: 11:00 AM – 07:00 PM</p>
+              <p className="text-[11px] text-rose-400 font-semibold">Monday: Closed</p>
             </div>
           </div>
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-text-secondary text-center md:text-left">
+        <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400 text-center md:text-left">
           <p className="leading-relaxed">© {new Date().getFullYear()} Nex World Travel &amp; Tourism LLC-SPC. A Nex Group Company. All rights reserved.</p>
           <div className="flex flex-wrap items-center justify-center md:justify-end gap-x-5 gap-y-2">
             <Link
               href="/login"
-              className="inline-flex items-center gap-1.5 text-text-muted hover:text-accent-primary transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 text-slate-400 hover:text-brand-teal transition-colors whitespace-nowrap"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>Member Portal</span>
             </Link>
             <Link
               href="/employee/login"
-              className="inline-flex items-center gap-1.5 text-text-muted hover:text-accent-primary transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 text-slate-400 hover:text-brand-teal transition-colors whitespace-nowrap"
             >
-              <Users className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+              <Users className="w-3.5 h-3.5 text-sky-400 shrink-0" />
               <span>Employee Login</span>
             </Link>
             <Link
               href="/admin/login"
-              className="inline-flex items-center gap-1.5 text-text-muted hover:text-accent-primary transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 text-slate-400 hover:text-brand-teal transition-colors whitespace-nowrap"
             >
-              <Shield className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <Shield className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>Admin Portal</span>
             </Link>
-            <div className="inline-flex items-center gap-1.5 text-emerald-600 font-medium whitespace-nowrap">
+            <div className="inline-flex items-center gap-1.5 text-emerald-400 font-medium whitespace-nowrap">
               <ShieldCheck className="w-4 h-4 shrink-0" />
               <span>Verified Agency Service</span>
             </div>
@@ -304,4 +303,3 @@ export default function Footer() {
     </footer>
   );
 }
-

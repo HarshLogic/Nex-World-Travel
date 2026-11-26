@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, MapPin, Calendar, Users, Sparkles, Filter } from 'lucide-react';
+import { Search, MapPin, Calendar, Users, Sparkles } from 'lucide-react';
 
 export default function SearchPanel() {
   const router = useRouter();
@@ -26,19 +26,19 @@ export default function SearchPanel() {
     <div className="w-full max-w-5xl mx-auto">
       <form
         onSubmit={handleSearch}
-        className="bg-white rounded-3xl p-4 sm:p-5 shadow-card border border-border/80 hover:border-accent-primary/40 transition-all duration-300"
+        className="bg-white rounded-3xl p-4 sm:p-5 shadow-card border border-border hover:border-brand-teal/40 transition-all duration-300"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
           {/* Destination Field */}
-          <div className="p-3 rounded-2xl bg-surface-50 border border-border/60 hover:bg-white hover:border-accent-primary/50 transition-all">
-            <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-secondary mb-1">
-              <MapPin className="w-3.5 h-3.5 text-accent-primary" />
+          <div className="p-3 rounded-2xl bg-surface-50 border border-border/80 hover:bg-white hover:border-brand-teal/50 transition-all">
+            <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-secondary mb-1">
+              <MapPin className="w-3.5 h-3.5 text-brand-teal" />
               <span>Destination</span>
             </label>
             <select
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
-              className="w-full bg-transparent text-sm font-semibold text-text-primary focus:outline-none cursor-pointer"
+              className="w-full bg-transparent text-sm font-semibold text-brand-navy focus:outline-none cursor-pointer"
             >
               <option value="">Any Region</option>
               <option value="Asia">Asia (Tokyo, Bali, Bangkok)</option>
@@ -50,29 +50,29 @@ export default function SearchPanel() {
           </div>
 
           {/* Travel Date */}
-          <div className="p-3 rounded-2xl bg-surface-50 border border-border/60 hover:bg-white hover:border-accent-primary/50 transition-all">
-            <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-secondary mb-1">
-              <Calendar className="w-3.5 h-3.5 text-accent-primary" />
+          <div className="p-3 rounded-2xl bg-surface-50 border border-border/80 hover:bg-white hover:border-brand-teal/50 transition-all">
+            <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-secondary mb-1">
+              <Calendar className="w-3.5 h-3.5 text-brand-teal" />
               <span>Departure Month</span>
             </label>
             <input
               type="date"
               value={travelDate}
               onChange={(e) => setTravelDate(e.target.value)}
-              className="w-full bg-transparent text-sm font-semibold text-text-primary focus:outline-none cursor-pointer"
+              className="w-full bg-transparent text-sm font-semibold text-brand-navy focus:outline-none cursor-pointer"
             />
           </div>
 
           {/* Travelers */}
-          <div className="p-3 rounded-2xl bg-surface-50 border border-border/60 hover:bg-white hover:border-accent-primary/50 transition-all">
-            <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-secondary mb-1">
-              <Users className="w-3.5 h-3.5 text-accent-primary" />
+          <div className="p-3 rounded-2xl bg-surface-50 border border-border/80 hover:bg-white hover:border-brand-teal/50 transition-all">
+            <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-secondary mb-1">
+              <Users className="w-3.5 h-3.5 text-brand-teal" />
               <span>Travelers</span>
             </label>
             <select
               value={travelers}
               onChange={(e) => setTravelers(e.target.value)}
-              className="w-full bg-transparent text-sm font-semibold text-text-primary focus:outline-none cursor-pointer"
+              className="w-full bg-transparent text-sm font-semibold text-brand-navy focus:outline-none cursor-pointer"
             >
               <option value="1">1 Solo Traveler</option>
               <option value="2">2 Travelers (Couple / Duo)</option>
@@ -85,7 +85,7 @@ export default function SearchPanel() {
           <div className="flex items-center gap-2">
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 py-4 px-6 rounded-2xl font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-md shadow-accent-primary/20 transition-all duration-200 active:scale-95 group"
+              className="w-full flex items-center justify-center gap-2 py-4 px-6 rounded-2xl font-bold text-white bg-brand-teal hover:bg-brand-teal-dark shadow-sm transition-all duration-200 active:scale-95 group"
             >
               <Search className="w-4 h-4 transition-transform group-hover:scale-110" />
               <span>Search Journeys</span>
@@ -94,9 +94,9 @@ export default function SearchPanel() {
         </div>
 
         {/* Quick filter pills */}
-        <div className="flex flex-wrap items-center gap-2 pt-3 mt-3 border-t border-border/50 text-xs text-text-secondary">
-          <span className="font-semibold text-text-primary flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-accent-secondary" />
+        <div className="flex flex-wrap items-center gap-2 pt-3 mt-3 border-t border-border/60 text-xs text-text-secondary">
+          <span className="font-bold text-brand-navy flex items-center gap-1">
+            <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
             Popular:
           </span>
           {['Europe Elegance', 'Bali & Tokyo', 'UAE Desert VIP', 'Cruise Voyages'].map((tag) => (
@@ -109,7 +109,7 @@ export default function SearchPanel() {
                 else if (tag.includes('UAE')) setDestination('Middle East / UAE');
                 else router.push('/packages');
               }}
-              className="px-3 py-1 rounded-full bg-surface-50 hover:bg-accent-primary-light hover:text-accent-primary border border-border transition-colors"
+              className="px-3 py-1 rounded-full bg-surface-50 hover:bg-brand-teal-light hover:text-brand-teal border border-border text-text-secondary font-medium transition-colors"
             >
               {tag}
             </button>
@@ -119,4 +119,3 @@ export default function SearchPanel() {
     </div>
   );
 }
-

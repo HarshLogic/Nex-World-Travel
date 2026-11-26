@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Calendar, Clock, MapPin, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
+import { MapPin, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
 import { packagesData } from '../../data/packages';
 import { fetchPackages, getPackageImageUrl } from '../../lib/api';
 
@@ -53,11 +53,11 @@ function PackagesContent() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-primary-light border border-accent-primary/20 text-xs font-semibold text-accent-primary mb-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-teal-light border border-brand-teal/20 text-xs font-semibold text-brand-teal mb-3">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Curated Grand Itineraries</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-extrabold text-text-primary tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-extrabold text-brand-navy tracking-tight">
             Tailor-Made Holiday Packages
           </h1>
           <p className="text-base sm:text-lg text-text-secondary mt-3">
@@ -72,8 +72,8 @@ function PackagesContent() {
                 onClick={() => setSelectedRegion(region)}
                 className={`px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all ${
                   selectedRegion === region
-                    ? 'bg-accent-primary text-white shadow-md shadow-accent-primary/20'
-                    : 'bg-white text-text-secondary hover:text-text-primary border border-border hover:border-accent-primary/30'
+                    ? 'bg-brand-navy text-white shadow-sm'
+                    : 'bg-white text-text-secondary hover:text-brand-navy border border-border hover:border-brand-teal/40'
                 }`}
               >
                 {region}
@@ -87,7 +87,7 @@ function PackagesContent() {
           {filtered.map((pkg) => (
             <div
               key={pkg.id}
-              className="bg-white rounded-4xl border border-border overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col"
+              className="bg-white rounded-3xl border border-border overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col"
             >
               {/* Photo */}
               <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface-200">
@@ -96,21 +96,21 @@ function PackagesContent() {
                   alt={pkg.title}
                   fill
                   sizes="(max-width: 768px) 100vw, 50vw"
-                  className="object-cover"
+                  className="object-cover transition-transform duration-700 hover:scale-102"
                 />
                 <div className="absolute top-4 left-4">
-                  <span className="px-3 py-1 rounded-full bg-white/95 backdrop-blur-md text-xs font-bold text-text-primary shadow-sm">
+                  <span className="px-3 py-1 rounded-full bg-white/95 backdrop-blur-md text-xs font-bold text-brand-navy shadow-sm">
                     {pkg.region}
                   </span>
                 </div>
                 <div className="absolute top-4 right-4">
-                  <span className="px-3 py-1 rounded-full bg-accent-primary text-white text-xs font-bold shadow-sm">
+                  <span className="px-3 py-1 rounded-full bg-brand-teal text-white text-xs font-bold shadow-sm">
                     {pkg.durationDays} Days / {pkg.durationNights} Nights
                   </span>
                 </div>
                 <div className="absolute bottom-4 left-4 right-4 text-white">
                   <div className="flex items-center gap-1.5 text-xs text-white/90 mb-1">
-                    <MapPin className="w-3.5 h-3.5 text-accent-secondary" />
+                    <MapPin className="w-3.5 h-3.5 text-brand-teal-light" />
                     <span className="font-semibold">{pkg.destination}</span>
                   </div>
                 </div>
@@ -119,10 +119,10 @@ function PackagesContent() {
               {/* Package Content */}
               <div className="p-6 sm:p-8 flex-1 flex flex-col justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-text-primary mb-2">
+                  <h2 className="text-2xl font-bold text-brand-navy mb-2">
                     {pkg.title}
                   </h2>
-                  <p className="text-xs sm:text-sm font-semibold text-accent-primary mb-3">
+                  <p className="text-xs sm:text-sm font-semibold text-brand-teal mb-3">
                     {pkg.tagline}
                   </p>
                   <p className="text-xs sm:text-sm text-text-secondary leading-relaxed mb-6">
@@ -131,13 +131,13 @@ function PackagesContent() {
 
                   {pkg.includes && pkg.includes.length > 0 && (
                     <div className="mb-6">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary mb-2.5">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-brand-navy mb-2.5">
                         Included Luxuries:
                       </h4>
                       <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {pkg.includes.slice(0, 4).map((inc) => (
                           <li key={inc} className="flex items-start gap-2 text-xs text-text-secondary">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-accent-secondary flex-shrink-0 mt-0.5" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-brand-teal flex-shrink-0 mt-0.5" />
                             <span className="line-clamp-2">{inc}</span>
                           </li>
                         ))}
@@ -151,13 +151,13 @@ function PackagesContent() {
                     <span className="block text-[11px] text-text-muted">Pricing</span>
                     {pkg.price && Number(pkg.price) > 0 ? (
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-base font-extrabold text-accent-primary">
+                        <span className="text-base font-extrabold text-brand-navy">
                           AED {Number(pkg.price).toLocaleString()}
                         </span>
                         <span className="text-[11px] text-text-secondary">/ person</span>
                       </div>
                     ) : (
-                      <span className="text-xs font-semibold text-text-primary">
+                      <span className="text-xs font-semibold text-brand-navy">
                         {pkg.priceEstimateNote || 'Custom quotation available'}
                       </span>
                     )}
@@ -166,13 +166,13 @@ function PackagesContent() {
                   <div className="flex items-center gap-3">
                     <Link
                       href={`/packages/${pkg.slug}`}
-                      className="px-4 py-2 rounded-full text-xs font-semibold text-accent-primary hover:bg-accent-primary-light transition-colors"
+                      className="px-4 py-2 rounded-full text-xs font-semibold text-brand-navy hover:bg-surface-50 border border-border transition-colors"
                     >
                       View Itinerary
                     </Link>
                     <Link
                       href={`/booking?package=${encodeURIComponent(pkg.title)}`}
-                      className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-sm transition-all"
+                      className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-semibold text-white bg-brand-teal hover:bg-brand-teal-dark shadow-sm transition-all"
                     >
                       <span>Enquire Package</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -195,4 +195,3 @@ export default function PackagesPage() {
     </Suspense>
   );
 }
-

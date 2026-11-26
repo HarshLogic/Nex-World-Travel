@@ -1,4 +1,4 @@
-import { MessageSquareText, Shield, Award, Users, CheckCircle, Sparkles } from 'lucide-react';
+import { MessageSquareText, Shield, Award, Users, Sparkles } from 'lucide-react';
 
 const VALUE_PROPS = [
   {
@@ -40,11 +40,11 @@ export default function WhyChooseUs() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-primary-light border border-accent-primary/20 text-xs font-semibold text-accent-primary mb-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-teal-light border border-brand-teal/20 text-xs font-semibold text-brand-teal mb-3">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Why Choose Nex World Travel</span>
           </div>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-text-primary tracking-tight">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-brand-navy tracking-tight">
             Built on Trust, Modern Technology & Personal Care
           </h2>
           <p className="text-text-secondary text-base mt-3 leading-relaxed">
@@ -59,12 +59,12 @@ export default function WhyChooseUs() {
             return (
               <div
                 key={prop.title}
-                className="bg-white rounded-3xl p-7 border border-border hover:border-accent-primary/40 shadow-card hover:shadow-card-hover transition-all duration-300"
+                className="bg-white rounded-3xl p-7 border border-border hover:border-brand-teal/40 shadow-card hover:shadow-card-hover transition-all duration-300"
               >
-                <div className="w-12 h-12 rounded-2xl bg-accent-primary-light text-accent-primary flex items-center justify-center mb-5">
+                <div className="w-12 h-12 rounded-2xl bg-brand-teal-light text-brand-teal flex items-center justify-center mb-5">
                   <Icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-bold text-text-primary mb-2.5">
+                <h3 className="text-lg font-bold text-brand-navy mb-2.5">
                   {prop.title}
                 </h3>
                 <p className="text-xs text-text-secondary leading-relaxed">
@@ -80,13 +80,13 @@ export default function WhyChooseUs() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
             {METRICS.map((metric) => (
               <div key={metric.label} className="text-center p-3 rounded-2xl bg-surface-50/60 lg:bg-transparent">
-                <div className="text-2xl sm:text-4xl font-extrabold text-text-primary mb-1">
+                <div className="text-2xl sm:text-4xl font-extrabold text-brand-navy mb-1">
                   {metric.value}
                 </div>
-                <div className="text-xs font-semibold text-text-primary mb-0.5">
+                <div className="text-xs font-bold text-brand-navy mb-0.5">
                   {metric.label}
                 </div>
-                <div className="text-[11px] text-accent-primary font-medium">
+                <div className="text-[11px] text-brand-teal font-semibold">
                   {metric.highlight}
                 </div>
               </div>
@@ -97,4 +97,3 @@ export default function WhyChooseUs() {
     </section>
   );
 }
-

@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Compass, Calendar, Clock, MapPin, CheckCircle2, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, ArrowRight, ShieldCheck } from 'lucide-react';
 import { fetchDestinationBySlug, getDestinationImageUrl } from '../../../lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -18,15 +18,15 @@ export default async function DestinationDetailPage({ params }) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 text-xs text-text-muted mb-6">
-          <Link href="/" className="hover:text-text-primary">Home</Link>
+          <Link href="/" className="hover:text-brand-navy">Home</Link>
           <span>/</span>
-          <Link href="/destinations" className="hover:text-text-primary">Destinations</Link>
+          <Link href="/destinations" className="hover:text-brand-navy">Destinations</Link>
           <span>/</span>
-          <span className="text-accent-primary font-semibold">{destination.title}</span>
+          <span className="text-brand-teal font-semibold">{destination.title}</span>
         </nav>
 
         {/* Hero Banner */}
-        <div className="relative aspect-[16/8] sm:aspect-[21/9] w-full rounded-4xl overflow-hidden shadow-card border border-border mb-12">
+        <div className="relative aspect-[16/8] sm:aspect-[21/9] w-full rounded-3xl overflow-hidden shadow-card border border-border mb-12">
           <Image
             src={getDestinationImageUrl(destination)}
             alt={destination.title}
@@ -55,7 +55,7 @@ export default async function DestinationDetailPage({ params }) {
           {/* Left Column: Narrative & Highlights */}
           <div className="lg:col-span-8 space-y-10">
             <div>
-              <h2 className="text-2xl font-bold text-text-primary mb-4">
+              <h2 className="text-2xl font-bold text-brand-navy mb-4">
                 About The Region
               </h2>
               <p className="text-sm sm:text-base text-text-secondary leading-relaxed">
@@ -65,14 +65,14 @@ export default async function DestinationDetailPage({ params }) {
 
             {/* Highlights */}
             <div className="bg-surface-50 rounded-3xl p-6 sm:p-8 border border-border">
-              <h3 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-accent-primary" />
+              <h3 className="text-lg font-bold text-brand-navy mb-4 flex items-center gap-2">
+                <span className="text-brand-teal font-extrabold">✦</span>
                 <span>Curated Experiences & Sights</span>
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {destination.highlights?.map((highlight) => (
                   <div key={highlight} className="flex items-start gap-3 bg-white p-4 rounded-2xl border border-border">
-                    <CheckCircle2 className="w-4 h-4 text-accent-secondary flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-brand-teal flex-shrink-0 mt-0.5" />
                     <span className="text-xs sm:text-sm text-text-secondary">{highlight}</span>
                   </div>
                 ))}
@@ -81,14 +81,14 @@ export default async function DestinationDetailPage({ params }) {
 
             {/* Popular Cities */}
             <div>
-              <h3 className="text-lg font-bold text-text-primary mb-3">
+              <h3 className="text-lg font-bold text-brand-navy mb-3">
                 Key Destinations & Hubs
               </h3>
               <div className="flex flex-wrap gap-2">
                 {destination.popularCities?.map((city) => (
                   <span
                     key={city}
-                    className="px-4 py-2 rounded-xl bg-surface-50 border border-border text-xs sm:text-sm font-semibold text-text-primary"
+                    className="px-4 py-2 rounded-xl bg-surface-50 border border-border text-xs sm:text-sm font-semibold text-brand-navy"
                   >
                     {city}
                   </span>
@@ -100,33 +100,33 @@ export default async function DestinationDetailPage({ params }) {
           {/* Right Column: Trip Planning Card */}
           <div className="lg:col-span-4">
             <div className="sticky top-28 bg-white rounded-3xl p-6 sm:p-8 border border-border shadow-card space-y-6">
-              <h3 className="text-xl font-bold text-text-primary">
+              <h3 className="text-xl font-bold text-brand-navy">
                 Plan Your {destination.title} Tour
               </h3>
 
               <div className="space-y-3 text-xs text-text-secondary">
                 <div className="flex justify-between py-2 border-b border-border">
                   <span>Best Season:</span>
-                  <strong className="text-text-primary">{destination.bestTimeToVisit}</strong>
+                  <strong className="text-brand-navy">{destination.bestTimeToVisit}</strong>
                 </div>
                 <div className="flex justify-between py-2 border-b border-border">
                   <span>Recommended Duration:</span>
-                  <strong className="text-text-primary">{destination.idealDuration || '10 - 14 Days'}</strong>
+                  <strong className="text-brand-navy">{destination.idealDuration || '10 - 14 Days'}</strong>
                 </div>
                 <div className="flex justify-between py-2 border-b border-border">
                   <span>Itinerary Style:</span>
-                  <strong className="text-text-primary">100% Customized</strong>
+                  <strong className="text-brand-navy">100% Customized</strong>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-accent-primary-light border border-accent-primary/20 text-xs text-accent-primary flex items-center gap-2">
+              <div className="p-3.5 rounded-2xl bg-brand-teal-light border border-brand-teal/20 text-xs text-brand-teal flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 flex-shrink-0" />
                 <span>Curated by licensed Abu Dhabi consultants</span>
               </div>
 
               <Link
                 href={`/booking?destination=${encodeURIComponent(destination.title)}`}
-                className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-full text-sm font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-md transition-all active:scale-95"
+                className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-full text-sm font-semibold text-white bg-brand-teal hover:bg-brand-teal-dark shadow-sm transition-all active:scale-95"
               >
                 <span>Request Itinerary Proposal</span>
                 <ArrowRight className="w-4 h-4" />
@@ -138,4 +138,3 @@ export default async function DestinationDetailPage({ params }) {
     </div>
   );
 }
-

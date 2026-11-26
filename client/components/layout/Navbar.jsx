@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Menu, X, ArrowUpRight, PhoneCall, User, Shield, MapPin, Sparkles } from 'lucide-react';
+import { Menu, X, ArrowUpRight, PhoneCall, User, Shield, MapPin, Sparkles, Clock } from 'lucide-react';
 import { getAuthUser } from '../../lib/auth';
 
 const NAV_LINKS = [
@@ -27,7 +27,7 @@ export default function Navbar() {
   // Handle scroll effect
   useEffect(() => {
     const handleScroll = () => {
-      setScrolled(window.scrollY > 15);
+      setScrolled(window.scrollY > 20);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
@@ -104,21 +104,53 @@ export default function Navbar() {
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
           scrolled
-            ? 'bg-white/95 backdrop-blur-md shadow-subtle border-b border-border py-3'
-            : 'bg-white/90 backdrop-blur-sm border-b border-border/60 py-4 sm:py-5'
+            ? 'bg-white/95 backdrop-blur-md shadow-[0_4px_20px_-2px_rgba(16,42,67,0.08)] border-b border-border/80 py-2.5 sm:py-3'
+            : 'bg-white/95 backdrop-blur-sm border-b border-border/60 py-3 sm:py-4'
         }`}
       >
+        {/* Top Mini Utility Bar (Desktop only, subtle & informative) */}
+        <div className="hidden xl:block border-b border-border/40 pb-2 mb-2">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-[11px] text-text-secondary">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5 text-brand-navy font-medium">
+                <MapPin className="w-3.5 h-3.5 text-brand-teal" />
+                <span>Bin Hamooda Tower, Abu Dhabi, U.A.E.</span>
+              </span>
+              <span className="text-border">•</span>
+              <span className="flex items-center gap-1.5 text-amber-800 font-semibold bg-amber-50/80 px-2.5 py-0.5 rounded-full border border-amber-200/60">
+                <Sparkles className="w-3 h-3 text-amber-600" />
+                <span>Official Travel Partner for Lulu Events in 2025</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1 text-text-secondary">
+                <Clock className="w-3 h-3 text-brand-teal" />
+                <span>Tue – Sun: 11:00 AM – 07:00 PM (Mon Closed)</span>
+              </span>
+              <span className="text-border">•</span>
+              <a
+                href="tel:+97126395908"
+                className="font-mono font-semibold text-brand-navy hover:text-brand-teal transition-colors flex items-center gap-1"
+              >
+                <PhoneCall className="w-3 h-3 text-brand-teal" />
+                <span>+971-263-959-08</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Navigation Bar */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-2 lg:gap-4">
             {/* Brand Logo */}
             <Link
               href="/"
-              className="flex items-center shrink-0 group focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary rounded-lg"
+              className="flex items-center shrink-0 group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal rounded-lg"
               aria-label="Nex World Travel & Tourism Homepage"
             >
-              <div className="relative h-10 w-36 sm:h-11 sm:w-44 xl:h-12 xl:w-52 transition-transform duration-200 group-hover:scale-[1.02]">
+              <div className="relative h-10 w-36 sm:h-11 sm:w-44 xl:h-12 xl:w-52 transition-transform duration-200 group-hover:scale-[1.01]">
                 <Image
                   src="/images/logo.png"
                   alt="Nex World Travel & Tourism"
@@ -130,10 +162,10 @@ export default function Navbar() {
               </div>
             </Link>
 
-            {/* Desktop Navigation Capsule */}
+            {/* Desktop Navigation Links */}
             <nav
               aria-label="Primary Navigation"
-              className="hidden lg:flex items-center gap-0.5 xl:gap-1 bg-surface-50/90 p-1 xl:p-1.5 rounded-full border border-border shadow-2xs shrink-0"
+              className="hidden lg:flex items-center gap-1 xl:gap-1.5 bg-surface-50 px-3 py-1.5 rounded-full border border-border/80 shadow-subtle shrink-0"
             >
               {NAV_LINKS.map((link) => {
                 const isActive = pathname === link.href;
@@ -141,10 +173,10 @@ export default function Navbar() {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`px-2.5 py-1.5 xl:px-3.5 xl:py-2 rounded-full text-xs xl:text-sm font-semibold transition-all whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
+                    className={`px-3 py-1.5 xl:px-4 xl:py-2 rounded-full text-xs xl:text-sm font-semibold transition-all whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal ${
                       isActive
-                        ? 'bg-white text-accent-primary shadow-subtle'
-                        : 'text-text-secondary hover:text-text-primary hover:bg-white/70'
+                        ? 'bg-white text-brand-navy shadow-subtle border border-border/60'
+                        : 'text-text-secondary hover:text-brand-navy hover:bg-white/60'
                     }`}
                   >
                     {link.label}
@@ -158,26 +190,26 @@ export default function Navbar() {
               {/* Member / Staff Portal Link */}
               <Link
                 href={portal.href}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-primary hover:text-accent-primary transition-all py-2 px-3 rounded-full hover:bg-surface-50 border border-border shrink-0 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-navy hover:text-brand-teal transition-all py-2 px-3 xl:px-3.5 rounded-full hover:bg-surface-50 border border-border shrink-0 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal"
                 title={portal.fullLabel}
               >
-                <PortalIcon className="w-3.5 h-3.5 text-accent-primary shrink-0" />
+                <PortalIcon className="w-3.5 h-3.5 text-brand-teal shrink-0" />
                 <span className="hidden xl:inline">{portal.fullLabel}</span>
                 <span className="inline xl:hidden">{portal.shortLabel}</span>
                 {portal.badge && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-accent-primary-light text-accent-primary shrink-0">
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-brand-teal-light text-brand-teal shrink-0">
                     {portal.badge}
                   </span>
                 )}
               </Link>
 
-              {/* Direct Phone Link */}
+              {/* Direct Phone Link (for lg screens when top bar hidden) */}
               <a
                 href="tel:+97126395908"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-accent-primary transition-colors py-2 px-2.5 xl:px-3 rounded-full hover:bg-surface-50 shrink-0 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
+                className="inline-flex xl:hidden items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-brand-teal transition-colors py-2 px-2.5 rounded-full hover:bg-surface-50 shrink-0 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal"
                 title="Call Nex World Travel Abu Dhabi: +971-263-959-08"
               >
-                <PhoneCall className="w-3.5 h-3.5 text-accent-secondary shrink-0" />
+                <PhoneCall className="w-3.5 h-3.5 text-brand-teal shrink-0" />
                 <span className="font-mono text-xs">+971-263-959-08</span>
               </a>
 
@@ -185,7 +217,7 @@ export default function Navbar() {
               {!isAdminOrStaff && (
                 <Link
                   href="/booking"
-                  className="group relative inline-flex items-center gap-1.5 px-4 py-2 xl:px-5 xl:py-2.5 rounded-full text-xs xl:text-sm font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover shadow-sm transition-all duration-200 active:scale-95 shrink-0 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-accent-primary"
+                  className="group relative inline-flex items-center gap-1.5 px-4 py-2 xl:px-5 xl:py-2.5 rounded-full text-xs xl:text-sm font-semibold text-white bg-brand-teal hover:bg-brand-teal-dark shadow-sm transition-all duration-200 active:scale-95 shrink-0 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-brand-teal"
                 >
                   <span>Plan Your Journey</span>
                   <ArrowUpRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
@@ -198,7 +230,7 @@ export default function Navbar() {
               {!isAdminOrStaff && (
                 <Link
                   href="/booking"
-                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-accent-primary hover:bg-accent-primary-hover rounded-full shadow-sm whitespace-nowrap active:scale-95 transition-all"
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-brand-teal hover:bg-brand-teal-dark rounded-full shadow-sm whitespace-nowrap active:scale-95 transition-all"
                 >
                   <span>Plan Trip</span>
                   <ArrowUpRight className="w-3.5 h-3.5" />
@@ -211,12 +243,12 @@ export default function Navbar() {
                 aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
                 aria-expanded={mobileMenuOpen}
                 aria-controls="mobile-navigation-drawer"
-                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border border-border bg-white text-text-primary hover:text-accent-primary hover:bg-surface-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border border-border bg-white text-brand-navy hover:text-brand-teal hover:bg-surface-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal"
               >
                 {mobileMenuOpen ? (
-                  <X className="w-5 h-5 text-text-primary" />
+                  <X className="w-5 h-5 text-brand-navy" />
                 ) : (
-                  <Menu className="w-5 h-5 text-text-primary" />
+                  <Menu className="w-5 h-5 text-brand-navy" />
                 )}
               </button>
             </div>
@@ -228,7 +260,7 @@ export default function Navbar() {
       {mobileMenuOpen && (
         <div
           onClick={() => setMobileMenuOpen(false)}
-          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 lg:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-brand-navy/50 backdrop-blur-xs z-50 lg:hidden transition-opacity duration-300"
           aria-hidden="true"
         />
       )}
@@ -264,7 +296,7 @@ export default function Navbar() {
             type="button"
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Close navigation menu"
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border border-border hover:bg-surface-50 text-text-secondary hover:text-text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border border-border hover:bg-surface-50 text-text-secondary hover:text-brand-navy transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal"
           >
             <X className="w-5 h-5" />
           </button>
@@ -286,13 +318,13 @@ export default function Navbar() {
                   onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${
                     isActive
-                      ? 'bg-accent-primary-light text-accent-primary font-bold shadow-2xs'
-                      : 'text-text-primary hover:bg-surface-50'
+                      ? 'bg-brand-teal-light text-brand-teal font-bold shadow-subtle'
+                      : 'text-brand-navy hover:bg-surface-50'
                   }`}
                 >
                   <span>{link.label}</span>
                   {isActive && (
-                    <span className="w-2 h-2 rounded-full bg-accent-primary" />
+                    <span className="w-2 h-2 rounded-full bg-brand-teal" />
                   )}
                 </Link>
               );
@@ -307,21 +339,21 @@ export default function Navbar() {
             <Link
               href={portal.href}
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center justify-between px-4 py-3.5 rounded-2xl border border-border text-sm font-semibold text-text-primary bg-surface-50 hover:bg-white hover:border-accent-primary/50 hover:shadow-subtle transition-all"
+              className="flex items-center justify-between px-4 py-3.5 rounded-2xl border border-border text-sm font-semibold text-brand-navy bg-surface-50 hover:bg-white hover:border-brand-teal/50 hover:shadow-subtle transition-all"
             >
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-accent-primary-light text-accent-primary">
+                <div className="p-2 rounded-xl bg-brand-teal-light text-brand-teal">
                   <PortalIcon className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="block text-sm font-bold text-text-primary">{portal.fullLabel}</span>
+                  <span className="block text-sm font-bold text-brand-navy">{portal.fullLabel}</span>
                   <span className="block text-[11px] text-text-secondary">
                     {authUser ? `Role: ${authUser.role}` : 'Login with Member ID'}
                   </span>
                 </div>
               </div>
               {portal.badge && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-accent-primary-light text-accent-primary">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-teal-light text-brand-teal">
                   {portal.badge}
                 </span>
               )}
@@ -331,7 +363,7 @@ export default function Navbar() {
                 <Link
                   href="/employee/login"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="hover:text-accent-primary font-medium transition-colors"
+                  className="hover:text-brand-teal font-medium transition-colors"
                 >
                   Employee Login
                 </Link>
@@ -339,7 +371,7 @@ export default function Navbar() {
                 <Link
                   href="/admin/login"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="hover:text-accent-primary font-medium transition-colors"
+                  className="hover:text-brand-teal font-medium transition-colors"
                 >
                   Admin Portal
                 </Link>
@@ -354,13 +386,13 @@ export default function Navbar() {
             </span>
             <a
               href="tel:+97126395908"
-              className="flex items-center gap-3 p-3.5 bg-surface-50 hover:bg-white hover:border-accent-primary/40 border border-border rounded-2xl transition-all"
+              className="flex items-center gap-3 p-3.5 bg-surface-50 hover:bg-white hover:border-brand-teal/40 border border-border rounded-2xl transition-all"
             >
-              <div className="p-2.5 rounded-xl bg-accent-secondary-light text-accent-secondary shrink-0">
+              <div className="p-2.5 rounded-xl bg-brand-teal-light text-brand-teal shrink-0">
                 <PhoneCall className="w-4 h-4" />
               </div>
               <div>
-                <span className="block text-xs font-bold text-text-primary font-mono">+971-263-959-08</span>
+                <span className="block text-xs font-bold text-brand-navy font-mono">+971-263-959-08</span>
                 <span className="block text-[11px] text-text-secondary">Head Office Desk • Abu Dhabi</span>
               </div>
             </a>
@@ -369,7 +401,7 @@ export default function Navbar() {
               <Link
                 href="/booking"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm text-white bg-accent-primary hover:bg-accent-primary-hover shadow-md shadow-accent-primary/20 transition-all active:scale-95"
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm text-white bg-brand-teal hover:bg-brand-teal-dark shadow-md transition-all active:scale-95"
               >
                 <span>Plan Your Journey</span>
                 <ArrowUpRight className="w-4 h-4" />
@@ -379,8 +411,8 @@ export default function Navbar() {
 
           {/* Location & Partner Note */}
           <div className="pt-4 border-t border-border/80 text-[11px] text-text-secondary space-y-1">
-            <div className="flex items-center gap-1.5 font-semibold text-text-primary">
-              <MapPin className="w-3.5 h-3.5 text-accent-primary" />
+            <div className="flex items-center gap-1.5 font-semibold text-brand-navy">
+              <MapPin className="w-3.5 h-3.5 text-brand-teal" />
               <span>Bin Hamooda Tower, Abu Dhabi, UAE</span>
             </div>
             <p className="text-text-muted">
@@ -391,7 +423,7 @@ export default function Navbar() {
       </aside>
 
       {/* Spacer so page content begins neatly below fixed header */}
-      <div className="h-[76px] sm:h-[84px] xl:h-[88px]" aria-hidden="true" />
+      <div className="h-[76px] sm:h-[84px] xl:h-[104px]" aria-hidden="true" />
     </>
   );
 }

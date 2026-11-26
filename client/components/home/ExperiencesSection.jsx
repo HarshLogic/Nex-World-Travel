@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Sparkles, Clock, MapPin, Gauge, ArrowRight } from 'lucide-react';
+import { Sparkles, Clock, MapPin, ArrowRight } from 'lucide-react';
 import { activitiesData } from '../../data/activities';
 import { fetchActivities, getActivityImageUrl } from '../../lib/api';
 
@@ -27,11 +27,11 @@ export default function ExperiencesSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-primary-light border border-accent-primary/20 text-xs font-semibold text-accent-primary mb-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-teal-light border border-brand-teal/20 text-xs font-semibold text-brand-teal mb-3">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Signature Experiences</span>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-text-primary tracking-tight">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-brand-navy tracking-tight">
               Featured Travel Experiences & Adventures
             </h2>
             <p className="text-text-secondary text-base max-w-xl mt-2">
@@ -41,7 +41,7 @@ export default function ExperiencesSection() {
 
           <Link
             href="/activities"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-accent-primary hover:text-accent-primary-hover group self-start md:self-auto"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-brand-teal hover:text-brand-teal-dark group self-start md:self-auto"
           >
             <span>View All Experiences</span>
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
@@ -53,7 +53,7 @@ export default function ExperiencesSection() {
           {featured.map((item) => (
             <div
               key={item.id || item._id || item.slug}
-              className="group bg-surface-50 rounded-3xl overflow-hidden border border-border hover:border-accent-primary/40 shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col"
+              className="group bg-surface-50 rounded-3xl overflow-hidden border border-border hover:border-brand-teal/40 shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col"
             >
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-surface-200">
                 <Image
@@ -61,10 +61,10 @@ export default function ExperiencesSection() {
                   alt={item.title}
                   fill
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  className="object-cover transition-transform duration-700 group-hover:scale-105"
+                  className="object-cover transition-transform duration-700 group-hover:scale-103"
                 />
                 <div className="absolute top-3 left-3">
-                  <span className="px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md text-[11px] font-semibold text-text-primary shadow-sm">
+                  <span className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md text-[11px] font-bold text-brand-navy shadow-sm">
                     {item.category}
                   </span>
                 </div>
@@ -73,11 +73,11 @@ export default function ExperiencesSection() {
               <div className="p-5 flex-1 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center gap-1.5 text-xs text-text-muted mb-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-accent-primary" />
+                    <MapPin className="w-3.5 h-3.5 text-brand-teal" />
                     <span className="line-clamp-1">{item.location}</span>
                   </div>
 
-                  <h3 className="text-base font-bold text-text-primary group-hover:text-accent-primary transition-colors line-clamp-2 mb-2">
+                  <h3 className="text-base font-bold text-brand-navy group-hover:text-brand-teal transition-colors line-clamp-2 mb-2">
                     {item.title}
                   </h3>
 
@@ -87,14 +87,14 @@ export default function ExperiencesSection() {
                 </div>
 
                 <div className="pt-3 border-t border-border flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1 text-text-secondary">
-                    <Clock className="w-3.5 h-3.5 text-accent-secondary" />
+                  <span className="flex items-center gap-1 text-text-secondary font-medium">
+                    <Clock className="w-3.5 h-3.5 text-brand-teal" />
                     <span>{item.duration || 'Flexible'}</span>
                   </span>
 
                   <Link
                     href={`/booking?activity=${encodeURIComponent(item.title)}`}
-                    className="font-semibold text-accent-primary hover:text-accent-primary-hover"
+                    className="font-bold text-brand-teal hover:text-brand-teal-dark"
                   >
                     Enquire
                   </Link>

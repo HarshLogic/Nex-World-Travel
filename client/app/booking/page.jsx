@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { Calendar, ShieldCheck, Clock, Sparkles, MapPin } from 'lucide-react';
+import { ShieldCheck, Clock, Sparkles, MapPin } from 'lucide-react';
 import BookingForm from '../../components/booking/BookingForm';
 
 export const metadata = {
@@ -13,11 +13,11 @@ export default function BookingPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-primary-light border border-accent-primary/20 text-xs font-semibold text-accent-primary mb-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-teal-light border border-brand-teal/20 text-xs font-semibold text-brand-teal mb-3">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Itinerary Concierge</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-extrabold text-text-primary tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-extrabold text-brand-navy tracking-tight">
             Plan Your Journey With Us
           </h1>
           <p className="text-base sm:text-lg text-text-secondary mt-3">
@@ -30,11 +30,11 @@ export default function BookingPage() {
               Direct Travel Agency Consultation
             </span>
             <span className="flex items-center gap-1.5 font-medium">
-              <Clock className="w-4 h-4 text-accent-primary" />
+              <Clock className="w-4 h-4 text-brand-teal" />
               Response within 24 Hours
             </span>
             <span className="flex items-center gap-1.5 font-medium">
-              <MapPin className="w-4 h-4 text-accent-secondary" />
+              <MapPin className="w-4 h-4 text-brand-teal" />
               Office 1203, Bin Hamooda Tower, Abu Dhabi
             </span>
           </div>
@@ -48,4 +48,3 @@ export default function BookingPage() {
     </div>
   );
 }
-
