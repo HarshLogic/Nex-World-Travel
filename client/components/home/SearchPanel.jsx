@@ -26,11 +26,11 @@ export default function SearchPanel() {
     <div className="w-full max-w-5xl mx-auto">
       <form
         onSubmit={handleSearch}
-        className="bg-white rounded-3xl p-4 sm:p-5 shadow-card border border-border hover:border-brand-teal/40 transition-all duration-300"
+        className="bg-white rounded-3xl p-4 sm:p-6 shadow-[0_16px_40px_-6px_rgba(16,42,67,0.14),0_2px_8px_rgba(16,42,67,0.04)] border border-border hover:border-brand-teal/40 transition-all duration-300"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
           {/* Destination Field */}
-          <div className="p-3 rounded-2xl bg-surface-50 border border-border/80 hover:bg-white hover:border-brand-teal/50 transition-all">
+          <div className="p-3 sm:p-3.5 rounded-2xl bg-surface-50 border border-border hover:bg-white hover:border-brand-teal/50 transition-all">
             <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-secondary mb-1">
               <MapPin className="w-3.5 h-3.5 text-brand-teal" />
               <span>Destination</span>
@@ -50,7 +50,7 @@ export default function SearchPanel() {
           </div>
 
           {/* Travel Date */}
-          <div className="p-3 rounded-2xl bg-surface-50 border border-border/80 hover:bg-white hover:border-brand-teal/50 transition-all">
+          <div className="p-3 sm:p-3.5 rounded-2xl bg-surface-50 border border-border hover:bg-white hover:border-brand-teal/50 transition-all">
             <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-secondary mb-1">
               <Calendar className="w-3.5 h-3.5 text-brand-teal" />
               <span>Departure Month</span>
@@ -64,7 +64,7 @@ export default function SearchPanel() {
           </div>
 
           {/* Travelers */}
-          <div className="p-3 rounded-2xl bg-surface-50 border border-border/80 hover:bg-white hover:border-brand-teal/50 transition-all">
+          <div className="p-3 sm:p-3.5 rounded-2xl bg-surface-50 border border-border hover:bg-white hover:border-brand-teal/50 transition-all">
             <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-secondary mb-1">
               <Users className="w-3.5 h-3.5 text-brand-teal" />
               <span>Travelers</span>
@@ -94,7 +94,7 @@ export default function SearchPanel() {
         </div>
 
         {/* Quick filter pills */}
-        <div className="flex flex-wrap items-center gap-2 pt-3 mt-3 border-t border-border/60 text-xs text-text-secondary">
+        <div className="flex flex-wrap items-center gap-2 pt-3.5 mt-3.5 border-t border-border/70 text-xs text-text-secondary">
           <span className="font-bold text-brand-navy flex items-center gap-1">
             <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
             Popular:
